@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import {
   getPrompts,
   getPromptById,
@@ -286,13 +287,16 @@ export function useDeletePromptMutation(projectId: string) {
       })
 
       // Optimistic update
-      queryClient.setQueriesData<{ prompts: PromptListItem[] }>(
+      queryClient.setQueriesData<PaginatedResponse<PromptListItem>>(
         { queryKey: promptQueryKeys.lists() },
         (old) => {
           if (!old) return old
           return {
-            ...old,
-            prompts: old.prompts.filter((p) => p.id !== promptId),
+            data: old.data.filter((p) => p.id !== promptId),
+            pagination: {
+              ...old.pagination,
+              total: old.pagination.total - 1,
+            },
           }
         }
       )

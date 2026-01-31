@@ -160,7 +160,7 @@ export function AnnotationsDrawer({
             </div>
           ) : (
             <AnnotationForm
-              scoreConfigs={scoreConfigs ?? []}
+              scoreConfigs={scoreConfigs?.data ?? []}
               onSubmit={(data) => createMutation.mutate(data)}
               isSubmitting={createMutation.isPending}
             />

@@ -63,79 +63,13 @@ interface OrganizationMemberAPIResponse {
 // Flexible base client - versions specified per endpoint
 const client = new BrokleAPIClient('/api')
 
-// ============================================================================
-// API Response Types
-// ============================================================================
-
-export interface OrganizationsResponse {
-  organizations: Organization[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-export interface MembersResponse {
-  members: OrganizationMember[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
 // Direct organization functions - latest & optimal endpoints
-export const getUserOrganizations = async (page = 1, limit = 20): Promise<OrganizationsResponse> => {
-    const response = await client.getPaginated<OrganizationAPIResponse>('/v1/organizations', {
-      page,
-      limit
-    })
-    return {
-      organizations: response.data.map(mapOrganizationFromAPI),
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
-  }
-
-
 export const getOrganizationById = async (organizationId: string): Promise<Organization> => {
     const response = await client.get<OrganizationAPIResponse>(
       `/v1/organizations/${organizationId}`
     )
 
     return mapOrganizationFromAPI(response)
-  }
-
-
-export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<MembersResponse> => {
-    const response = await client.getPaginated<OrganizationMemberAPIResponse>(
-      `/organizations/${organizationId}/members`,
-      {
-        page,
-        limit
-      },
-      {
-        includeOrgContext: true,
-        customOrgId: organizationId
-      }
-    )
-
-    return {
-      members: response.data.map(mapOrganizationMemberFromAPI),
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   }
 
 export const getOrganizationProjects = async (organizationId: string, page = 1, limit = 20): Promise<Project[]> => {

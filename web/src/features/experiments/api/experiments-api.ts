@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Experiment,
   ExperimentProgress,
@@ -20,25 +21,12 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
-/**
- * Response type for experiments list
- */
-export interface ExperimentsResponse {
-  experiments: Experiment[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
 export const experimentsApi = {
   // Experiments
   listExperiments: async (
     projectId: string,
     params?: ExperimentListParams
-  ): Promise<ExperimentsResponse> => {
+  ): Promise<PaginatedResponse<Experiment>> => {
     const queryParams: Record<string, string | number> = {}
     if (params?.page) queryParams.page = params.page
     if (params?.limit) queryParams.limit = params.limit
@@ -47,20 +35,10 @@ export const experimentsApi = {
     if (params?.search) queryParams.search = params.search
     if (params?.ids) queryParams.ids = params.ids
 
-    const response = await client.getPaginated<Experiment>(
+    return client.getPaginated<Experiment>(
       `/v1/projects/${projectId}/experiments`,
       queryParams
     )
-
-    return {
-      experiments: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   getExperiment: async (

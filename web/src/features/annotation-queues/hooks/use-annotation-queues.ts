@@ -2,11 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  annotationQueuesApi,
-  type QueuesResponse,
-  type QueueItemsResponse
-} from '../api/annotation-queues-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
+import { annotationQueuesApi } from '../api/annotation-queues-api'
 import type {
   CreateQueueRequest,
   UpdateQueueRequest,
@@ -150,17 +147,19 @@ export function useDeleteQueueMutation(projectId: string) {
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<QueuesResponse>({
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<QueueWithStats>>({
         queryKey: annotationQueueQueryKeys.list(projectId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<QueuesResponse>(
+      queryClient.setQueriesData<PaginatedResponse<QueueWithStats>>(
         { queryKey: annotationQueueQueryKeys.list(projectId) },
         (old) => old ? {
-          ...old,
-          queues: old.queues.filter((q) => q.queue.id !== queueId),
-          totalCount: old.totalCount - 1,
+          data: old.data.filter((q) => q.queue.id !== queueId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
         } : old
       )
 

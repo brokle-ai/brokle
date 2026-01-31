@@ -35,7 +35,7 @@ export function useProjectExperiments(): UseProjectExperimentsReturn {
   } = useExperimentsQuery(projectId)
 
   // Extract the experiments array from the response
-  const experiments = experimentsResponse?.experiments ?? []
+  const experiments = experimentsResponse?.data ?? []
 
   // Destructure for stable references
   const { search, status, sortBy, sortOrder, page, pageSize } = tableState

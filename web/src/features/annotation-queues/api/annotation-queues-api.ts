@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   AnnotationQueue,
   QueueWithStats,
@@ -19,59 +20,23 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
-/**
- * Response type for queues list
- */
-export interface QueuesResponse {
-  queues: QueueWithStats[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-/**
- * Response type for queue items list
- */
-export interface QueueItemsResponse {
-  items: QueueItem[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
 export const annotationQueuesApi = {
   // Queues
 
   listQueues: async (
     projectId: string,
     params?: QueueListFilter
-  ): Promise<QueuesResponse> => {
+  ): Promise<PaginatedResponse<QueueWithStats>> => {
     const queryParams: Record<string, string | number> = {}
     if (params?.status) queryParams.status = params.status
     if (params?.page) queryParams.page = params.page
     if (params?.limit) queryParams.limit = params.limit
     if (params?.search) queryParams.search = params.search
 
-    const response = await client.getPaginated<QueueWithStats>(
+    return client.getPaginated<QueueWithStats>(
       `/v1/projects/${projectId}/annotation-queues`,
       queryParams
     )
-
-    return {
-      queues: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   getQueue: async (
@@ -125,26 +90,16 @@ export const annotationQueuesApi = {
     projectId: string,
     queueId: string,
     filter?: ItemListFilter
-  ): Promise<QueueItemsResponse> => {
+  ): Promise<PaginatedResponse<QueueItem>> => {
     const params: Record<string, string | number> = {}
     if (filter?.status) params.status = filter.status
     if (filter?.page) params.page = filter.page
     if (filter?.limit) params.limit = filter.limit
 
-    const response = await client.getPaginated<QueueItem>(
+    return client.getPaginated<QueueItem>(
       `/v1/projects/${projectId}/annotation-queues/${queueId}/items`,
       params
     )
-
-    return {
-      items: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   addItems: async (

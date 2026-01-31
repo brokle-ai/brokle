@@ -30,9 +30,9 @@ function DatasetsContent() {
     refetch,
   } = useDatasetsQuery(currentProject?.id, tableState.toApiParams())
 
-  // Extract data from response
-  const data = response?.datasets ?? []
-  const totalCount = response?.totalCount ?? 0
+  // Extract data from response using generic PaginatedResponse fields
+  const data = response?.data ?? []
+  const totalCount = response?.pagination?.total ?? 0
 
   // Check if there are active filters
   const hasActiveFilters = tableState.hasActiveFilters

@@ -245,9 +245,9 @@ export function useTraceMetrics() {
 
   // Calculate metrics from traces
   const metrics = useMemo((): TraceMetrics | null => {
-    if (!tracesData?.traces) return null
-    return calculateMetrics(tracesData.traces, timeRange)
-  }, [tracesData?.traces, timeRange])
+    if (!tracesData?.data) return null
+    return calculateMetrics(tracesData.data, timeRange)
+  }, [tracesData?.data, timeRange])
 
   return {
     metrics,

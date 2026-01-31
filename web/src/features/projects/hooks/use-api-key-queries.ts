@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import {
   listAPIKeys,
   createAPIKey,
@@ -149,14 +150,17 @@ export function useDeleteAPIKeyMutation(projectId: string) {
       })
 
       // Optimistically remove from cache
-      queryClient.setQueriesData<{ keys: APIKey[] }>(
+      queryClient.setQueriesData<PaginatedResponse<APIKey>>(
         { queryKey: apiKeyQueryKeys.lists() },
         (old) => {
           if (!old) return old
 
           return {
-            ...old,
-            keys: old.keys.filter((key) => key.id !== keyId),
+            data: old.data.filter((key) => key.id !== keyId),
+            pagination: {
+              ...old.pagination,
+              total: old.pagination.total - 1,
+            },
           }
         }
       )

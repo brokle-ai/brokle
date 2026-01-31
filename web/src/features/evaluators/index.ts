@@ -53,7 +53,6 @@ export type {
 } from './types'
 
 export { evaluatorsApi } from './api/evaluators-api'
-export type { EvaluatorsResponse, ExecutionsResponse } from './api/evaluators-api'
 
 export {
   evaluatorQueryKeys,

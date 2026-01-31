@@ -101,7 +101,7 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
     role: OrganizationRole
     joined_at: string
     avatar?: string
-  }> = (membersResponse?.members || []).map((member: Member) => ({
+  }> = (membersResponse?.data || []).map((member: Member) => ({
     id: member.userId,
     name: member.name,
     email: member.email,

@@ -64,7 +64,7 @@ export function PromptSelector() {
           <CommandList>
             <CommandEmpty>No prompts found.</CommandEmpty>
             <CommandGroup>
-              {prompts?.prompts?.map((prompt) => (
+              {prompts?.data?.map((prompt) => (
                 <CommandItem
                   key={prompt.id}
                   value={prompt.name}

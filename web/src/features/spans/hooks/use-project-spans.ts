@@ -190,11 +190,11 @@ export function useProjectSpans() {
 
   return {
     // Data
-    data: data?.spans ?? [],
-    totalCount: data?.totalCount ?? 0,
-    page: data?.page ?? tableState.page,
-    pageSize: data?.pageSize ?? tableState.pageSize,
-    totalPages: data?.totalPages ?? 0,
+    data: data?.data ?? [],
+    totalCount: data?.pagination?.total ?? 0,
+    page: data?.pagination?.page ?? tableState.page,
+    pageSize: data?.pagination?.limit ?? tableState.pageSize,
+    totalPages: data?.pagination?.totalPages ?? 0,
 
     // Loading states
     isLoading: isProjectLoading || isSpansLoading,

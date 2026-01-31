@@ -72,7 +72,7 @@ export function AddFromTracesDialog({
 
   // Populate cache when selected dataset appears in API response
   useEffect(() => {
-    const items = datasetsResponse?.datasets ?? []
+    const items = datasetsResponse?.data ?? []
 
     if (selectedDatasetId) {
       // Try to find selected dataset in current results
@@ -84,14 +84,14 @@ export function AddFromTracesDialog({
       // Clear cache when nothing is selected
       setSelectedDatasetCache(null)
     }
-  }, [datasetsResponse?.datasets, selectedDatasetId, selectedDatasetCache])
+  }, [datasetsResponse?.data, selectedDatasetId, selectedDatasetCache])
 
   // Get selected dataset from cache (always available regardless of search)
   const selectedDataset = selectedDatasetCache
 
   // Merge API results with cached selection if not in current results
   const datasets = useMemo(() => {
-    const items = datasetsResponse?.datasets ?? []
+    const items = datasetsResponse?.data ?? []
     if (selectedDatasetCache) {
       const selectedInResults = items.find((d: Dataset) => d.id === selectedDatasetCache.id)
       if (!selectedInResults) {
@@ -100,7 +100,7 @@ export function AddFromTracesDialog({
       }
     }
     return items
-  }, [datasetsResponse?.datasets, selectedDatasetCache])
+  }, [datasetsResponse?.data, selectedDatasetCache])
 
   const importMutation = useImportFromTracesMutation(projectId, selectedDatasetId ?? '')
 

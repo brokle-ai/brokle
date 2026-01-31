@@ -226,8 +226,8 @@ export function EvaluatorExecutionsTable({
   )
 
   const hasRunningExecutions = useMemo(() => {
-    return data?.executions?.some((e) => !isTerminalStatus(e.status)) ?? false
-  }, [data?.executions])
+    return data?.data?.some((e) => !isTerminalStatus(e.status)) ?? false
+  }, [data?.data])
 
   // Re-query with refetch interval if there are running executions
   const { data: refreshedData } = useEvaluatorExecutionsQuery(projectId, evaluatorId, {
@@ -238,8 +238,8 @@ export function EvaluatorExecutionsTable({
     enabled: hasRunningExecutions,
   })
 
-  const executions = refreshedData?.executions ?? data?.executions ?? []
-  const total = refreshedData?.totalCount ?? data?.totalCount ?? 0
+  const executions = refreshedData?.data ?? data?.data ?? []
+  const total = refreshedData?.pagination?.total ?? data?.pagination?.total ?? 0
   const totalPages = Math.ceil(total / limit)
 
   if (isError) {

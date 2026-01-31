@@ -147,11 +147,11 @@ export function useProjectSessions() {
   })
 
   return {
-    data: sessionsData?.sessions ?? [],
-    totalCount: sessionsData?.totalCount ?? 0,
+    data: sessionsData?.data ?? [],
+    totalCount: sessionsData?.pagination?.total ?? 0,
     page: tableState.page,
     pageSize: tableState.pageSize,
-    totalPages: sessionsData?.totalPages ?? 0,
+    totalPages: sessionsData?.pagination?.totalPages ?? 0,
 
     isLoading: isProjectLoading || isSessionsLoading,
     isFetching: isSessionsFetching,

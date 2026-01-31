@@ -28,7 +28,7 @@ export function DatasetSelector() {
   const { datasetState } = state
 
   const { data: datasetsResponse, isLoading } = useDatasetsQuery(projectId)
-  const datasets = datasetsResponse?.datasets ?? []
+  const datasets = datasetsResponse?.data ?? []
 
   const selectedDataset = datasetState.selectedDataset
 

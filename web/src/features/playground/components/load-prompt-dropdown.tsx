@@ -58,7 +58,7 @@ export function LoadPromptDropdown({
     staleTime: 30000, // Cache for 30s
   })
 
-  const prompts = promptsResponse?.prompts || []
+  const prompts = promptsResponse?.data || []
   const filteredPrompts = prompts.filter((p: PromptListItem) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   )

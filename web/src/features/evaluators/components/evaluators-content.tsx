@@ -46,22 +46,22 @@ function EvaluatorsContent() {
   // Only show spinner on true initial load (no data at all)
   const isInitialLoad = isLoading && !evaluatorsResponse
 
-  // Extract data from response using domain-specific field names
+  // Extract data from response using generic PaginatedResponse fields
   const evaluators = useMemo(
-    () => evaluatorsResponse?.evaluators ?? [],
-    [evaluatorsResponse?.evaluators]
+    () => evaluatorsResponse?.data ?? [],
+    [evaluatorsResponse?.data]
   )
-  const totalCount = evaluatorsResponse?.totalCount ?? 0
 
-  // Build pagination object from response
-  const pagination: Pagination = {
-    page: evaluatorsResponse?.page ?? tableState.page,
-    limit: evaluatorsResponse?.pageSize ?? tableState.pageSize,
-    total: totalCount,
-    totalPages: evaluatorsResponse?.totalPages ?? Math.ceil(totalCount / tableState.pageSize),
-    hasNext: evaluatorsResponse?.hasNext ?? false,
-    hasPrev: evaluatorsResponse?.hasPrev ?? false,
+  // Use pagination directly from response
+  const pagination: Pagination = evaluatorsResponse?.pagination ?? {
+    page: tableState.page,
+    limit: tableState.pageSize,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
   }
+  const totalCount = pagination.total
 
   // Determine if project is truly empty (no data ever, not just filtered to zero)
   const isEmptyProject = !isLoading && totalCount === 0 && !tableState.hasActiveFilters

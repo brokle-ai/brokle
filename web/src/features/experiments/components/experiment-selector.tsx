@@ -65,9 +65,9 @@ export function ExperimentSelector({
 
   // Determine which selected IDs are missing from the list response
   const missingIds = useMemo(() => {
-    const listIds = new Set(experimentsResponse?.experiments?.map((e) => e.id) ?? [])
+    const listIds = new Set(experimentsResponse?.data?.map((e) => e.id) ?? [])
     return selectedIds.filter((id) => !listIds.has(id))
-  }, [experimentsResponse?.experiments, selectedIds])
+  }, [experimentsResponse?.data, selectedIds])
 
   // Fetch missing selected experiments by IDs
   const { data: missingExperimentsResponse } = useExperimentsByIdsQuery(
@@ -80,17 +80,17 @@ export function ExperimentSelector({
     const map = new Map<string, Experiment>()
 
     // Add experiments from list response
-    for (const exp of experimentsResponse?.experiments ?? []) {
+    for (const exp of experimentsResponse?.data ?? []) {
       map.set(exp.id, exp)
     }
 
     // Add experiments from IDs fetch (may overlap, that's fine)
-    for (const exp of missingExperimentsResponse?.experiments ?? []) {
+    for (const exp of missingExperimentsResponse?.data ?? []) {
       map.set(exp.id, exp)
     }
 
     return map
-  }, [experimentsResponse?.experiments, missingExperimentsResponse?.experiments])
+  }, [experimentsResponse?.data, missingExperimentsResponse?.data])
 
   // Get selected experiments from the map
   const selectedExperiments = useMemo(() => {
@@ -101,7 +101,7 @@ export function ExperimentSelector({
 
   // Build dropdown list: selected-not-in-results first, then list results
   const experiments = useMemo(() => {
-    const listItems = experimentsResponse?.experiments ?? []
+    const listItems = experimentsResponse?.data ?? []
     const listIds = new Set(listItems.map((item) => item.id))
 
     // Get selected experiments that aren't in current list results
@@ -110,7 +110,7 @@ export function ExperimentSelector({
     )
 
     return [...selectedNotInList, ...listItems]
-  }, [experimentsResponse?.experiments, selectedExperiments])
+  }, [experimentsResponse?.data, selectedExperiments])
 
   const toggleExperiment = (id: string) => {
     if (selectedIds.includes(id)) {

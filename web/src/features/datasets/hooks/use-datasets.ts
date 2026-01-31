@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { datasetsApi, type DatasetsResponse, type DatasetItemsResponse } from '../api/datasets-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
+import { datasetsApi } from '../api/datasets-api'
 import type {
   CreateDatasetRequest,
   UpdateDatasetRequest,
@@ -11,6 +12,7 @@ import type {
   PinDatasetVersionRequest,
   Dataset,
   DatasetItem,
+  DatasetWithItemCount,
   ImportFromJsonRequest,
   ImportFromTracesRequest,
   ImportFromSpansRequest,
@@ -145,21 +147,20 @@ export function useDeleteDatasetMutation(projectId: string) {
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<DatasetsResponse>({
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<DatasetWithItemCount>>({
         queryKey: datasetQueryKeys.list(projectId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<DatasetsResponse>(
+      queryClient.setQueriesData<PaginatedResponse<DatasetWithItemCount>>(
         { queryKey: datasetQueryKeys.list(projectId) },
         (old) => old ? {
-          datasets: old.datasets.filter((d) => d.id !== datasetId),
-          totalCount: old.totalCount - 1,
-          page: old.page,
-          pageSize: old.pageSize,
-          totalPages: Math.ceil((old.totalCount - 1) / old.pageSize),
-          hasNext: old.hasNext,
-          hasPrev: old.hasPrev,
+          data: old.data.filter((d) => d.id !== datasetId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+            totalPages: Math.ceil((old.pagination.total - 1) / old.pagination.limit),
+          },
         } : old
       )
 
@@ -223,21 +224,20 @@ export function useDeleteDatasetItemMutation(projectId: string, datasetId: strin
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<DatasetItemsResponse>({
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<DatasetItem>>({
         queryKey: datasetQueryKeys.items(projectId, datasetId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<DatasetItemsResponse>(
+      queryClient.setQueriesData<PaginatedResponse<DatasetItem>>(
         { queryKey: datasetQueryKeys.items(projectId, datasetId) },
         (old) => old ? {
-          items: old.items.filter((i) => i.id !== itemId),
-          totalCount: old.totalCount - 1,
-          page: old.page,
-          pageSize: old.pageSize,
-          totalPages: Math.ceil((old.totalCount - 1) / old.pageSize),
-          hasNext: old.hasNext,
-          hasPrev: old.hasPrev,
+          data: old.data.filter((i) => i.id !== itemId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+            totalPages: Math.ceil((old.pagination.total - 1) / old.pagination.limit),
+          },
         } : old
       )
 

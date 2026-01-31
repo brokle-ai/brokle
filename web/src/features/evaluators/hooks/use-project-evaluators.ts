@@ -33,14 +33,14 @@ export function useProjectEvaluators(): UseProjectEvaluatorsReturn {
   } = useEvaluatorsQuery(projectId)
 
   // Client-side filtering since the API doesn't support filter param
-  const evaluators = evaluatorsResponse?.evaluators
+  const evaluators = evaluatorsResponse?.data
   const filteredData = useMemo(() => {
     if (!evaluators) return []
     if (!searchFilter) return evaluators
 
     const lowerFilter = searchFilter.toLowerCase()
     return evaluators.filter(
-      (evaluator) =>
+      (evaluator: Evaluator) =>
         evaluator.name.toLowerCase().includes(lowerFilter) ||
         evaluator.description?.toLowerCase().includes(lowerFilter)
     )

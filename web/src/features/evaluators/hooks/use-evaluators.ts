@@ -3,7 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { extractErrorMessage } from '@/lib/api/error-utils'
-import { evaluatorsApi, type EvaluatorsResponse } from '../api/evaluators-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
+import { evaluatorsApi } from '../api/evaluators-api'
 import type {
   CreateEvaluatorRequest,
   UpdateEvaluatorRequest,
@@ -134,18 +135,20 @@ export function useDeleteEvaluatorMutation(projectId: string) {
         queryKey: evaluatorQueryKeys.all,
       })
 
-      const previousEvaluators = queryClient.getQueryData<EvaluatorsResponse>(
+      const previousEvaluators = queryClient.getQueryData<PaginatedResponse<Evaluator>>(
         evaluatorQueryKeys.list(projectId)
       )
 
       // Optimistic update
       if (previousEvaluators) {
-        queryClient.setQueryData<EvaluatorsResponse>(
+        queryClient.setQueryData<PaginatedResponse<Evaluator>>(
           evaluatorQueryKeys.list(projectId),
           {
-            ...previousEvaluators,
-            evaluators: previousEvaluators.evaluators.filter((e) => e.id !== evaluatorId),
-            totalCount: previousEvaluators.totalCount - 1,
+            data: previousEvaluators.data.filter((e) => e.id !== evaluatorId),
+            pagination: {
+              ...previousEvaluators.pagination,
+              total: previousEvaluators.pagination.total - 1,
+            },
           }
         )
       }

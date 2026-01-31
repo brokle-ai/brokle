@@ -106,24 +106,15 @@ export function ScoresPageContent({ projectSlug }: ScoresPageContentProps) {
 
         <TabsContent value="list" className="mt-6">
           <ScoresTable
-            data={scoresResponse?.scores ?? []}
-            pagination={
-              scoresResponse ? {
-                page: scoresResponse.page,
-                limit: scoresResponse.pageSize,
-                total: scoresResponse.totalCount,
-                totalPages: scoresResponse.totalPages,
-                hasNext: scoresResponse.hasNext,
-                hasPrev: scoresResponse.hasPrev,
-              } : {
-                page: 1,
-                limit: 50,
-                total: 0,
-                totalPages: 0,
-                hasNext: false,
-                hasPrev: false,
-              }
-            }
+            data={scoresResponse?.data ?? []}
+            pagination={scoresResponse?.pagination ?? {
+              page: 1,
+              limit: 50,
+              total: 0,
+              totalPages: 0,
+              hasNext: false,
+              hasPrev: false,
+            }}
             projectSlug={projectSlug}
             loading={scoresLoading}
             error={scoresError?.message}

@@ -54,8 +54,8 @@ export function useProjectDatasets(): UseProjectDatasetsReturn {
   })
 
   return {
-    data: data?.datasets ?? [],
-    totalCount: data?.totalCount ?? 0,
+    data: data?.data ?? [],
+    totalCount: data?.pagination?.total ?? 0,
     page,
     pageSize,
     isLoading: isProjectLoading || isDatasetsLoading,

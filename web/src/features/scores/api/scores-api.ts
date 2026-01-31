@@ -1,5 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { QueryParams } from '@/lib/api/core/types'
+import type { QueryParams, PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Score,
   ScoreConfig,
@@ -10,27 +10,6 @@ import type {
   ScoreAnalyticsParams,
   ScoreAnalyticsData,
 } from '../types'
-
-// Response types following Pattern B
-export interface ScoresResponse {
-  scores: Score[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-export interface ScoreConfigsResponse {
-  configs: ScoreConfig[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
 
 const client = new BrokleAPIClient('/api')
 
@@ -83,20 +62,11 @@ export const scoresApi = {
   listScores: async (
     projectId: string,
     params?: ScoreListParams
-  ): Promise<ScoresResponse> => {
-    const response = await client.getPaginated<Score>(
+  ): Promise<PaginatedResponse<Score>> => {
+    return client.getPaginated<Score>(
       `/v1/projects/${projectId}/scores`,
       buildScoreListQueryParams(params)
     )
-    return {
-      scores: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   getScore: async (projectId: string, scoreId: string): Promise<Score> => {
@@ -107,24 +77,15 @@ export const scoresApi = {
   listScoreConfigs: async (
     projectId: string,
     params?: ScoreConfigListParams
-  ): Promise<ScoreConfigsResponse> => {
+  ): Promise<PaginatedResponse<ScoreConfig>> => {
     const queryParams: QueryParams = {}
     if (params?.page) queryParams.page = params.page
     if (params?.limit) queryParams.limit = params.limit
 
-    const response = await client.getPaginated<ScoreConfig>(
+    return client.getPaginated<ScoreConfig>(
       `/v1/projects/${projectId}/score-configs`,
       queryParams
     )
-    return {
-      configs: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   getScoreConfig: async (

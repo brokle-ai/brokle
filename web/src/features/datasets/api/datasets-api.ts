@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Dataset,
   CreateDatasetRequest,
@@ -21,38 +22,12 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
-/**
- * Response type for datasets list
- */
-export interface DatasetsResponse {
-  datasets: DatasetWithItemCount[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-/**
- * Response type for dataset items list
- */
-export interface DatasetItemsResponse {
-  items: DatasetItem[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
 export const datasetsApi = {
   // Datasets
   listDatasets: async (
     projectId: string,
     params: DatasetListParams = {}
-  ): Promise<DatasetsResponse> => {
+  ): Promise<PaginatedResponse<DatasetWithItemCount>> => {
     const { search, page = 1, limit = 50, sortBy = 'updated_at', sortDir = 'desc' } = params
 
     const queryParams: Record<string, string | number> = {
@@ -66,20 +41,10 @@ export const datasetsApi = {
       queryParams.search = search
     }
 
-    const response = await client.getPaginated<DatasetWithItemCount>(
+    return client.getPaginated<DatasetWithItemCount>(
       `/v1/projects/${projectId}/datasets`,
       queryParams
     )
-
-    return {
-      datasets: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   getDataset: async (projectId: string, datasetId: string): Promise<Dataset> => {
@@ -113,25 +78,15 @@ export const datasetsApi = {
     projectId: string,
     datasetId: string,
     params?: DatasetItemListParams
-  ): Promise<DatasetItemsResponse> => {
+  ): Promise<PaginatedResponse<DatasetItem>> => {
     const queryParams: Record<string, string | number> = {}
     if (params?.page) queryParams.page = params.page
     if (params?.limit) queryParams.limit = params.limit
 
-    const response = await client.getPaginated<DatasetItem>(
+    return client.getPaginated<DatasetItem>(
       `/v1/projects/${projectId}/datasets/${datasetId}/items`,
       queryParams
     )
-
-    return {
-      items: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   createDatasetItem: async (
@@ -255,25 +210,15 @@ export const datasetsApi = {
     datasetId: string,
     versionId: string,
     params?: DatasetItemListParams
-  ): Promise<DatasetItemsResponse> => {
+  ): Promise<PaginatedResponse<DatasetItem>> => {
     const queryParams: Record<string, string | number> = {}
     if (params?.page) queryParams.page = params.page
     if (params?.limit) queryParams.limit = params.limit
 
-    const response = await client.getPaginated<DatasetItem>(
+    return client.getPaginated<DatasetItem>(
       `/v1/projects/${projectId}/datasets/${datasetId}/versions/${versionId}/items`,
       queryParams
     )
-
-    return {
-      items: response.data,
-      totalCount: response.pagination.total,
-      page: response.pagination.page,
-      pageSize: response.pagination.limit,
-      totalPages: response.pagination.totalPages,
-      hasNext: response.pagination.hasNext,
-      hasPrev: response.pagination.hasPrev,
-    }
   },
 
   pinVersion: async (

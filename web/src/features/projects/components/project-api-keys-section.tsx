@@ -55,7 +55,7 @@ export function ProjectAPIKeysSection({
     return null
   }
 
-  const apiKeys = apiKeysData?.keys || []
+  const apiKeys = apiKeysData?.data || []
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)

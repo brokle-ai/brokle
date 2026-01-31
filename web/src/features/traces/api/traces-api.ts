@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type { Trace, Span, Score } from '../data/schema'
 import {
   transformTrace,
@@ -8,40 +9,6 @@ import {
 } from '../utils/transform'
 
 const client = new BrokleAPIClient('/api')
-
-// ============================================================================
-// API Response Types
-// ============================================================================
-
-export interface TracesResponse {
-  traces: Trace[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-export interface SpansResponse {
-  spans: Span[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
-
-export interface ScoresResponse {
-  scores: Score[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  hasNext: boolean
-  hasPrev: boolean
-}
 
 // ============================================================================
 // API Parameter Types
@@ -144,7 +111,7 @@ export interface UpdateScoreData {
  * @param params - Filter and pagination parameters
  * @returns Traces array with pagination metadata
  */
-export const getProjectTraces = async (params: GetTracesParams): Promise<TracesResponse> => {
+export const getProjectTraces = async (params: GetTracesParams): Promise<PaginatedResponse<Trace>> => {
   const {
     projectId,
     page = 1,
@@ -207,13 +174,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<TracesR
   const response = await client.getPaginated<any>('/v1/traces', queryParams)
 
   return {
-    traces: response.data.map(transformTrace),
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
-    hasNext: response.pagination.hasNext,
-    hasPrev: response.pagination.hasPrev,
+    data: response.data.map(transformTrace),
+    pagination: response.pagination,
   }
 }
 
@@ -479,7 +441,7 @@ export const getTraceFilterOptions = async (
  * @param params - Filter and pagination parameters
  * @returns Spans array with pagination
  */
-export const getSpans = async (params: GetSpansParams): Promise<SpansResponse> => {
+export const getSpans = async (params: GetSpansParams): Promise<PaginatedResponse<Span>> => {
   const {
     projectId,
     traceId,
@@ -508,13 +470,8 @@ export const getSpans = async (params: GetSpansParams): Promise<SpansResponse> =
   const response = await client.getPaginated<any>('/v1/spans', queryParams)
 
   return {
-    spans: response.data.map(transformSpan),
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
-    hasNext: response.pagination.hasNext,
-    hasPrev: response.pagination.hasPrev,
+    data: response.data.map(transformSpan),
+    pagination: response.pagination,
   }
 }
 
@@ -559,7 +516,7 @@ export const updateSpan = async (
  *
  * Backend endpoint: GET /api/v1/scores
  */
-export const getScores = async (params: GetScoresParams): Promise<ScoresResponse> => {
+export const getScores = async (params: GetScoresParams): Promise<PaginatedResponse<Score>> => {
   const {
     projectId,
     traceId,
@@ -588,13 +545,8 @@ export const getScores = async (params: GetScoresParams): Promise<ScoresResponse
   const response = await client.getPaginated<Score>('/v1/scores', queryParams)
 
   return {
-    scores: response.data.map(transformScore),
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
-    hasNext: response.pagination.hasNext,
-    hasPrev: response.pagination.hasPrev,
+    data: response.data.map(transformScore),
+    pagination: response.pagination,
   }
 }
 
