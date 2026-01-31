@@ -39,16 +39,16 @@ export function ProjectSettingsNav({ className, ...props }: ProjectSettingsNavPr
       href: `/projects/${projectSlug}/settings/score-configs`,
       icon: <Target size={18} />,
     },
-    {
-      title: 'Integrations',
-      href: `/projects/${projectSlug}/settings/integrations`,
-      icon: <Puzzle size={18} />,
-    },
-    {
-      title: 'Security',
-      href: `/projects/${projectSlug}/settings/security`,
-      icon: <Shield size={18} />,
-    },
+    // {
+    //   title: 'Integrations',
+    //   href: `/projects/${projectSlug}/settings/integrations`,
+    //   icon: <Puzzle size={18} />,
+    // },
+    // {
+    //   title: 'Security',
+    //   href: `/projects/${projectSlug}/settings/security`,
+    //   icon: <Shield size={18} />,
+    // },
     {
       title: 'Danger Zone',
       href: `/projects/${projectSlug}/settings/danger`,

@@ -459,8 +459,8 @@ export function ProjectAPIKeysSection({
         </DialogContent>
       </Dialog>
 
-      {/* Usage Instructions Section */}
-      {!isLoading && !error && (
+      {/* Usage Instructions Section - Hidden for now */}
+      {/* {!isLoading && !error && (
         <div className="space-y-4">
           <h3 className="text-lg font-medium">Usage Instructions</h3>
 
@@ -500,7 +500,7 @@ export function ProjectAPIKeysSection({
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

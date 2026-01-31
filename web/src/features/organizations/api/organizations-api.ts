@@ -3,7 +3,7 @@
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import type { RequestOptions } from '@/lib/api/core/types'
-import type { Organization, Project, OrganizationMember } from '../types'
+import type { Organization, Project, OrganizationMember, ProjectStatus } from '../types'
 import type { PaginatedResponse } from '@/lib/api/core/types'
 
 // API response types matching backend
@@ -27,13 +27,27 @@ interface ProjectAPIResponse {
   updated_at: string
 }
 
+// Maps API status values to domain ProjectStatus
+// Note: API may return 'inactive', but our domain only has 'active' | 'archived'
+const mapProjectStatus = (apiStatus: ProjectAPIResponse['status']): ProjectStatus => {
+  if (apiStatus === 'active') return 'active'
+  // Map both 'inactive' and 'archived' to 'archived' for domain consistency
+  return 'archived'
+}
+
 interface ProjectMetricsAPIResponse {
-  requests_today: number
-  cost_today: number
-  avg_latency_ms: number
-  error_rate: number
-  total_requests: number
-  total_cost: number
+  // Observability metrics
+  traces_collected?: number
+  observed_cost?: number
+  active_rules?: number
+  running_experiments?: number
+  // Legacy fields (deprecated)
+  requests_today?: number
+  cost_today?: number
+  avg_latency_ms?: number
+  error_rate?: number
+  total_requests?: number
+  total_cost?: number
   last_request_at?: string
 }
 
@@ -251,9 +265,9 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       updated_at: apiOrg.updated_at || '',
       members: [], // Will be populated separately if needed
       usage: {
-        requests_this_month: 0, // Will be populated from metrics API
-        cost_this_month: 0,
-        models_used: 0,
+        traces_this_month: 0, // Will be populated from metrics API
+        observed_cost_this_month: 0,
+        models_observed: 0,
       },
     }
   }
@@ -273,14 +287,12 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       name: apiProject.name || '',
       organizationId: apiProject.organization_id || '',
       description: apiProject.description || '',
-      status: apiProject.status || 'active',
+      status: mapProjectStatus(apiProject.status || 'active'),
       metrics: {
-        requests_today: 0, // Will be populated from metrics API
-        cost_today: 0,
-        avg_latency: 0,
-        error_rate: 0,
-        total_requests: 0,
-        total_cost: 0,
+        traces_collected: 0, // Will be populated from metrics API
+        observed_cost: 0,
+        active_rules: 0,
+        running_experiments: 0,
       },
       createdAt: apiProject.created_at,
       updatedAt: apiProject.updated_at,
