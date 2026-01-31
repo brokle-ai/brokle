@@ -86,7 +86,7 @@ type ScoreAggregation struct {
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
 	Max    float64 `json:"max"`
-	Count  int64   `json:"count"`
+	Count  uint64  `json:"count"`
 }
 
 type ScoreAnalyticsFilter struct {
@@ -99,7 +99,7 @@ type ScoreAnalyticsFilter struct {
 }
 
 type ScoreStatistics struct {
-	Count       int64    `json:"count"`
+	Count       uint64   `json:"count"`
 	Mean        float64  `json:"mean"`
 	StdDev      float64  `json:"std_dev"`
 	Min         float64  `json:"min"`
@@ -112,25 +112,25 @@ type ScoreStatistics struct {
 type TimeSeriesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	AvgValue  float64   `json:"avg_value"`
-	Count     int64     `json:"count"`
+	Count     uint64    `json:"count"`
 }
 
 type DistributionBin struct {
 	BinStart float64 `json:"bin_start"`
 	BinEnd   float64 `json:"bin_end"`
-	Count    int64   `json:"count"`
+	Count    uint64  `json:"count"`
 }
 
 type HeatmapCell struct {
-	Row      int     `json:"row"`
-	Col      int     `json:"col"`
-	Value    int64   `json:"value"`
-	RowLabel string  `json:"row_label"`
-	ColLabel string  `json:"col_label"`
+	Row      int    `json:"row"`
+	Col      int    `json:"col"`
+	Value    uint64 `json:"value"`
+	RowLabel string `json:"row_label"`
+	ColLabel string `json:"col_label"`
 }
 
 type ComparisonMetrics struct {
-	MatchedCount        int64   `json:"matched_count"`
+	MatchedCount        uint64  `json:"matched_count"`
 	PearsonCorrelation  float64 `json:"pearson_correlation"`
 	SpearmanCorrelation float64 `json:"spearman_correlation"`
 	MAE                 float64 `json:"mae"`
@@ -166,7 +166,7 @@ type ScoreAnalyticsRepository interface {
 type ExperimentScoreSummary struct {
 	ExperimentID string  `json:"experiment_id"`
 	ScoreName    string  `json:"score_name"`
-	Count        int64   `json:"count"`
+	Count        uint64  `json:"count"`
 	SumValue     float64 `json:"sum_value"`
 	MinValue     float64 `json:"min_value"`
 	MaxValue     float64 `json:"max_value"`
@@ -178,14 +178,14 @@ type ExperimentScoreSummary struct {
 type SourceDistributionPoint struct {
 	Source string    `json:"source"` // code, llm, human
 	Day    time.Time `json:"day"`
-	Count  int64     `json:"count"`
+	Count  uint64    `json:"count"`
 }
 
 // DailySummaryPoint represents pre-aggregated daily score metrics
 // Uses the scores_daily_summary materialized view for fast queries
 type DailySummaryPoint struct {
 	Day      time.Time `json:"day"`
-	Count    int64     `json:"count"`
+	Count    uint64    `json:"count"`
 	SumValue float64   `json:"sum_value"`
 	MinValue float64   `json:"min_value"`
 	MaxValue float64   `json:"max_value"`

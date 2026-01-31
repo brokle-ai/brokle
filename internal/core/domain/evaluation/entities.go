@@ -748,7 +748,7 @@ type ScoreAggregation struct {
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
 	Max    float64 `json:"max"`
-	Count  int64   `json:"count"`
+	Count  uint64  `json:"count"`
 }
 
 // ScoreDiffType represents the type of score difference.
@@ -972,7 +972,7 @@ type ScoreMetrics struct {
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
 	Max    float64 `json:"max"`
-	Count  int64   `json:"count"`
+	Count  uint64  `json:"count"`
 }
 
 // DatasetWithItemCount extends Dataset to include item count in list responses.

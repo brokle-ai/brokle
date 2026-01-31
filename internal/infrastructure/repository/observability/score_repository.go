@@ -399,7 +399,7 @@ func (r *scoreRepository) GetAggregationsByExperiments(
 			StdDev: stddevValue,
 			Min:    minValue,
 			Max:    maxValue,
-			Count:  int64(count),
+			Count:  count,
 		}
 	}
 

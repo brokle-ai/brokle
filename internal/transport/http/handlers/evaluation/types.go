@@ -185,7 +185,7 @@ type ScoreAggregationResponse struct {
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
 	Max    float64 `json:"max"`
-	Count  int64   `json:"count"`
+	Count  uint64  `json:"count"`
 }
 
 // @Description Score difference from baseline
