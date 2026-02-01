@@ -194,7 +194,7 @@ type CreateAnnotationRequest struct {
 	Name        string   `json:"name" binding:"required"`
 	Value       *float64 `json:"value,omitempty"`
 	StringValue *string  `json:"string_value,omitempty"`
-	DataType    string   `json:"data_type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	DataType    string   `json:"type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
 	Reason      *string  `json:"reason,omitempty"`
 }
 
@@ -207,7 +207,7 @@ type AnnotationResponse struct {
 	Name        string   `json:"name"`
 	Value       *float64 `json:"value,omitempty"`
 	StringValue *string  `json:"string_value,omitempty"`
-	DataType    string   `json:"data_type"`
+	DataType    string   `json:"type"`
 	Source      string   `json:"source"`
 	Reason      *string  `json:"reason,omitempty"`
 	CreatedBy   *string  `json:"created_by,omitempty"`

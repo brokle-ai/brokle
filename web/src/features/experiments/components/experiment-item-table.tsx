@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Skeleton } from '@/components/ui/skeleton'
+import { DataTableSkeleton } from '@/components/data-table'
 import { useExperimentItemsQuery } from '../hooks/use-experiments'
 import type { ExperimentItem } from '../types'
 
@@ -109,13 +109,7 @@ export function ExperimentItemTable({
   })
 
   if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-12 w-full" />
-        ))}
-      </div>
-    )
+    return <DataTableSkeleton columns={6} rows={5} showToolbar={false} />
   }
 
   if (!data?.items.length) {

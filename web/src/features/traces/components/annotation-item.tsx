@@ -57,7 +57,7 @@ export function AnnotationItem({
 
   // Format the value based on data type
   const formattedValue = React.useMemo(() => {
-    switch (annotation.data_type) {
+    switch (annotation.type) {
       case 'NUMERIC':
         return annotation.value?.toString() ?? '-'
       case 'CATEGORICAL':
@@ -71,7 +71,7 @@ export function AnnotationItem({
 
   // Get data type icon
   const DataTypeIcon = React.useMemo(() => {
-    switch (annotation.data_type) {
+    switch (annotation.type) {
       case 'NUMERIC':
         return Hash
       case 'CATEGORICAL':
@@ -81,15 +81,15 @@ export function AnnotationItem({
       default:
         return Hash
     }
-  }, [annotation.data_type])
+  }, [annotation.type])
 
   // Get value badge variant based on data type and value
   const valueBadgeVariant = React.useMemo(() => {
-    if (annotation.data_type === 'BOOLEAN') {
+    if (annotation.type === 'BOOLEAN') {
       return annotation.value === 1 ? 'default' : 'destructive'
     }
     return 'secondary'
-  }, [annotation.data_type, annotation.value])
+  }, [annotation.type, annotation.value])
 
   // Format source label
   const sourceLabel = React.useMemo(() => {
@@ -146,8 +146,8 @@ export function AnnotationItem({
             variant={valueBadgeVariant}
             className={cn(
               'font-mono text-xs',
-              annotation.data_type === 'NUMERIC' && 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-              annotation.data_type === 'CATEGORICAL' && 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+              annotation.type === 'NUMERIC' && 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+              annotation.type === 'CATEGORICAL' && 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
             )}
           >
             {formattedValue}

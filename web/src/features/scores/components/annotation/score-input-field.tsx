@@ -14,14 +14,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import type { ScoreDataType, ScoreConfig } from '../../types'
+import type { ScoreType, ScoreConfig } from '../../types'
 
 // ============================================================================
 // Score Input Field - Dynamic input based on data type
 // ============================================================================
 
 interface ScoreInputFieldProps {
-  dataType: ScoreDataType
+  dataType: ScoreType
   value: number | string | boolean | null
   onChange: (value: number | string | boolean | null) => void
   config?: ScoreConfig

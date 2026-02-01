@@ -1,7 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { Trash2, Loader2, AlertCircle, AlertTriangle, Plug, Pencil } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { AlertCircle, AlertTriangle, Plug } from 'lucide-react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -21,13 +26,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DataTableSkeleton,
+  DataTableEmptyState,
+} from '@/components/shared/tables'
+import {
   useAIProvidersQuery,
   useDeleteProviderMutation,
 } from '../hooks/use-ai-providers'
-import type { AIProviderCredential, AIProvider } from '../types'
+import type { AIProviderCredential } from '../types'
 import { PROVIDER_INFO } from '../types'
 import { ProviderDialog } from './ProviderDialog'
 import { ProviderIcon } from './ProviderIcon'
+import { createAIProvidersColumns } from './ai-providers-columns'
 
 interface AIProvidersSettingsProps {
   orgId: string
@@ -70,7 +80,7 @@ export function AIProvidersSettings({
     try {
       await deleteMutation.mutateAsync({
         credentialId: selectedCredential.id,
-        displayName: getProviderDisplayName(selectedCredential),
+        displayName: selectedCredential.name,
       })
       setIsDeleteDialogOpen(false)
     } catch (error) {
@@ -82,25 +92,33 @@ export function AIProvidersSettings({
     setEditingCredential(credential)
   }
 
-  const getProviderDisplayName = (credential: AIProviderCredential): string => {
-    // Name is now always set for all configurations
-    return credential.name
-  }
-
-  const getAdapterDisplayName = (adapter: AIProvider): string => {
+  const getAdapterDisplayName = (adapter: AIProviderCredential['adapter']): string => {
     return PROVIDER_INFO[adapter]?.name ?? adapter
   }
+
+  // Create columns
+  const columns = useMemo(
+    () =>
+      createAIProvidersColumns({
+        onEdit: handleEditClick,
+        onDelete: openDeleteDialog,
+        isDeleting: deleteMutation.isPending,
+      }),
+    [deleteMutation.isPending]
+  )
+
+  // Initialize React Table
+  const table = useReactTable({
+    data: credentials || [],
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   return (
     <div className="space-y-8">
       {/* Loading State */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading providers...</p>
-          </div>
-        </div>
+        <DataTableSkeleton columns={5} rows={3} showToolbar={false} />
       )}
 
       {/* Error State */}
@@ -123,90 +141,39 @@ export function AIProvidersSettings({
           <div className="rounded-md border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>API Key</TableHead>
-                  <TableHead>Base URL</TableHead>
-                  <TableHead>Added</TableHead>
-                  <TableHead className="w-[100px] text-right">Actions</TableHead>
-                </TableRow>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
               </TableHeader>
               <TableBody>
-                {!credentials || credentials.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      <div className="flex flex-col items-center gap-2">
-                        <Plug className="h-8 w-8 text-muted-foreground/50" />
-                        <p>No providers configured yet.</p>
-                        <p className="text-xs">Add a provider to enable AI features in the playground.</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  credentials.map((credential) => (
-                    <TableRow key={credential.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <ProviderIcon provider={credential.adapter} className="h-5 w-5" />
-                          <div>
-                            <div className="font-medium">{getProviderDisplayName(credential)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {getAdapterDisplayName(credential.adapter)}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
-                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                          {credential.key_preview}
-                        </code>
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="text-sm">
-                          {credential.base_url ? (
-                            <code className="text-xs bg-muted px-2 py-1 rounded font-mono truncate max-w-[200px] block">
-                              {credential.base_url}
-                            </code>
-                          ) : (
-                            <span className="text-muted-foreground">Default</span>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="text-sm">
-                          {new Date(credential.created_at).toLocaleDateString()}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditClick(credential)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openDeleteDialog(credential)}
-                            disabled={deleteMutation.isPending}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                          >
-                            {deleteMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                      <DataTableEmptyState
+                        title="No providers configured yet"
+                        description="Add a provider to enable AI features in the playground."
+                        icon={<Plug className="h-8 w-8 text-muted-foreground/50" />}
+                      />
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
@@ -248,7 +215,7 @@ export function AIProvidersSettings({
               <div className="rounded-lg bg-muted p-3 space-y-1">
                 <div className="flex items-center gap-2">
                   <ProviderIcon provider={selectedCredential.adapter} className="h-4 w-4" />
-                  <span className="font-medium">{getProviderDisplayName(selectedCredential)}</span>
+                  <span className="font-medium">{selectedCredential.name}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{getAdapterDisplayName(selectedCredential.adapter)}</span>
@@ -279,14 +246,7 @@ export function AIProvidersSettings({
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete Provider'
-              )}
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Provider'}
             </Button>
           </DialogFooter>
         </DialogContent>

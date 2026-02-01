@@ -20,18 +20,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import type { ScoreDataType, ScoreSource } from '../types'
+import type { ScoreType, ScoreSource } from '../types'
 import { getDataTypeIndicator, getSourceIndicator } from '../lib/score-colors'
 
 interface ScoresToolbarProps {
   // Current values
   search: string | null
-  dataType: ScoreDataType | null
+  dataType: ScoreType | null
   source: ScoreSource | null
 
   // Setters
   onSearchChange: (search: string) => void
-  onDataTypeChange: (dataType: ScoreDataType | null) => void
+  onDataTypeChange: (dataType: ScoreType | null) => void
   onSourceChange: (source: ScoreSource | null) => void
   onReset: () => void
 
@@ -92,7 +92,7 @@ export function ScoresToolbar({
   const handleDataTypeChange = useCallback(
     (value: string) => {
       startTransition(() => {
-        onDataTypeChange(value === 'all' ? null : (value as ScoreDataType))
+        onDataTypeChange(value === 'all' ? null : (value as ScoreType))
       })
     },
     [onDataTypeChange]

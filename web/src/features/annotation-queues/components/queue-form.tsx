@@ -230,7 +230,7 @@ export function QueueForm({
                                   <div className="flex flex-col">
                                     <span>{config.name}</span>
                                     <span className="text-xs text-muted-foreground">
-                                      {config.data_type} {config.description && `• ${config.description}`}
+                                      {config.type} {config.description && `• ${config.description}`}
                                     </span>
                                   </div>
                                 </CommandItem>

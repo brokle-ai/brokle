@@ -2,9 +2,9 @@
 
 import { useMemo, useCallback } from 'react'
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringLiteral } from 'nuqs'
-import type { ScoreDataType, ScoreSource } from '../types'
+import type { ScoreType, ScoreSource } from '../types'
 
-export type ScoreSortField = 'name' | 'value' | 'data_type' | 'source' | 'timestamp'
+export type ScoreSortField = 'name' | 'value' | 'type' | 'source' | 'timestamp'
 
 const DATA_TYPE_VALUES = ['NUMERIC', 'BOOLEAN', 'CATEGORICAL'] as const
 const SOURCE_VALUES = ['code', 'llm', 'human'] as const
@@ -14,14 +14,14 @@ export interface UseScoresTableStateReturn {
   page: number
   pageSize: number
   search: string | null
-  dataType: ScoreDataType | null
+  dataType: ScoreType | null
   source: ScoreSource | null
   sortBy: ScoreSortField
   sortOrder: 'asc' | 'desc'
 
   // Setters (update URL)
   setSearch: (search: string) => void
-  setDataType: (dataType: ScoreDataType | null) => void
+  setDataType: (dataType: ScoreType | null) => void
   setSource: (source: ScoreSource | null) => void
   setPagination: (page: number, pageSize?: number) => void
   setSorting: (sortBy: ScoreSortField | null, sortOrder: 'asc' | 'desc' | null) => void
@@ -33,7 +33,7 @@ export interface UseScoresTableStateReturn {
   // API params format
   toApiParams: () => {
     name?: string
-    data_type?: ScoreDataType
+    type?: ScoreType
     source?: ScoreSource
     page: number
     limit: number
@@ -42,7 +42,7 @@ export interface UseScoresTableStateReturn {
   }
 }
 
-const validSortFields: ScoreSortField[] = ['name', 'value', 'data_type', 'source', 'timestamp']
+const validSortFields: ScoreSortField[] = ['name', 'value', 'type', 'source', 'timestamp']
 
 /**
  * Centralized hook that manages ALL scores table state via URL params.
@@ -96,7 +96,7 @@ export function useScoresTableState(): UseScoresTableStateReturn {
   )
 
   const setDataType = useCallback(
-    (dataType: ScoreDataType | null) => {
+    (dataType: ScoreType | null) => {
       setQuery({
         dataType: dataType || null,
         page: 1, // Reset to page 1 when filter changes
@@ -150,7 +150,7 @@ export function useScoresTableState(): UseScoresTableStateReturn {
   // Convert to API params format
   const toApiParams = useCallback(() => ({
     name: query.search || undefined,
-    data_type: query.dataType || undefined,
+    type: query.dataType || undefined,
     source: query.source || undefined,
     page: Math.max(1, query.page),
     limit: Math.max(1, query.pageSize),
