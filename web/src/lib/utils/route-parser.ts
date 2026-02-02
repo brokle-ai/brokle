@@ -82,6 +82,7 @@ export function extractSlug(pathname: string, context: RouteContext): string {
 
 /**
  * Extract page information from pathname
+ * Supports up to three-level nesting (e.g., settings/organization/billing)
  */
 function extractPageInfo(pathname: string, context: RouteContext): {
   pageType?: string
@@ -91,37 +92,57 @@ function extractPageInfo(pathname: string, context: RouteContext): {
 } {
   const config = getContextConfig(context)
   const pattern = config.pattern
-  
+
   // Extract everything after the base pattern
   const regexPattern = pattern
     .replace(/\[([^\]]+)\]/g, '([^/]+)')
     .replace(/\//g, '\\/')
-  
+
   const regex = new RegExp(`^${regexPattern}(?:/(.*))?$`)
   const match = pathname.match(regex)
   const pagesPart = match?.[2] // Everything after slug
-  
+
   if (!pagesPart) {
     return { isNested: false }
   }
-  
+
   const pathSegments = pagesPart.split('/')
   const firstSegment = pathSegments[0]
-  
-  // Check if it's a nested page
-  if (pathSegments.length > 1 && config.nested?.[firstSegment]) {
-    const parentPage = firstSegment
-    const nestedPage = pathSegments[1]
-    
-    return {
-      pageType: `${parentPage}/${nestedPage}`,
-      isNested: true,
-      parentPage,
-      nestedPage
+
+  // Check for THREE-level nesting first (e.g., settings/organization/billing)
+  // This must be checked before two-level to avoid partial matches
+  if (pathSegments.length >= 3 && config.nested) {
+    const twoLevelKey = `${pathSegments[0]}/${pathSegments[1]}`
+    const nestedConfig = config.nested[twoLevelKey as keyof typeof config.nested]
+
+    if (Array.isArray(nestedConfig) && nestedConfig.includes(pathSegments[2] as never)) {
+      return {
+        pageType: `${twoLevelKey}/${pathSegments[2]}`,
+        isNested: true,
+        parentPage: twoLevelKey,
+        nestedPage: pathSegments[2]
+      }
     }
   }
-  
-  // Regular page
+
+  // Check for TWO-level nesting (e.g., settings/api-keys)
+  if (pathSegments.length >= 2 && config.nested?.[firstSegment]) {
+    const parentPage = firstSegment
+    const nestedPage = pathSegments[1]
+    const nestedConfig = config.nested[parentPage as keyof typeof config.nested]
+
+    // Only treat as nested if the child page is in the config
+    if (Array.isArray(nestedConfig) && nestedConfig.includes(nestedPage as never)) {
+      return {
+        pageType: `${parentPage}/${nestedPage}`,
+        isNested: true,
+        parentPage,
+        nestedPage
+      }
+    }
+  }
+
+  // Regular page (single segment)
   return {
     pageType: firstSegment,
     isNested: false

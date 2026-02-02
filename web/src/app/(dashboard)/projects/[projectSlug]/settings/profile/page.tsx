@@ -1,10 +1,6 @@
-import { Metadata } from 'next'
-import { ProfileForm, ContentSection } from '@/features/settings'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Profile',
-  description: 'Manage your profile settings.',
-}
+import { ProfileForm, ContentSection } from '@/features/settings'
 
 export default function ProfilePage() {
   return (

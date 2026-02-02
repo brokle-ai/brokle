@@ -23,20 +23,32 @@ export function getValidPages(context: RouteContext): string[] {
 }
 
 /**
- * Check if a page is a nested page (e.g., "settings/integrations")
+ * Check if a page is a nested page (e.g., "settings/integrations" or "settings/organization/billing")
+ * Supports both two-level and three-level nesting
  */
 export function isNestedPage(pageType: string | undefined, context: RouteContext): boolean {
   if (!pageType) return false
-  
+
   const config = getContextConfig(context)
   if (!config.nested) return false
-  
-  // Check if pageType follows the pattern "parent/child"
+
   const parts = pageType.split('/')
-  if (parts.length !== 2) return false
-  
-  const [parentPage, childPage] = parts
-  return config.nested[parentPage]?.includes(childPage as any) || false
+
+  // Three-level nesting (e.g., settings/organization/billing)
+  if (parts.length === 3) {
+    const twoLevelKey = `${parts[0]}/${parts[1]}`
+    const nestedConfig = config.nested[twoLevelKey as keyof typeof config.nested]
+    return Array.isArray(nestedConfig) && nestedConfig.includes(parts[2] as never)
+  }
+
+  // Two-level nesting (e.g., settings/profile)
+  if (parts.length === 2) {
+    const [parentPage, childPage] = parts
+    const nestedConfig = config.nested[parentPage as keyof typeof config.nested]
+    return Array.isArray(nestedConfig) && nestedConfig.includes(childPage as never)
+  }
+
+  return false
 }
 
 /**

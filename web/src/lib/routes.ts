@@ -17,7 +17,6 @@ export const ROUTES = {
   // Dashboard routes (protected)
   HOME: '/',
   PROJECTS: '/projects',
-  SETTINGS: '/settings',
 
   // Error routes
   UNAUTHORIZED: '/401',

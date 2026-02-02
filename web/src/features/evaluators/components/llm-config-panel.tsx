@@ -2,6 +2,8 @@
 
 import { useMemo } from 'react'
 import { Bot, AlertCircle, Settings2 } from 'lucide-react'
+import { useWorkspace } from '@/context/workspace-context'
+import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -65,6 +67,7 @@ export function LLMConfigPanel({
   onChange,
   disabled = false,
 }: LLMConfigPanelProps) {
+  const { currentProject } = useWorkspace()
   const {
     data: allModels,
     modelsByProvider,
@@ -151,11 +154,21 @@ export function LLMConfigPanel({
         <Alert>
           <Settings2 className="h-4 w-4" />
           <AlertDescription>
-            No AI providers configured. Go to{' '}
-            <a href="/settings/ai-providers" className="font-medium underline">
-              Settings → AI Providers
-            </a>{' '}
-            to add your API credentials.
+            No AI providers configured.{' '}
+            {currentProject ? (
+              <>
+                Go to{' '}
+                <a
+                  href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/organization/ai-providers')}
+                  className="font-medium underline"
+                >
+                  Settings → AI Providers
+                </a>{' '}
+                to add your API credentials.
+              </>
+            ) : (
+              'Please select a project to configure AI providers.'
+            )}
           </AlertDescription>
         </Alert>
       ) : (

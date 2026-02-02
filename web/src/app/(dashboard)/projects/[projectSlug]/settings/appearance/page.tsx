@@ -1,10 +1,6 @@
-import { Metadata } from 'next'
-import { AppearanceForm, ContentSection } from '@/features/settings'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Appearance',
-  description: 'Customize the appearance of the dashboard.',
-}
+import { AppearanceForm, ContentSection } from '@/features/settings'
 
 export default function AppearancePage() {
   return (

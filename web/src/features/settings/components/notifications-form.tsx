@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,6 +42,8 @@ const defaultValues: Partial<NotificationsFormValues> = {
 }
 
 export function NotificationsForm() {
+  const params = useParams()
+  const projectSlug = params.projectSlug as string
   const form = useForm<NotificationsFormValues>({
     resolver: zodResolver(notificationsFormSchema),
     defaultValues,
@@ -209,7 +212,7 @@ export function NotificationsForm() {
                 <FormDescription>
                   You can manage your mobile notifications in the{' '}
                   <Link
-                    href='/settings'
+                    href={`/projects/${projectSlug}/settings`}
                     className='underline decoration-dashed underline-offset-4 hover:decoration-solid'
                   >
                     mobile settings

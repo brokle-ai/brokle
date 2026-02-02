@@ -1,10 +1,6 @@
-import { Metadata } from 'next'
-import { AccountForm, ContentSection } from '@/features/settings'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Account',
-  description: 'Manage your account settings.',
-}
+import { AccountForm, ContentSection } from '@/features/settings'
 
 export default function AccountPage() {
   return (

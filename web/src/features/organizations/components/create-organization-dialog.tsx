@@ -25,8 +25,6 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { useCreateOrganizationMutation } from '../hooks/use-organization-queries'
-import { buildOrgUrl } from '@/lib/utils/slug-utils'
-import { toast } from 'sonner'
 
 // Zod validation schema - name only
 const createOrgSchema = z.object({
@@ -59,24 +57,17 @@ export function CreateOrganizationDialog({
 
   const onSubmit = async (data: CreateOrgFormData) => {
     try {
-      const newOrg = await createOrgMutation.mutateAsync({
+      await createOrgMutation.mutateAsync({
         name: data.name,
         // description is reserved for future backend use
       })
 
-      // Navigate to new organization dashboard
-      const orgUrl = buildOrgUrl(newOrg.name, newOrg.id)
-
-      try {
-        router.push(orgUrl)
-      } catch (navError) {
-        // Fallback: close dialog if navigation fails
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Navigation failed:', navError)
-        }
-        onOpenChange(false)
-        toast.error('Navigation failed. Please use the organization selector.')
-      }
+      // Close dialog and navigate to root
+      // Root page will show "Create Your First Project" for the new org
+      // (PostHog pattern: new orgs have no projects, root handles empty state)
+      // Note: Success toast is shown by the mutation hook
+      onOpenChange(false)
+      router.push('/')
     } catch (error) {
       // Error handled by mutation hook (toast notification)
       if (process.env.NODE_ENV === 'development') {

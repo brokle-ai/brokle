@@ -1,10 +1,6 @@
-import { Metadata } from 'next'
-import { DisplayForm, ContentSection } from '@/features/settings'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Display',
-  description: 'Configure display and layout preferences.',
-}
+import { DisplayForm, ContentSection } from '@/features/settings'
 
 export default function DisplayPage() {
   return (

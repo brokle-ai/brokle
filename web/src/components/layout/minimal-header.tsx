@@ -10,7 +10,7 @@ export function MinimalHeader() {
           <BrokleLogo variant="full" size="sm" />
         </Link>
 
-        <ProfileDropdown />
+        <ProfileDropdown currentProject={null} />
       </div>
     </header>
   )

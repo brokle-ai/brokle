@@ -23,11 +23,12 @@ export function useCreateOrganizationMutation() {
       return createOrganization(data)
     },
     onSuccess: async (newOrganization: Organization) => {
-      // Invalidate organizations list
-      queryClient.invalidateQueries({ queryKey: organizationQueryKeys.lists() })
+      // CRITICAL: Await workspace refetch to ensure data is fresh before navigation
+      // Using refetchQueries instead of invalidateQueries ensures the data is actually loaded
+      await queryClient.refetchQueries({ queryKey: ['workspace'] })
 
-      // Invalidate workspace context to include new organization
-      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+      // Invalidate organizations list (can be background, less critical)
+      queryClient.invalidateQueries({ queryKey: organizationQueryKeys.lists() })
 
       // Refresh user data (backend sets defaultOrganizationId automatically)
       try {
@@ -67,11 +68,11 @@ export function useUpdateOrganizationMutation() {
     }) => {
       return updateOrganization(orgId, data)
     },
-    onSuccess: (updatedOrg: Organization) => {
-      // Invalidate workspace context
-      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+    onSuccess: async (updatedOrg: Organization) => {
+      // Await workspace refetch to ensure data is fresh
+      await queryClient.refetchQueries({ queryKey: ['workspace'] })
 
-      // Invalidate organizations list
+      // Invalidate organizations list (can be background)
       queryClient.invalidateQueries({ queryKey: organizationQueryKeys.lists() })
 
       // Invalidate specific org detail

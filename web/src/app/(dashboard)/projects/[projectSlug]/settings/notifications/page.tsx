@@ -1,10 +1,6 @@
-import { Metadata } from 'next'
-import { NotificationsForm, ContentSection } from '@/features/settings'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Notifications',
-  description: 'Configure your notification preferences.',
-}
+import { NotificationsForm, ContentSection } from '@/features/settings'
 
 export default function NotificationsPage() {
   return (

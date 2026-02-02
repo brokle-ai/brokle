@@ -13,9 +13,33 @@ export const ROUTE_CONFIG = {
     },
     project: {
       pattern: '/projects/[projectSlug]',
-      pages: ['traces', 'prompts', 'playground', 'settings'] as const,
+      pages: ['traces', 'prompts', 'playground', 'settings', 'dashboards',
+              'datasets', 'evaluators', 'experiments', 'scores',
+              'annotation-queues', 'sessions', 'spans'] as const,
       nested: {
-        settings: ['integrations', 'api-keys', 'security', 'danger']
+        // PROJECT settings
+        settings: [
+          'api-keys',
+          'score-configs',
+          'danger',
+          'integrations',
+          'security',
+          // ACCOUNT settings
+          'profile',
+          'account',
+          'appearance',
+          'notifications',
+          'display',
+          // ORGANIZATION settings parent
+          'organization',
+        ],
+        // Two-level nesting for organization settings under project
+        'settings/organization': [
+          'members',
+          'ai-providers',
+          'billing',
+          'danger',
+        ],
       } as const,
       preserveContext: true,
       homeRoute: '/'
@@ -25,13 +49,14 @@ export const ROUTE_CONFIG = {
 
 // Auto-generated types from configuration
 export type RouteContext = keyof typeof ROUTE_CONFIG.contexts
-export type OrgPage = typeof ROUTE_CONFIG.contexts.organization.pages[number]  
+export type OrgPage = typeof ROUTE_CONFIG.contexts.organization.pages[number]
 export type ProjectPage = typeof ROUTE_CONFIG.contexts.project.pages[number]
 export type ProjectSettingsPage = typeof ROUTE_CONFIG.contexts.project.nested.settings[number]
+export type ProjectOrgSettingsPage = typeof ROUTE_CONFIG.contexts.project.nested['settings/organization'][number]
 
 // Union types for all pages
 export type OrganizationPageType = OrgPage
-export type ProjectPageType = ProjectPage | `settings/${ProjectSettingsPage}`
+export type ProjectPageType = ProjectPage | `settings/${ProjectSettingsPage}` | `settings/organization/${ProjectOrgSettingsPage}`
 
 // Route configuration type
 export interface RouteConfig {
@@ -67,6 +92,11 @@ export function getAllPages(context: RouteContext): string[] {
 
   if ('nested' in config && config.nested) {
     Object.entries(config.nested).forEach(([parentPage, nestedPages]) => {
+      // Add multi-level parent keys (e.g., 'settings/organization')
+      if (parentPage.includes('/')) {
+        pages.push(parentPage)
+      }
+
       (nestedPages as readonly string[]).forEach((nestedPage: string) => {
         pages.push(`${parentPage}/${nestedPage}`)
       })
