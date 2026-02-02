@@ -124,13 +124,12 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Other Group
+  // Secondary Section (bottom of sidebar)
   {
     title: 'Settings',
     pathname: '/projects/[projectSlug]/settings',
     icon: Settings,
-    section: RouteSection.Main,
-    group: RouteGroup.Other,
+    section: RouteSection.Secondary,
     rbacScope: 'settings:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },

@@ -100,8 +100,10 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         redirectUrl = '/'
       }
 
-      // Navigate
-      router.push(redirectUrl)
+      // Full page reload instead of client-side navigation (PostHog pattern)
+      // This ensures clean state when switching organizations - different orgs have
+      // different security contexts (members, roles, API keys, billing, etc.)
+      window.location.href = redirectUrl
     } catch (error) {
       // Preserve already-classified WorkspaceError, only classify if needed
       const workspaceError = error instanceof WorkspaceError
@@ -119,7 +121,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         })
       }
     }
-  }, [currentOrganization, organizations, pathname, router, switchOrganization])
+  }, [currentOrganization, organizations, pathname, switchOrganization])
 
   // Loading state - show shimmer only if not initialized yet
   if (!isInitialized) {

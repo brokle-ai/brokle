@@ -68,7 +68,14 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain items={mainNavigation} />
         <div className="flex-1" />
-        <NavMain items={secondaryNavigation} />
+
+        {/* Secondary navigation with separator */}
+        {(secondaryNavigation.ungrouped.length > 0 ||
+          Object.keys(secondaryNavigation.grouped).length > 0) && (
+          <div className="border-t border-sidebar-border pt-2">
+            <NavMain items={secondaryNavigation} />
+          </div>
+        )}
       </SidebarContent>
 
       <SidebarFooter>
