@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Target, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Target, AlertCircle, AlertTriangle } from 'lucide-react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -43,11 +43,20 @@ import type { ScoreConfig, CreateScoreConfigRequest, UpdateScoreConfigRequest } 
 
 interface ScoreConfigsSectionProps {
   projectId: string
+  createDialogOpen?: boolean
+  onCreateDialogOpenChange?: (open: boolean) => void
 }
 
-export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+export function ScoreConfigsSection({
+  projectId,
+  createDialogOpen,
+  onCreateDialogOpenChange,
+}: ScoreConfigsSectionProps) {
+  // editingConfig drives edit mode, createDialogOpen drives create mode
   const [editingConfig, setEditingConfig] = useState<ScoreConfig | null>(null)
+
+  // Dialog is open when parent requests create OR we're editing
+  const isDialogOpen = createDialogOpen || editingConfig !== null
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingConfig, setDeletingConfig] = useState<ScoreConfig | null>(null)
   const [page, setPage] = useState(1)
@@ -61,14 +70,19 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   const updateMutation = useUpdateScoreConfigMutation(projectId, editingConfig?.id ?? '')
   const deleteMutation = useDeleteScoreConfigMutation(projectId)
 
-  const handleAddClick = () => {
-    setEditingConfig(null)
-    setIsDialogOpen(true)
+  // Handler for dialog open/close - ensures both states are properly reset
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      // Closing: reset both create and edit states
+      onCreateDialogOpenChange?.(false)
+      setEditingConfig(null)
+    }
+    // Opening is handled by parent (create) or handleEditClick (edit)
   }
 
   const handleEditClick = (config: ScoreConfig) => {
     setEditingConfig(config)
-    setIsDialogOpen(true)
+    // Dialog opens automatically via: editingConfig !== null
   }
 
   const handleDeleteClick = (config: ScoreConfig) => {
@@ -82,8 +96,8 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
     } else {
       await createMutation.mutateAsync(data)
     }
-    setIsDialogOpen(false)
-    setEditingConfig(null)
+    // Close via the handler to ensure both states reset
+    handleDialogOpenChange(false)
   }
 
   const handleConfirmDelete = async () => {
@@ -154,21 +168,6 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
 
       {!isLoading && !error && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium">
-                Score Configs {totalCount > 0 && `(${totalCount})`}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Define validation rules for evaluation scores
-              </p>
-            </div>
-            <Button onClick={handleAddClick}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Config
-            </Button>
-          </div>
-
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -229,7 +228,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
         </div>
       )}
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
@@ -244,7 +243,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
           <ScoreConfigForm
             config={editingConfig ?? undefined}
             onSubmit={handleSubmit}
-            onCancel={() => setIsDialogOpen(false)}
+            onCancel={() => handleDialogOpenChange(false)}
             isLoading={createMutation.isPending || updateMutation.isPending}
           />
         </DialogContent>

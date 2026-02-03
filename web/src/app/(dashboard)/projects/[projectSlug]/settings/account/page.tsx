@@ -1,14 +1,10 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { AccountForm, ContentSection } from '@/features/settings'
+interface AccountPageProps {
+  params: Promise<{ projectSlug: string }>
+}
 
-export default function AccountPage() {
-  return (
-    <ContentSection
-      title="Account"
-      description="Update your account settings. Set your preferred language and timezone."
-    >
-      <AccountForm />
-    </ContentSection>
-  )
+export default async function AccountPage({ params }: AccountPageProps) {
+  const { projectSlug } = await params
+  redirect(`/projects/${projectSlug}/settings/profile`)
 }

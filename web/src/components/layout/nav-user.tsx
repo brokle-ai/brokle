@@ -2,8 +2,6 @@
 
 import Link from 'next/link'
 import {
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
@@ -101,21 +99,9 @@ export function NavUser({
             {currentProject && (
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/account')}>
-                    <BadgeCheck />
-                    Account
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
                   <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/organization/billing')}>
                     <CreditCard />
                     Billing
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/notifications')}>
-                    <Bell />
-                    Notifications
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>

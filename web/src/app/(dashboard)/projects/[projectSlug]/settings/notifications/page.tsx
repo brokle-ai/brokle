@@ -1,14 +1,10 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { NotificationsForm, ContentSection } from '@/features/settings'
+interface NotificationsPageProps {
+  params: Promise<{ projectSlug: string }>
+}
 
-export default function NotificationsPage() {
-  return (
-    <ContentSection
-      title="Notifications"
-      description="Configure how you receive notifications."
-    >
-      <NotificationsForm />
-    </ContentSection>
-  )
+export default async function NotificationsPage({ params }: NotificationsPageProps) {
+  const { projectSlug } = await params
+  redirect(`/projects/${projectSlug}/settings/profile`)
 }

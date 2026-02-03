@@ -1,14 +1,10 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { DisplayForm, ContentSection } from '@/features/settings'
+interface DisplayPageProps {
+  params: Promise<{ projectSlug: string }>
+}
 
-export default function DisplayPage() {
-  return (
-    <ContentSection
-      title="Display"
-      description="Turn items on or off to control what's displayed in the app."
-    >
-      <DisplayForm />
-    </ContentSection>
-  )
+export default async function DisplayPage({ params }: DisplayPageProps) {
+  const { projectSlug } = await params
+  redirect(`/projects/${projectSlug}/settings/appearance`)
 }

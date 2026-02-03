@@ -3,8 +3,6 @@
 import { z } from 'zod'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -56,8 +54,6 @@ const defaultValues: Partial<ProfileFormValues> = {
 }
 
 export function ProfileForm() {
-  const params = useParams()
-  const projectSlug = params.projectSlug as string
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
     defaultValues,
@@ -117,14 +113,7 @@ export function ProfileForm() {
                 </SelectContent>
               </Select>
               <FormDescription>
-                You can manage verified email addresses in your{' '}
-                <Link
-                  href={`/projects/${projectSlug}/settings/account`}
-                  className='hover:text-primary underline underline-offset-4'
-                >
-                  email settings
-                </Link>
-                .
+                Select a verified email address to display on your public profile.
               </FormDescription>
               <FormMessage />
             </FormItem>

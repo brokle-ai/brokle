@@ -13,10 +13,7 @@ import {
   Bot,
   CreditCard,
   UserCog,
-  Wrench,
   Palette,
-  Bell,
-  Monitor,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
@@ -114,39 +111,13 @@ export function UnifiedSettingsNav({ className, ...props }: UnifiedSettingsNavPr
           icon: <UserCog size={18} />,
         },
         {
-          title: 'Account',
-          href: `/projects/${projectSlug}/settings/account`,
-          icon: <Wrench size={18} />,
-        },
-        {
           title: 'Appearance',
           href: `/projects/${projectSlug}/settings/appearance`,
           icon: <Palette size={18} />,
         },
-        {
-          title: 'Notifications',
-          href: `/projects/${projectSlug}/settings/notifications`,
-          icon: <Bell size={18} />,
-        },
-        {
-          title: 'Display',
-          href: `/projects/${projectSlug}/settings/display`,
-          icon: <Monitor size={18} />,
-        },
       ],
     },
   ], [projectSlug])
-
-  // Flatten all items for mobile select
-  const allItems = useMemo(() =>
-    sections.flatMap(section =>
-      section.items.map(item => ({
-        ...item,
-        section: section.title,
-      }))
-    ),
-    [sections]
-  )
 
   const [val, setVal] = useState(pathname ?? sections[0].items[0].href)
 

@@ -7,11 +7,7 @@ import {
   getCoreRowModel,
   flexRender,
 } from '@tanstack/react-table'
-import {
-  Users,
-  UserPlus,
-  Search,
-} from 'lucide-react'
+import { Users, Search } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { useAuth } from '@/features/authentication'
 import { useHasAccess } from '@/hooks/rbac/use-has-access'
@@ -24,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -37,16 +32,11 @@ import {
   DataTableSkeleton,
   DataTableEmptyState,
 } from '@/components/shared/tables'
-import { InviteMemberModal } from './invite-member-modal'
 import { toast } from 'sonner'
 import { createMembersColumns, type MemberRow } from './members-columns'
 import type { OrganizationRole } from '../types'
 
-interface OrganizationMembersSectionProps {
-  className?: string
-}
-
-export function OrganizationMembersSection({ className }: OrganizationMembersSectionProps) {
+export function OrganizationMembersSection() {
   const { user } = useAuth()
   const { currentOrganization } = useWorkspace()
   const queryClient = useQueryClient()
@@ -55,7 +45,6 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
 
   // Scope-based permission checks
-  const canInviteMembers = useHasAccess({ scope: "members:invite" })
   const canUpdateMembers = useHasAccess({ scope: "members:update" })
   const canRemoveMembers = useHasAccess({ scope: "members:remove" })
 
@@ -157,24 +146,8 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
   }
 
   return (
-    <div className="space-y-8">
-      {/* Members Table Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium">Team Members ({members.length})</h3>
-          {canInviteMembers && (
-            <InviteMemberModal
-              trigger={
-                <Button>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Invite Member
-                </Button>
-              }
-            />
-          )}
-        </div>
-
-        {/* Filters */}
+    <div className="space-y-4">
+      {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -246,6 +219,5 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
           </Table>
         </div>
       </div>
-    </div>
   )
 }
