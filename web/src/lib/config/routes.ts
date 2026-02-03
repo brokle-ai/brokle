@@ -26,10 +26,7 @@ export const ROUTE_CONFIG = {
           'security',
           // ACCOUNT settings
           'profile',
-          'account',       // Redirects to profile
           'appearance',
-          'notifications', // Redirects to profile
-          'display',       // Redirects to appearance
           // ORGANIZATION settings parent
           'organization',
         ],
