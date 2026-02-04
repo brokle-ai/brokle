@@ -27,19 +27,22 @@ export function useProjectExperiments(): UseProjectExperimentsReturn {
   const projectSlug = currentProject?.slug
 
   const {
-    data: experiments,
+    data: experimentsResponse,
     isLoading: isQueryLoading,
     isFetching,
     error,
     refetch,
   } = useExperimentsQuery(projectId)
 
+  // Extract the experiments array from the response
+  const experiments = experimentsResponse?.data ?? []
+
   // Destructure for stable references
   const { search, status, sortBy, sortOrder, page, pageSize } = tableState
 
   // Client-side filtering since the API doesn't support filter params yet
   const filteredData = useMemo(() => {
-    if (!experiments) return []
+    if (!experiments || experiments.length === 0) return []
 
     let filtered = experiments
 
@@ -96,6 +99,8 @@ export function useProjectExperiments(): UseProjectExperimentsReturn {
   return {
     data: paginatedData,
     totalCount: filteredData.length,
+    page,
+    pageSize,
     isLoading: isProjectLoading || isQueryLoading,
     isFetching,
     error: error?.message ?? null,

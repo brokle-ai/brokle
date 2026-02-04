@@ -151,12 +151,14 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
     )
   }
 
+  const totalCount = data.pagination.total
+
   return (
     <>
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm text-muted-foreground">
-          {data.total} {data.total === 1 ? 'item' : 'items'}
+          {totalCount} {totalCount === 1 ? 'item' : 'items'}
         </div>
         <RowHeightSelector value={rowHeight} onChange={setRowHeight} />
       </div>
@@ -208,9 +210,9 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
         </Table>
       </div>
 
-      {data && data.pagination.total > data.data.length && (
+      {data && totalCount > data.data.length && (
         <p className="text-sm text-muted-foreground text-center mt-4">
-          Showing {data.data.length} of {data.pagination.total} items
+          Showing {data.data.length} of {totalCount} items
         </p>
       )}
 

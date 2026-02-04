@@ -26,7 +26,7 @@ import (
 // @Param limit query int false "Limit (default 20, max 100)"
 // @Param sort_by query string false "Sort field: last_trace, first_trace, trace_count, total_tokens, total_cost (default: last_trace)"
 // @Param sort_dir query string false "Sort direction: asc, desc (default: desc)"
-// @Success 200 {object} response.APIResponse{data=observability.SessionListResponse} "List of sessions with pagination"
+// @Success 200 {object} response.APIResponse{data=[]observability.SessionSummary} "List of sessions with pagination"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
 // @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
@@ -100,14 +100,6 @@ func (h *Handler) ListSessions(c *gin.Context) {
 
 	paginationMeta := response.NewPagination(params.Page, params.Limit, totalCount)
 
-	// Return response in SessionListResponse format
-	sessionResponse := &observability.SessionListResponse{
-		Sessions:   sessions,
-		TotalCount: totalCount,
-		Page:       params.Page,
-		PageSize:   params.Limit,
-		TotalPages: int((totalCount + int64(params.Limit) - 1) / int64(params.Limit)),
-	}
-
-	response.SuccessWithPagination(c, sessionResponse, paginationMeta)
+	// Return sessions array directly with standard pagination
+	response.SuccessWithPagination(c, sessions, paginationMeta)
 }

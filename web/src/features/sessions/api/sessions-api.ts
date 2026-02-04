@@ -57,17 +57,6 @@ export interface Session {
   userIds: string[]
 }
 
-/**
- * Session list response from the backend
- */
-export interface SessionListResponse {
-  sessions: SessionSummary[]
-  total_count: number
-  page: number
-  page_size: number
-  total_pages: number
-}
-
 // ============================================================================
 // API Parameter Types
 // ============================================================================
@@ -141,18 +130,13 @@ export async function getProjectSessions(
   }
   if (sortOrder) searchParams.sort_dir = sortOrder
 
-  const response = await client.get<SessionListResponse>(
+  const response = await client.getPaginated<SessionSummary>(
     `/v1/projects/${projectId}/sessions`,
     searchParams
   )
 
   return {
-    data: (response.sessions ?? []).map(transformSession),
-    pagination: {
-      page: response.page,
-      pageSize: response.page_size,
-      totalCount: response.total_count,
-      totalPages: response.total_pages,
-    },
+    data: response.data.map(transformSession),
+    pagination: response.pagination,
   }
 }

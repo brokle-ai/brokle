@@ -24,11 +24,11 @@ func (r *scoreAnalyticsRepository) GetStatistics(ctx context.Context, filter *ob
 	query := `
 		SELECT
 			count() as count,
-			avg(value) as mean,
-			stddevPop(value) as std_dev,
-			min(value) as min_val,
-			max(value) as max_val,
-			median(value) as median_val
+			ifNull(avg(value), 0) as mean,
+			ifNull(stddevPop(value), 0) as std_dev,
+			ifNull(min(value), 0) as min_val,
+			ifNull(max(value), 0) as max_val,
+			ifNull(median(value), 0) as median_val
 		FROM scores
 		WHERE project_id = ?
 		  AND name = ?
@@ -166,7 +166,9 @@ func (r *scoreAnalyticsRepository) GetDistribution(ctx context.Context, filter *
 	}
 
 	boundsQuery := `
-		SELECT min(value) as min_val, max(value) as max_val
+		SELECT
+			ifNull(min(value), 0) as min_val,
+			ifNull(max(value), 0) as max_val
 		FROM scores
 		WHERE project_id = ?
 		  AND name = ?
@@ -237,7 +239,7 @@ func (r *scoreAnalyticsRepository) GetDistribution(ctx context.Context, filter *
 
 	for rows.Next() {
 		var binIdx int64
-		var count int64
+		var count uint64
 		if err := rows.Scan(&binIdx, &count); err != nil {
 			return nil, fmt.Errorf("scan distribution bin: %w", err)
 		}
@@ -284,7 +286,7 @@ func (r *scoreAnalyticsRepository) GetHeatmap(ctx context.Context, filter *obser
 	}
 
 	if filter.FromTimestamp != nil {
-		boundsQuery = boundsQuery[:len(boundsQuery)-1] + " AND timestamp >= ?"
+		boundsQuery += " AND timestamp >= ?"
 		boundsArgs = append(boundsArgs, *filter.FromTimestamp)
 	}
 	if filter.ToTimestamp != nil {
@@ -350,7 +352,8 @@ func (r *scoreAnalyticsRepository) GetHeatmap(ctx context.Context, filter *obser
 
 	var cells []observability.HeatmapCell
 	for rows.Next() {
-		var bin1, bin2, count int64
+		var bin1, bin2 int64
+		var count uint64
 		if err := rows.Scan(&bin1, &bin2, &count); err != nil {
 			return nil, fmt.Errorf("scan heatmap cell: %w", err)
 		}
@@ -416,7 +419,7 @@ func (r *scoreAnalyticsRepository) GetComparisonMetrics(ctx context.Context, fil
 		args = append(args, *filter.ToTimestamp, *filter.ToTimestamp)
 	}
 
-	var matchedCount int64
+	var matchedCount uint64
 	var pearson, mae, rmse float64
 	err := r.db.QueryRow(ctx, aggregateQuery, args...).Scan(&matchedCount, &pearson, &mae, &rmse)
 	if err != nil {

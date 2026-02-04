@@ -199,9 +199,9 @@ function SessionTracesSubRow({ row }: { row: Row<Session> }) {
   const session = row.original
 
   const handleViewInTraces = () => {
-    if (currentProject?.slug && session.sessionId !== 'no-session') {
+    if (currentProject?.compositeSlug && session.sessionId !== 'no-session') {
       // Navigate to traces page with session filter
-      router.push(`/projects/${currentProject.slug}/traces?sessionId=${session.sessionId}`)
+      router.push(`/projects/${currentProject.compositeSlug}/traces?sessionId=${session.sessionId}`)
     }
   }
 

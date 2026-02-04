@@ -47,13 +47,53 @@ export interface ProjectSummary {
   updatedAt: string
 }
 
+/**
+ * Project metrics for observability dashboard
+ * Note: These are observability metrics (traces observed), NOT gateway metrics (requests processed)
+ */
 export interface ProjectMetrics {
-  requests_today: number
-  cost_today: number
-  avg_latency: number
-  error_rate: number
+  // Observability metrics
+  traces_collected: number
+  traces_trend?: number
+  observed_cost: number
+  cost_trend?: number
+
+  // Evaluation metrics
+  active_rules: number
+  running_experiments: number
+
+  // Optional additional metrics
+  scores_count?: number
+  avg_score?: number
+
+  // Legacy fields (deprecated - for backward compatibility during migration)
+  /** @deprecated Use traces_collected instead */
+  requests_today?: number
+  /** @deprecated Use observed_cost instead */
+  cost_today?: number
+  /** @deprecated Not relevant for observability platform */
+  avg_latency?: number
+  /** @deprecated Not relevant for observability platform */
+  error_rate?: number
+  /** @deprecated Use traces_collected instead */
   total_requests?: number
+  /** @deprecated Use observed_cost instead */
   total_cost?: number
+}
+
+/**
+ * Organization-level aggregated stats
+ * Used in the organization dashboard stats row
+ */
+export interface OrganizationStats {
+  traces_collected: number
+  traces_trend: number
+  spans_analyzed: number
+  scores_recorded: number
+  observed_cost: number
+  cost_trend: number
+  projects_count: number
+  members_count?: number
 }
 
 export interface ProjectSettings {
@@ -70,10 +110,24 @@ export interface RoutingPreferences {
   fallback_providers: string[]
 }
 
+/**
+ * Usage statistics for organization
+ * Note: These track observed AI usage, not gateway requests
+ */
 export interface UsageStats {
-  requests_this_month: number
-  cost_this_month: number
-  models_used: number
+  traces_this_month: number
+  observed_cost_this_month: number
+  models_observed: number
+  last_trace?: string
+
+  // Legacy fields (deprecated - for backward compatibility)
+  /** @deprecated Use traces_this_month instead */
+  requests_this_month?: number
+  /** @deprecated Use observed_cost_this_month instead */
+  cost_this_month?: number
+  /** @deprecated Use models_observed instead */
+  models_used?: number
+  /** @deprecated Use last_trace instead */
   last_request?: string
 }
 

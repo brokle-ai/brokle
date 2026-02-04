@@ -1,13 +1,12 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Evaluator,
   CreateEvaluatorRequest,
   UpdateEvaluatorRequest,
-  EvaluatorListResponse,
   EvaluatorListParams,
   EvaluatorExecution,
   EvaluatorExecutionDetail,
-  ExecutionListResponse,
   ExecutionListParams,
   TriggerOptions,
   TriggerResponse,
@@ -26,19 +25,20 @@ export const evaluatorsApi = {
   listEvaluators: async (
     projectId: string,
     params?: EvaluatorListParams
-  ): Promise<EvaluatorListResponse> => {
-    const queryParams = new URLSearchParams()
-    if (params?.page) queryParams.set('page', String(params.page))
-    if (params?.limit) queryParams.set('limit', String(params.limit))
-    if (params?.status) queryParams.set('status', params.status)
-    if (params?.scorer_type) queryParams.set('scorer_type', params.scorer_type)
-    if (params?.search) queryParams.set('search', params.search)
-    if (params?.sort_by) queryParams.set('sort_by', params.sort_by)
-    if (params?.sort_dir) queryParams.set('sort_dir', params.sort_dir)
+  ): Promise<PaginatedResponse<Evaluator>> => {
+    const queryParams: Record<string, string> = {}
+    if (params?.page) queryParams.page = String(params.page)
+    if (params?.limit) queryParams.limit = String(params.limit)
+    if (params?.status) queryParams.status = params.status
+    if (params?.scorer_type) queryParams.scorer_type = params.scorer_type
+    if (params?.search) queryParams.search = params.search
+    if (params?.sort_by) queryParams.sort_by = params.sort_by
+    if (params?.sort_dir) queryParams.sort_dir = params.sort_dir
 
-    const query = queryParams.toString()
-    const url = `/v1/projects/${projectId}/evaluators${query ? `?${query}` : ''}`
-    return client.get<EvaluatorListResponse>(url)
+    return client.getPaginated<Evaluator>(
+      `/v1/projects/${projectId}/evaluators`,
+      queryParams
+    )
   },
 
   /**
@@ -140,16 +140,17 @@ export const evaluatorsApi = {
     projectId: string,
     evaluatorId: string,
     params?: ExecutionListParams
-  ): Promise<ExecutionListResponse> => {
-    const queryParams = new URLSearchParams()
-    if (params?.page) queryParams.set('page', String(params.page))
-    if (params?.limit) queryParams.set('limit', String(params.limit))
-    if (params?.status) queryParams.set('status', params.status)
-    if (params?.trigger_type) queryParams.set('trigger_type', params.trigger_type)
+  ): Promise<PaginatedResponse<EvaluatorExecution>> => {
+    const queryParams: Record<string, string> = {}
+    if (params?.page) queryParams.page = String(params.page)
+    if (params?.limit) queryParams.limit = String(params.limit)
+    if (params?.status) queryParams.status = params.status
+    if (params?.trigger_type) queryParams.trigger_type = params.trigger_type
 
-    const query = queryParams.toString()
-    const url = `/v1/projects/${projectId}/evaluators/${evaluatorId}/executions${query ? `?${query}` : ''}`
-    return client.get<ExecutionListResponse>(url)
+    return client.getPaginated<EvaluatorExecution>(
+      `/v1/projects/${projectId}/evaluators/${evaluatorId}/executions`,
+      queryParams
+    )
   },
 
   /**

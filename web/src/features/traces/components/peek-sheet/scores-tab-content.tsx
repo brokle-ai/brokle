@@ -200,7 +200,7 @@ export function ScoresTabContent({
 
   // Find config for a score by name
   const getConfigForScore = React.useCallback((scoreName: string): ScoreConfig | undefined => {
-    return scoreConfigs?.find(config => config.name === scoreName)
+    return scoreConfigs?.data?.find(config => config.name === scoreName)
   }, [scoreConfigs])
 
   // Handle save from edit dialog

@@ -55,12 +55,3 @@ func (f *SessionFilter) SetDefaults(defaultSort string) {
 		f.Limit = 100
 	}
 }
-
-// SessionListResponse represents the paginated response for listing sessions.
-type SessionListResponse struct {
-	Sessions   []*SessionSummary `json:"sessions"`
-	TotalCount int64             `json:"total_count"`
-	Page       int               `json:"page"`
-	PageSize   int               `json:"page_size"`
-	TotalPages int               `json:"total_pages"`
-}

@@ -44,16 +44,16 @@ export function OrganizationSettingsNav({ className, ...props }: OrganizationSet
       href: `/organizations/${orgSlug}/settings/billing`,
       icon: <CreditCard size={18} />,
     },
-    {
-      title: 'Security',
-      href: `/organizations/${orgSlug}/settings/security`,
-      icon: <Shield size={18} />,
-    },
-    {
-      title: 'Advanced',
-      href: `/organizations/${orgSlug}/settings/advanced`,
-      icon: <Code size={18} />,
-    },
+    // {
+    //   title: 'Security',
+    //   href: `/organizations/${orgSlug}/settings/security`,
+    //   icon: <Shield size={18} />,
+    // },
+    // {
+    //   title: 'Advanced',
+    //   href: `/organizations/${orgSlug}/settings/advanced`,
+    //   icon: <Code size={18} />,
+    // },
     {
       title: 'Danger Zone',
       href: `/organizations/${orgSlug}/settings/danger`,

@@ -111,13 +111,7 @@ export interface UpdateScoreData {
  * @param params - Filter and pagination parameters
  * @returns Traces array with pagination metadata
  */
-export const getProjectTraces = async (params: GetTracesParams): Promise<{
-  traces: Trace[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}> => {
+export const getProjectTraces = async (params: GetTracesParams): Promise<PaginatedResponse<Trace>> => {
   const {
     projectId,
     page = 1,
@@ -180,11 +174,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   const response = await client.getPaginated<any>('/v1/traces', queryParams)
 
   return {
-    traces: response.data.map(transformTrace),
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
+    data: response.data.map(transformTrace),
+    pagination: response.pagination,
   }
 }
 
@@ -450,13 +441,7 @@ export const getTraceFilterOptions = async (
  * @param params - Filter and pagination parameters
  * @returns Spans array with pagination
  */
-export const getSpans = async (params: GetSpansParams): Promise<{
-  spans: Span[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}> => {
+export const getSpans = async (params: GetSpansParams): Promise<PaginatedResponse<Span>> => {
   const {
     projectId,
     traceId,
@@ -485,11 +470,8 @@ export const getSpans = async (params: GetSpansParams): Promise<{
   const response = await client.getPaginated<any>('/v1/spans', queryParams)
 
   return {
-    spans: response.data.map(transformSpan),
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
+    data: response.data.map(transformSpan),
+    pagination: response.pagination,
   }
 }
 
@@ -534,10 +516,7 @@ export const updateSpan = async (
  *
  * Backend endpoint: GET /api/v1/scores
  */
-export const getScores = async (params: GetScoresParams): Promise<{
-  scores: Score[]
-  totalCount: number
-}> => {
+export const getScores = async (params: GetScoresParams): Promise<PaginatedResponse<Score>> => {
   const {
     projectId,
     traceId,
@@ -566,8 +545,8 @@ export const getScores = async (params: GetScoresParams): Promise<{
   const response = await client.getPaginated<Score>('/v1/scores', queryParams)
 
   return {
-    scores: response.data.map(transformScore),
-    totalCount: response.pagination.total,
+    data: response.data.map(transformScore),
+    pagination: response.pagination,
   }
 }
 

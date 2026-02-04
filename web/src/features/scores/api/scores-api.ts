@@ -1,5 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { PaginatedResponse, QueryParams } from '@/lib/api/core/types'
+import type { QueryParams, PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Score,
   ScoreConfig,

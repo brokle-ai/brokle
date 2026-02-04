@@ -72,7 +72,7 @@ export function AddToQueueButton({
   }
 
   // Filter to only active queues
-  const activeQueues = queuesData?.filter((q) => q.queue.status === 'active') ?? []
+  const activeQueues = queuesData?.data?.filter((q) => q.queue.status === 'active') ?? []
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

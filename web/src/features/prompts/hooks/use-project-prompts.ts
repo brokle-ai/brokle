@@ -74,11 +74,11 @@ export function useProjectPrompts() {
 
   return {
     // Data
-    data: data?.prompts ?? [],
-    totalCount: data?.totalCount ?? 0,
-    page: data?.page ?? page,
-    pageSize: data?.pageSize ?? limit,
-    totalPages: data?.totalPages ?? 0,
+    data: data?.data ?? [],
+    totalCount: data?.pagination?.total ?? 0,
+    page: data?.pagination?.page ?? page,
+    pageSize: data?.pagination?.limit ?? limit,
+    totalPages: data?.pagination?.totalPages ?? 0,
 
     // Loading states
     isLoading: isProjectLoading || isPromptsLoading,

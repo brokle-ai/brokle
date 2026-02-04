@@ -24,13 +24,11 @@ export type {
   Evaluator,
   CreateEvaluatorRequest,
   UpdateEvaluatorRequest,
-  EvaluatorListResponse,
   EvaluatorListParams,
   // Execution types
   ExecutionStatus,
   TriggerType,
   EvaluatorExecution,
-  ExecutionListResponse,
   ExecutionListParams,
   // Analytics types
   EvaluatorAnalyticsParams,

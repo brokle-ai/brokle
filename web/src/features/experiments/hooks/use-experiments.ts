@@ -2,8 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { experimentsApi } from '../api/experiments-api'
 import type { PaginatedResponse } from '@/lib/api/core/types'
+import { experimentsApi } from '../api/experiments-api'
 import type {
   CreateExperimentRequest,
   UpdateExperimentRequest,
@@ -214,6 +214,7 @@ export function useDeleteExperimentMutation(projectId: string) {
           pagination: {
             ...old.pagination,
             total: old.pagination.total - 1,
+            totalPages: Math.ceil((old.pagination.total - 1) / old.pagination.limit),
           },
         } : old
       )

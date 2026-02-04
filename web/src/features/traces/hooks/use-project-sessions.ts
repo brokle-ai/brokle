@@ -210,10 +210,10 @@ export function useProjectSessions() {
 
   // Aggregate traces into sessions
   const sessions = useMemo(() => {
-    if (!tracesData?.traces) return []
+    if (!tracesData?.data) return []
 
     // Filter to traces that have a session_id
-    const tracesWithSession = tracesData.traces.filter((t) => t.session_id)
+    const tracesWithSession = tracesData.data.filter((t) => t.session_id)
 
     const aggregated = aggregateTracesToSessions(tracesWithSession)
 
@@ -255,7 +255,7 @@ export function useProjectSessions() {
     }
 
     return aggregated
-  }, [tracesData?.traces, tableState.sortBy, tableState.sortOrder])
+  }, [tracesData?.data, tableState.sortBy, tableState.sortOrder])
 
   // Paginate sessions client-side
   const paginatedSessions = useMemo(() => {

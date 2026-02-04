@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Prompt,
   PromptListItem,
@@ -67,13 +68,7 @@ export interface DetectDialectResponse {
 
 const client = new BrokleAPIClient('/api')
 
-export const getPrompts = async (params: GetPromptsParams): Promise<{
-  prompts: PromptListItem[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}> => {
+export const getPrompts = async (params: GetPromptsParams): Promise<PaginatedResponse<PromptListItem>> => {
   const { projectId, type, tags, search, page = 1, limit = 50 } = params
 
   const queryParams: Record<string, any> = {
@@ -85,18 +80,10 @@ export const getPrompts = async (params: GetPromptsParams): Promise<{
   if (tags && tags.length > 0) queryParams.tags = tags.join(',')
   if (search) queryParams.search = search
 
-  const response = await client.getPaginated<PromptListItem>(
+  return client.getPaginated<PromptListItem>(
     `/v1/projects/${projectId}/prompts`,
     queryParams
   )
-
-  return {
-    prompts: response.data,
-    totalCount: response.pagination.total,
-    page: response.pagination.page,
-    pageSize: response.pagination.limit,
-    totalPages: response.pagination.totalPages,
-  }
 }
 
 export const getPromptById = async (

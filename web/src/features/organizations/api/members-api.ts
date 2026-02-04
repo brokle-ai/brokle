@@ -58,7 +58,7 @@ export const getOrganizationMembers = async (
 
   return {
     data: response.data.map(mapMemberFromAPI),
-    pagination: response.pagination
+    pagination: response.pagination,
   }
 }
 

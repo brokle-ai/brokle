@@ -102,11 +102,20 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Evaluations Group
+  // Evaluations Group (ordered by workflow)
   {
     title: 'Datasets',
     pathname: '/projects/[projectSlug]/datasets',
     icon: Database,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Evaluators',
+    pathname: '/projects/[projectSlug]/evaluators',
+    icon: Scale,
     section: RouteSection.Main,
     group: RouteGroup.Evaluations,
     rbacScope: 'projects:read',
@@ -125,15 +134,6 @@ export const ROUTES: Route[] = [
     title: 'Scores',
     pathname: '/projects/[projectSlug]/scores',
     icon: BarChart3,
-    section: RouteSection.Main,
-    group: RouteGroup.Evaluations,
-    rbacScope: 'projects:read',
-    show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-  {
-    title: 'Evaluators',
-    pathname: '/projects/[projectSlug]/evaluators',
-    icon: Scale,
     section: RouteSection.Main,
     group: RouteGroup.Evaluations,
     rbacScope: 'projects:read',

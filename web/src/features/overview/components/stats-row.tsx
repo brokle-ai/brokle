@@ -49,44 +49,44 @@ export function StatsRow({ stats, isLoading, error, className }: StatsRowProps) 
       {
         title: 'Traces',
         value: formatNumber(stats.traces_count),
-        trend: {
+        trend: stats.traces_trend !== 0 ? {
           value: Math.abs(Math.round(stats.traces_trend)),
           label: 'vs previous period',
-          direction: stats.traces_trend >= 0 ? 'up' as const : 'down' as const,
-        },
+          direction: stats.traces_trend > 0 ? 'up' as const : 'down' as const,
+        } : undefined,
         icon: Activity,
       },
       {
         title: 'Total Cost',
         value: formatCurrency(stats.total_cost),
-        trend: {
+        trend: stats.cost_trend !== 0 ? {
           value: Math.abs(Math.round(stats.cost_trend)),
           label: 'vs previous period',
-          direction: stats.cost_trend >= 0 ? 'up' as const : 'down' as const,
+          direction: stats.cost_trend > 0 ? 'up' as const : 'down' as const,
           isPositiveWhenDown: true,  // cost decrease is good
-        },
+        } : undefined,
         icon: DollarSign,
       },
       {
         title: 'Avg Latency',
         value: formatLatency(stats.avg_latency_ms),
-        trend: {
+        trend: stats.latency_trend !== 0 ? {
           value: Math.abs(Math.round(stats.latency_trend)),
           label: 'vs previous period',
-          direction: stats.latency_trend >= 0 ? 'up' as const : 'down' as const,
+          direction: stats.latency_trend > 0 ? 'up' as const : 'down' as const,
           isPositiveWhenDown: true,  // latency decrease is good
-        },
+        } : undefined,
         icon: Clock,
       },
       {
         title: 'Error Rate',
         value: formatPercentage(stats.error_rate),
-        trend: {
+        trend: stats.error_rate_trend !== 0 ? {
           value: Math.abs(Math.round(stats.error_rate_trend)),
           label: 'vs previous period',
-          direction: stats.error_rate_trend >= 0 ? 'up' as const : 'down' as const,
+          direction: stats.error_rate_trend > 0 ? 'up' as const : 'down' as const,
           isPositiveWhenDown: true,  // error rate decrease is good
-        },
+        } : undefined,
         icon: AlertTriangle,
       },
     ]

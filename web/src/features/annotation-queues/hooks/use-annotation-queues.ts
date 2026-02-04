@@ -2,8 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { annotationQueuesApi } from '../api/annotation-queues-api'
 import type { PaginatedResponse } from '@/lib/api/core/types'
+import { annotationQueuesApi } from '../api/annotation-queues-api'
 import type {
   CreateQueueRequest,
   UpdateQueueRequest,

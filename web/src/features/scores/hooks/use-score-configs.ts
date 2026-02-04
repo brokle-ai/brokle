@@ -2,8 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { scoresApi } from '../api/scores-api'
 import type { PaginatedResponse } from '@/lib/api/core/types'
+import { scoresApi } from '../api/scores-api'
 import type {
   CreateScoreConfigRequest,
   UpdateScoreConfigRequest,
@@ -106,8 +106,8 @@ export function useScoreConfigsByIdsQuery(
     queryKey: [...scoreConfigQueryKeys.list(projectId ?? ''), 'byIds', configIds],
     queryFn: async () => {
       if (!projectId || configIds.length === 0) return []
-      const allConfigs = await scoresApi.listScoreConfigs(projectId)
-      return allConfigs.filter((c) => configIds.includes(c.id))
+      const response = await scoresApi.listScoreConfigs(projectId)
+      return response.data.filter((c) => configIds.includes(c.id))
     },
     enabled: !!projectId && configIds.length > 0,
     staleTime: 30_000,

@@ -6,14 +6,6 @@ import {
   FolderOpen,
   Plus,
   Search,
-  MoreVertical,
-  Play,
-  Pause,
-  Archive,
-  Settings,
-  Trash2,
-  Copy,
-  ExternalLink
 } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { useOrganizationProjects } from '../hooks/use-organization-projects'
@@ -27,14 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { CreateProjectDialog } from '@/features/projects'
 import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
@@ -55,7 +39,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
-  const [sortBy, setSortBy] = useState<'name' | 'created' | 'requests' | 'cost'>('name')
+  const [sortBy, setSortBy] = useState<'name' | 'created' | 'traces' | 'cost'>('name')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const filteredAndSortedProjects = useMemo(() => {
@@ -74,10 +58,10 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           return a.name.localeCompare(b.name)
         case 'created':
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        case 'requests':
-          return (b.metrics.total_requests || 0) - (a.metrics.total_requests || 0)
+        case 'traces':
+          return (b.metrics.traces_collected || 0) - (a.metrics.traces_collected || 0)
         case 'cost':
-          return (b.metrics.total_cost || 0) - (a.metrics.total_cost || 0)
+          return (b.metrics.observed_cost || 0) - (a.metrics.observed_cost || 0)
         default:
           return 0
       }
@@ -90,8 +74,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
     switch (status) {
       case 'active':
         return 'bg-green-500'
-      case 'inactive':
-        return 'bg-yellow-500'
       case 'archived':
         return 'bg-gray-500'
       default:
@@ -108,11 +90,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   const handleProjectClick = (project: Project) => {
     const projectUrl = buildProjectUrl(project.name, project.id)
     router.push(projectUrl)
-  }
-
-  const handleProjectAction = (action: string, project: Project) => {
-    console.log(`Action: ${action} on project:`, project.name)
-    // TODO: Implement project actions
   }
 
   if (!currentOrganization) {
@@ -158,19 +135,18 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
             <SelectItem value="archived">Archived</SelectItem>
           </SelectContent>
         </Select>
 
-        <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'name' | 'created' | 'requests' | 'cost')}>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'name' | 'created' | 'traces' | 'cost')}>
           <SelectTrigger className="w-full sm:w-40">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="name">Name</SelectItem>
             <SelectItem value="created">Created Date</SelectItem>
-            <SelectItem value="requests">Requests</SelectItem>
+            <SelectItem value="traces">Traces</SelectItem>
             <SelectItem value="cost">Cost</SelectItem>
           </SelectContent>
         </Select>
@@ -186,87 +162,17 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
               onClick={() => handleProjectClick(project)}
             >
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="bg-muted flex size-10 items-center justify-center rounded-lg group-hover:bg-primary/10 transition-colors">
-                      <FolderOpen className="size-5 group-hover:text-primary transition-colors" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate">{project.name}</CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className={cn("w-2 h-2 rounded-full", getStatusColor(project.status))}></div>
-                        <span className="text-sm capitalize text-muted-foreground">{project.status}</span>
-                      </div>
+                <div className="flex items-center gap-3">
+                  <div className="bg-muted flex size-10 items-center justify-center rounded-lg group-hover:bg-primary/10 transition-colors">
+                    <FolderOpen className="size-5 group-hover:text-primary transition-colors" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg truncate">{project.name}</CardTitle>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className={cn("w-2 h-2 rounded-full", getStatusColor(project.status))}></div>
+                      <span className="text-sm capitalize text-muted-foreground">{project.status}</span>
                     </div>
                   </div>
-                  
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        handleProjectClick(project)
-                      }}>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Open Project
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        handleProjectAction('settings', project)
-                      }}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        handleProjectAction('duplicate', project)
-                      }}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {project.status === 'active' ? (
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation()
-                          handleProjectAction('pause', project)
-                        }}>
-                          <Pause className="mr-2 h-4 w-4" />
-                          Pause Project
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation()
-                          handleProjectAction('activate', project)
-                        }}>
-                          <Play className="mr-2 h-4 w-4" />
-                          Activate Project
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        handleProjectAction('archive', project)
-                      }}>
-                        <Archive className="mr-2 h-4 w-4" />
-                        Archive
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleProjectAction('delete', project)
-                        }}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete Project
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </CardHeader>
               
@@ -274,18 +180,18 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="font-medium text-foreground">
-                      {formatNumber(project.metrics.requests_today)}
+                      {formatNumber(project.metrics.traces_collected)}
                     </div>
                     <div className="text-muted-foreground text-xs">
-                      Requests today
+                      Traces collected
                     </div>
                   </div>
                   <div>
                     <div className="font-medium text-foreground">
-                      ${project.metrics.cost_today.toFixed(2)}
+                      ${(project.metrics.observed_cost || 0).toFixed(2)}
                     </div>
                     <div className="text-muted-foreground text-xs">
-                      Cost today
+                      AI cost observed
                     </div>
                   </div>
                 </div>
@@ -293,18 +199,18 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="font-medium text-foreground">
-                      {project.metrics.avg_latency}ms
+                      {project.metrics.active_rules}
                     </div>
                     <div className="text-muted-foreground text-xs">
-                      Avg latency
+                      Active rules
                     </div>
                   </div>
                   <div>
                     <div className="font-medium text-foreground">
-                      {(project.metrics.error_rate * 100).toFixed(2)}%
+                      {project.metrics.running_experiments}
                     </div>
                     <div className="text-muted-foreground text-xs">
-                      Error rate
+                      Experiments
                     </div>
                   </div>
                 </div>
@@ -324,7 +230,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
             <p className="text-muted-foreground mb-6">
               {searchTerm || statusFilter !== 'all'
                 ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                : 'Create your first project to start using the AI platform'}
+                : 'Create your first project to start observing your AI applications'}
             </p>
             {(!searchTerm && statusFilter === 'all') && showCreateButton && currentOrganization?.id && (
               <Button onClick={() => setCreateDialogOpen(true)}>

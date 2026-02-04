@@ -4,13 +4,13 @@
  */
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   APIKey,
   CreateAPIKeyRequest,
   APIKeyFilters,
   BackendAPIKey,
 } from '../types/api-keys'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 
 // Initialize API client with /api base path (Dashboard routes)
 const client = new BrokleAPIClient('/api')
@@ -75,6 +75,7 @@ export async function listAPIKeys(
 
   const response = await client.getPaginated<APIKey>(endpoint, params)
 
+  // Map backend format to frontend format for each key
   return {
     data: response.data.map(mapAPIKeyToFrontend),
     pagination: response.pagination,

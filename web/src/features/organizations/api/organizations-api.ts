@@ -3,8 +3,7 @@
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import type { RequestOptions } from '@/lib/api/core/types'
-import type { Organization, Project, OrganizationMember } from '../types'
-import type { PaginatedResponse } from '@/lib/api/core/types'
+import type { Organization, Project, OrganizationMember, ProjectStatus } from '../types'
 
 // API response types matching backend
 interface OrganizationAPIResponse {
@@ -27,13 +26,27 @@ interface ProjectAPIResponse {
   updated_at: string
 }
 
+// Maps API status values to domain ProjectStatus
+// Note: API may return 'inactive', but our domain only has 'active' | 'archived'
+const mapProjectStatus = (apiStatus: ProjectAPIResponse['status']): ProjectStatus => {
+  if (apiStatus === 'active') return 'active'
+  // Map both 'inactive' and 'archived' to 'archived' for domain consistency
+  return 'archived'
+}
+
 interface ProjectMetricsAPIResponse {
-  requests_today: number
-  cost_today: number
-  avg_latency_ms: number
-  error_rate: number
-  total_requests: number
-  total_cost: number
+  // Observability metrics
+  traces_collected?: number
+  observed_cost?: number
+  active_rules?: number
+  running_experiments?: number
+  // Legacy fields (deprecated)
+  requests_today?: number
+  cost_today?: number
+  avg_latency_ms?: number
+  error_rate?: number
+  total_requests?: number
+  total_cost?: number
   last_request_at?: string
 }
 
@@ -51,44 +64,12 @@ interface OrganizationMemberAPIResponse {
 const client = new BrokleAPIClient('/api')
 
 // Direct organization functions - latest & optimal endpoints
-export const getUserOrganizations = async (page = 1, limit = 20): Promise<PaginatedResponse<Organization>> => {
-    const response = await client.getPaginated<OrganizationAPIResponse>('/v1/organizations', {
-      page,
-      limit
-    })
-    return {
-      data: response.data.map(mapOrganizationFromAPI),
-      pagination: response.pagination
-    }
-  }
-
-
 export const getOrganizationById = async (organizationId: string): Promise<Organization> => {
     const response = await client.get<OrganizationAPIResponse>(
       `/v1/organizations/${organizationId}`
     )
 
     return mapOrganizationFromAPI(response)
-  }
-
-
-export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<PaginatedResponse<OrganizationMember>> => {
-    const response = await client.getPaginated<OrganizationMemberAPIResponse>(
-      `/organizations/${organizationId}/members`,
-      {
-        page,
-        limit
-      },
-      { 
-        includeOrgContext: true,
-        customOrgId: organizationId
-      }
-    )
-
-    return {
-      data: response.data.map(mapOrganizationMemberFromAPI),
-      pagination: response.pagination
-    }
   }
 
 export const getOrganizationProjects = async (organizationId: string, page = 1, limit = 20): Promise<Project[]> => {
@@ -251,9 +232,9 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       updated_at: apiOrg.updated_at || '',
       members: [], // Will be populated separately if needed
       usage: {
-        requests_this_month: 0, // Will be populated from metrics API
-        cost_this_month: 0,
-        models_used: 0,
+        traces_this_month: 0, // Will be populated from metrics API
+        observed_cost_this_month: 0,
+        models_observed: 0,
       },
     }
   }
@@ -273,14 +254,12 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       name: apiProject.name || '',
       organizationId: apiProject.organization_id || '',
       description: apiProject.description || '',
-      status: apiProject.status || 'active',
+      status: mapProjectStatus(apiProject.status || 'active'),
       metrics: {
-        requests_today: 0, // Will be populated from metrics API
-        cost_today: 0,
-        avg_latency: 0,
-        error_rate: 0,
-        total_requests: 0,
-        total_cost: 0,
+        traces_collected: 0, // Will be populated from metrics API
+        observed_cost: 0,
+        active_rules: 0,
+        running_experiments: 0,
       },
       createdAt: apiProject.created_at,
       updatedAt: apiProject.updated_at,
