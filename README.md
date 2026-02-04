@@ -1,4 +1,4 @@
-# Brokle – The AI Engineering Platform for AI Teams
+# Brokle – The open source platform for AI teams
 
 <p align="center">
   <a href="https://docs.brokle.com">Docs</a> •
@@ -8,7 +8,7 @@
   <a href="https://brokle.com">Website</a>
 </p>
 
-Observability, evaluation, and experimentation for teams building AI agents and applications.
+Debug, evaluate, and optimize your LLM applications with complete visibility. Open source. OpenTelemetry-native. Self-host anywhere.
 
 ## Quick Start
 

@@ -193,15 +193,22 @@ export function useLogoutMutation() {
 // Update profile mutation
 export function useUpdateProfileMutation() {
   const queryClient = useQueryClient()
+  const setUser = useAuthStore((state) => state.setUser)
 
   return useMutation({
     mutationFn: async (data: Partial<User>) => {
       return authUpdateProfile(data)
     },
     onSuccess: (updatedUser: User) => {
-      // Update cache with new user data
-      queryClient.setQueryData(authQueryKeys.user(), updatedUser)
-      
+      // Merge with existing user to preserve org data not returned by update endpoint
+      const currentUser = useAuthStore.getState().user
+      const mergedUser = currentUser ? { ...currentUser, ...updatedUser } : updatedUser
+      // Update both caches with merged user for consistency
+      setUser(mergedUser)
+      queryClient.setQueryData(authQueryKeys.user(), mergedUser)
+      // Invalidate workspace cache so sidebar reflects the updated name
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+
       toast.success('Profile Updated', {
         description: 'Your profile has been updated successfully.',
       })
