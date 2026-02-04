@@ -4,7 +4,7 @@
 # and deployment of the Brokle platform.
 
 # Available commands:
-.PHONY: help setup install-deps install-tools setup-databases
+.PHONY: help setup install-deps install-tools ensure-swag setup-databases
 .PHONY: dev dev-server dev-worker dev-frontend stop-dev
 .PHONY: build build-oss build-enterprise build-server-oss build-worker-oss
 .PHONY: build-server-enterprise build-worker-enterprise build-frontend build-all
@@ -12,7 +12,7 @@
 .PHONY: migrate-up migrate-down migrate-status seed create-migration
 .PHONY: test test-coverage test-unit test-integration
 .PHONY: lint lint-go lint-frontend fmt fmt-frontend
-.PHONY: docs-generate
+.PHONY: generate docs-generate
 .PHONY: clean-builds shell-db shell-redis shell-clickhouse
 .PHONY: release-patch release-minor release-major release-patch-skip-tests release-dry
 
@@ -33,9 +33,11 @@ endef
 setup: ## Setup development environment
 	@echo "🚀 Setting up development environment..."
 	@$(MAKE) install-deps
+	@$(MAKE) install-tools
 	@$(MAKE) setup-databases
 	@$(MAKE) migrate-up
 	@$(MAKE) seed
+	@$(MAKE) generate
 	@echo "✅ Development environment ready!"
 
 install-deps: ## Install Go and Node.js dependencies
@@ -43,11 +45,21 @@ install-deps: ## Install Go and Node.js dependencies
 	go mod download
 	cd web && pnpm install
 
-install-tools: ## Install development tools (golangci-lint, etc.)
+install-tools: ## Install development tools (swag, air, golangci-lint)
 	@echo "🔧 Installing development tools..."
+	@echo "Installing Go development tools (swag, air)..."
+	@go install github.com/swaggo/swag/cmd/swag@v1.16.6
+	@go install github.com/air-verse/air@latest
 	@echo "Installing golangci-lint v2.6.2 (Go 1.25 compatible)..."
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v2.6.2
 	@echo "✅ Tools installed successfully"
+
+ensure-swag: ## Ensure swag is installed (auto-installs if missing)
+	@command -v swag >/dev/null 2>&1 || { \
+		echo "⚠️  swag not found, installing swag v1.16.6..."; \
+		go install github.com/swaggo/swag/cmd/swag@v1.16.6; \
+		echo "✅ swag installed successfully"; \
+	}
 
 setup-databases: ## Start databases with Docker Compose
 	@echo "🗄️ Starting databases..."
@@ -209,10 +221,10 @@ fmt-frontend: ## Format frontend code
 
 ##@ Documentation
 
-docs-generate: ## Generate API documentation
-	@echo "📚 Generating API documentation..."
+generate: ensure-swag ## Generate swagger docs and run go generate
+	@echo "📚 Generating swagger documentation..."
 	swag init -g cmd/server/main.go --output docs
-	@echo "✅ Swagger documentation generated in docs/"
+	@echo "✅ Code generation complete"
 
 ##@ Utilities
 
