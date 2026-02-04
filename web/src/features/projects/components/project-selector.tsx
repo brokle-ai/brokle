@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useWorkspace } from '@/context/workspace-context'
 import { WorkspaceError, classifyAPIError } from '@/context/workspace-errors'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { buildProjectUrl, buildOrgUrl, getProjectSlug } from '@/lib/utils/slug-utils'
+import { buildProjectUrl, getProjectSlug } from '@/lib/utils/slug-utils'
 import type { ProjectSummary } from '@/features/authentication'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import { toast } from 'sonner'
@@ -137,7 +137,7 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
         {/* Projects overview link */}
         <DropdownMenuItem className="font-semibold" asChild>
           <Link
-            href={buildOrgUrl(currentOrganization.name, currentOrganization.id)}
+            href="/"
             className="cursor-pointer"
           >
             Projects

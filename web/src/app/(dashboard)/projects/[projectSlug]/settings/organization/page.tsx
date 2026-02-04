@@ -6,7 +6,7 @@ import { OrganizationGeneralSection } from '@/features/organizations'
 export default function OrganizationSettingsPage() {
   return (
     <ContentSection
-      title="General"
+      title="Organization"
       description="Manage your organization details and configuration."
     >
       <OrganizationGeneralSection />

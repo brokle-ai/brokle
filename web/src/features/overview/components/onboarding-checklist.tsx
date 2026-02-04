@@ -54,7 +54,7 @@ const checklistItems: ChecklistItem[] = [
     label: 'Configure AI provider',
     description: 'Add your AI provider credentials to enable playground and evaluations.',
     icon: BrainCircuit,
-    href: '/settings/ai-providers',
+    href: '/settings/organization/ai-providers',
     actionLabel: 'Add Provider',
   },
   {

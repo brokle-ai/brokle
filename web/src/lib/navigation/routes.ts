@@ -3,7 +3,6 @@ import {
   Grid2X2,
   Settings,
   FolderOpen,
-  Home,
   Activity,
   FileText,
   FlaskConical,
@@ -16,7 +15,7 @@ import {
 
 export const ROUTES: Route[] = [
   // ========================================
-  // ROOT CONTEXT
+  // ROOT CONTEXT (redirects to project)
   // ========================================
   {
     title: 'Dashboard',
@@ -25,30 +24,6 @@ export const ROUTES: Route[] = [
     section: RouteSection.Main,
     show: ({ currentProject, currentOrganization }) =>
       !currentProject && !currentOrganization,
-  },
-
-  // ========================================
-  // ORGANIZATION CONTEXT
-  // ========================================
-  {
-    title: 'Projects',
-    pathname: '/organizations/[orgSlug]',
-    icon: Grid2X2,
-    section: RouteSection.Main,
-    show: ({ currentOrgSlug, currentProjectSlug, pathname }) =>
-      !!currentOrgSlug &&
-      !currentProjectSlug &&
-      !pathname.startsWith('/settings'),
-  },
-  {
-    title: 'Settings',
-    pathname: '/organizations/[orgSlug]/settings',
-    icon: Settings,
-    section: RouteSection.Main,
-    rbacScope: 'settings:read',
-    show: ({ currentProjectSlug, pathname }) =>
-      !currentProjectSlug &&
-      !pathname.startsWith('/settings'),
   },
 
   // ========================================
@@ -149,25 +124,13 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Other Group
+  // Secondary Section (bottom of sidebar)
   {
     title: 'Settings',
     pathname: '/projects/[projectSlug]/settings',
     icon: Settings,
-    section: RouteSection.Main,
-    group: RouteGroup.Other,
+    section: RouteSection.Secondary,
     rbacScope: 'settings:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-
-  // ========================================
-  // USER SETTINGS CONTEXT
-  // ========================================
-  {
-    title: 'Home',
-    pathname: '/',
-    icon: Home,
-    section: RouteSection.Main,
-    show: ({ pathname }) => pathname.startsWith('/settings'),
   },
 ]

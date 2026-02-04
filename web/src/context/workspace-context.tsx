@@ -140,17 +140,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           createdAt: proj.created_at,
           updatedAt: proj.updated_at,
           metrics: {
-            requests_today: 0,
-            cost_today: 0,
-            avg_latency: 0,
-            error_rate: 0,
+            traces_collected: 0,
+            observed_cost: 0,
+            active_rules: 0,
+            running_experiments: 0,
           },
         })),
         members: [] as OrganizationMember[], // Will be populated from API when needed
         usage: {
-          requests_this_month: 0,
-          cost_this_month: 0,
-          models_used: 0,
+          traces_this_month: 0,
+          observed_cost_this_month: 0,
+          models_observed: 0,
         },
       }))
 
@@ -232,39 +232,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     let urlError: WorkspaceError | null = null
 
-    // Try to detect organization from /organizations/[orgSlug]
-    const orgMatch = pathname.match(/\/organizations\/([^/]+)/)
-    if (orgMatch) {
-      const compositeSlug = orgMatch[1]
-
-      if (!isValidCompositeSlug(compositeSlug)) {
-        urlError = classifySlugError(compositeSlug, 'organization')
-      } else {
-        try {
-          const orgId = extractIdFromCompositeSlug(compositeSlug)
-          const org = data.organizations.find(o => o.id === orgId)
-
-          if (!org) {
-            urlError = createWorkspaceError(
-              WorkspaceErrorCode.ORG_NOT_FOUND,
-              { slug: compositeSlug, orgId }
-            )
-          } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[Workspace] Detected org from URL:', org.name)
-            }
-            return {
-              currentOrganization: org,
-              currentProject: null,
-              detectedUrlError: null
-            }
-          }
-        } catch {
-          urlError = classifySlugError(compositeSlug, 'organization')
-        }
-      }
-    }
-
     // Try to detect project from /projects/[projectSlug] and auto-infer parent org
     const projectMatch = pathname.match(/\/projects\/([^/]+)/)
     if (projectMatch) {
@@ -302,15 +269,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Default: use user's default organization
-    if (!urlError && data.user.defaultOrganizationId) {
-      const defaultOrg = data.organizations.find(o => o.id === data.user.defaultOrganizationId)
-      if (defaultOrg) {
+    // Default organization selection with fallback (PostHog pattern)
+    // Priority: 1) User's default org 2) First org in list 3) null (no orgs)
+    if (!urlError) {
+      // Start with first organization as fallback
+      let selectedOrg = data.organizations.length > 0 ? data.organizations[0] : null
+
+      // If user has a default organization preference, try to use it
+      if (data.user.defaultOrganizationId) {
+        const defaultOrg = data.organizations.find(o => o.id === data.user.defaultOrganizationId)
+        if (defaultOrg) {
+          selectedOrg = defaultOrg
+        }
+        // If defaultOrganizationId points to invalid org, we fall back to first org
+      }
+
+      if (selectedOrg) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('[Workspace] Using default org:', defaultOrg.name)
+          console.log('[Workspace] Using org:', selectedOrg.name,
+            data.user.defaultOrganizationId === selectedOrg.id ? '(user default)' : '(fallback to first)')
         }
         return {
-          currentOrganization: defaultOrg,
+          currentOrganization: selectedOrg,
           currentProject: null,
           detectedUrlError: null
         }

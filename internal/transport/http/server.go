@@ -220,7 +220,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	users := protected.Group("/users")
 	{
 		users.GET("/me", s.handlers.User.GetProfile)
-		users.PUT("/me", s.handlers.User.UpdateProfile)
+		users.PATCH("/me", s.handlers.User.UpdateProfile)
 		users.PUT("/me/default-organization", s.handlers.User.SetDefaultOrganization)
 	}
 

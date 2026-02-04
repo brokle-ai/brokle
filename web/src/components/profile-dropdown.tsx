@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUserInitials } from '@/lib/utils/user-utils'
+import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,16 +18,35 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth, useLogoutMutation } from '@/features/authentication'
+import type { ProjectSummary } from '@/features/authentication'
 
 interface ProfileDropdownProps {
   className?: string
+  /** Current project for building settings links. Pass null when outside WorkspaceProvider. */
+  currentProject?: ProjectSummary | null
 }
 
-export function ProfileDropdown({ className }: ProfileDropdownProps = {}) {
+/**
+ * ProfileDropdown - User profile menu with settings links
+ *
+ * This component is context-agnostic. The parent is responsible for providing
+ * currentProject from useWorkspace() when inside WorkspaceProvider, or null when outside.
+ *
+ * @example
+ * ```tsx
+ * // Inside dashboard (with WorkspaceProvider)
+ * const { currentProject } = useWorkspace()
+ * <ProfileDropdown currentProject={currentProject} />
+ *
+ * // Outside dashboard (no WorkspaceProvider)
+ * <ProfileDropdown currentProject={null} />
+ * ```
+ */
+export function ProfileDropdown({ className, currentProject = null }: ProfileDropdownProps) {
   const { user } = useAuth()
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
 
-  // Only render on authenticated pages (MinimalHeader is deprecated/being removed)
+  // Only render on authenticated pages
   if (!user) return null
 
   // Compute user display values
@@ -57,27 +77,29 @@ export function ProfileDropdown({ className }: ProfileDropdownProps = {}) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <Link href='/settings'>
-              Profile
-              <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href='/settings'>
-              Billing
-              <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href='/settings'>
-              Settings
-              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem>New Team</DropdownMenuItem>
-        </DropdownMenuGroup>
+        {currentProject && (
+          <DropdownMenuGroup>
+            <DropdownMenuItem asChild>
+              <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/profile')}>
+                Profile
+                <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/organization/billing')}>
+                Billing
+                <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings')}>
+                Settings
+                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem>New Team</DropdownMenuItem>
+          </DropdownMenuGroup>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => handleLogout()}

@@ -248,7 +248,7 @@ type UpdateProfileRequest struct {
 	Language  *string `json:"language,omitempty" example:"en" description:"User language preference (ISO 639-1 code)"`
 }
 
-// UpdateProfile handles PUT /users/me
+// UpdateProfile handles PATCH /users/me
 // @Summary Update current user profile
 // @Description Update the profile information of the currently authenticated user
 // @Tags User
@@ -260,7 +260,7 @@ type UpdateProfileRequest struct {
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/users/me [put]
+// @Router /api/v1/users/me [patch]
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Get user ID from middleware (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")

@@ -9,7 +9,7 @@ import { useWorkspace } from '@/context/workspace-context'
 import { WorkspaceError, classifyAPIError } from '@/context/workspace-errors'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
-import { generateCompositeSlug, extractIdFromCompositeSlug, buildOrgUrl } from '@/lib/utils/slug-utils'
+import { generateCompositeSlug, extractIdFromCompositeSlug, buildProjectUrl } from '@/lib/utils/slug-utils'
 import { CreateOrganizationDialog } from '@/features/organizations'
 import {
   DropdownMenu,
@@ -79,18 +79,31 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
 
     try {
       // Use context method (handles loading state internally)
+      // Always complete the switch first (PostHog pattern)
       await switchOrganization(compositeSlug)
 
-      // Calculate redirect URL
-      const redirectUrl = getSmartRedirectUrl({
-        currentPath: pathname,
-        targetOrgSlug: compositeSlug,
-        targetOrgId: targetOrg.id,
-        targetOrgName: targetOrg.name
-      })
+      // Determine redirect URL based on whether target org has projects
+      const targetProject = targetOrg.projects[0]
 
-      // Navigate
-      router.push(redirectUrl)
+      let redirectUrl: string
+      if (targetProject) {
+        // Target org has projects - use smart redirect to preserve page context
+        redirectUrl = getSmartRedirectUrl({
+          currentPath: pathname,
+          targetProjectSlug: generateCompositeSlug(targetProject.name, targetProject.id),
+          targetProjectId: targetProject.id,
+          targetProjectName: targetProject.name
+        })
+      } else {
+        // Target org has NO projects - redirect to root (PostHog pattern)
+        // Root page will show "Create Your First Project" empty state
+        redirectUrl = '/'
+      }
+
+      // Full page reload instead of client-side navigation (PostHog pattern)
+      // This ensures clean state when switching organizations - different orgs have
+      // different security contexts (members, roles, API keys, billing, etc.)
+      window.location.href = redirectUrl
     } catch (error) {
       // Preserve already-classified WorkspaceError, only classify if needed
       const workspaceError = error instanceof WorkspaceError
@@ -108,7 +121,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         })
       }
     }
-  }, [currentOrganization, organizations, pathname, router, switchOrganization])
+  }, [currentOrganization, organizations, pathname, switchOrganization])
 
   // Loading state - show shimmer only if not initialized yet
   if (!isInitialized) {
@@ -171,22 +184,27 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
 
         {/* All organizations list */}
         <div className="max-h-36 overflow-y-auto">
-          {organizations && organizations.map((org) => (
+          {organizations && organizations.map((org) => {
+            // Since org pages no longer exist, link to first project in org
+            const firstProject = org.projects[0]
+            const targetUrl = org.id === currentOrganization.id
+              ? pathname
+              : firstProject
+                ? getSmartRedirectUrl({
+                    currentPath: pathname,
+                    targetProjectSlug: generateCompositeSlug(firstProject.name, firstProject.id),
+                    targetProjectId: firstProject.id,
+                    targetProjectName: firstProject.name
+                  })
+                : '/' // Fallback to home if no projects
+
+            return (
             <DropdownMenuItem
               key={org.id}
               asChild
             >
               <Link
-                href={
-                  org.id === currentOrganization.id
-                    ? pathname
-                    : getSmartRedirectUrl({
-                        currentPath: pathname,
-                        targetOrgSlug: generateCompositeSlug(org.name, org.id),
-                        targetOrgId: org.id,
-                        targetOrgName: org.name
-                      })
-                }
+                href={targetUrl}
                 className="flex cursor-pointer justify-between"
                 onClick={(e) => {
                   if (org.id === currentOrganization.id) {
@@ -218,7 +236,16 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    router.push(buildOrgUrl(org.name, org.id, 'settings'))
+                    // Navigate to TARGET org's settings via its first project
+                    const targetProject = org.projects[0]
+                    if (targetProject) {
+                      router.push(buildProjectUrl(targetProject.name, targetProject.id, 'settings/organization'))
+                    } else {
+                      // Target org has no projects - switch to it first
+                      // Root page will show "Create Project" empty state
+                      const compositeSlug = generateCompositeSlug(org.name, org.id)
+                      handleOrgSwitch(compositeSlug)
+                    }
                   }}
                 >
                   <Settings className="h-3 w-3" />
@@ -226,7 +253,8 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
                 </Button>
               </Link>
             </DropdownMenuItem>
-          ))}
+            )
+          })}
         </div>
 
         <DropdownMenuSeparator />

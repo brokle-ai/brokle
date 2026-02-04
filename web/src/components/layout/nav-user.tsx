@@ -2,8 +2,6 @@
 
 import Link from 'next/link'
 import {
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
@@ -13,6 +11,8 @@ import {
   Sun,
 } from 'lucide-react'
 import { getUserInitials } from '@/lib/utils/user-utils'
+import { buildProjectUrl } from '@/lib/utils/slug-utils'
+import { useWorkspace } from '@/context/workspace-context'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,6 +45,7 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
   const { theme, setTheme } = useTheme()
+  const { currentProject } = useWorkspace()
 
   // Compute user initials from full name
   const initials = getUserInitials({ name: user.name, email: user.email })
@@ -95,26 +96,16 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href='/settings/account'>
-                  <BadgeCheck />
-                  Account
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href='/settings'>
-                  <CreditCard />
-                  Billing
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href='/settings/notifications'>
-                  <Bell />
-                  Notifications
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+            {currentProject && (
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <Link href={buildProjectUrl(currentProject.name, currentProject.id, 'settings/organization/billing')}>
+                    <CreditCard />
+                    Billing
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className='text-xs text-muted-foreground px-2 py-1.5'>
