@@ -27,8 +27,8 @@ func NewHandler(service commentDomain.Service) *Handler {
 // @Produce json
 // @Param id path string true "Trace ID"
 // @Param project_id query string true "Project ID"
-// @Param request body commentDomain.CreateCommentRequest true "Comment content"
-// @Success 201 {object} commentDomain.CommentResponse
+// @Param request body comment.CreateCommentRequest true "Comment content"
+// @Success 201 {object} comment.CommentResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Trace not found"
@@ -64,13 +64,13 @@ func (h *Handler) CreateComment(c *gin.Context) {
 		return
 	}
 
-	comment, err := h.service.CreateComment(c.Request.Context(), projectID, traceID, userID, &req)
+	createdComment, err := h.service.CreateComment(c.Request.Context(), projectID, traceID, userID, &req)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 
-	response.Created(c, comment)
+	response.Created(c, createdComment)
 }
 
 // @Summary List comments
@@ -79,7 +79,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 // @Produce json
 // @Param id path string true "Trace ID"
 // @Param project_id query string true "Project ID"
-// @Success 200 {object} commentDomain.ListCommentsResponse
+// @Success 200 {object} comment.ListCommentsResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/traces/{id}/comments [get]
@@ -123,7 +123,7 @@ func (h *Handler) ListComments(c *gin.Context) {
 // @Produce json
 // @Param id path string true "Trace ID"
 // @Param project_id query string true "Project ID"
-// @Success 200 {object} commentDomain.CommentCountResponse
+// @Success 200 {object} comment.CommentCountResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/traces/{id}/comments/count [get]
@@ -163,8 +163,8 @@ func (h *Handler) GetCommentCount(c *gin.Context) {
 // @Param id path string true "Trace ID"
 // @Param comment_id path string true "Comment ID"
 // @Param project_id query string true "Project ID"
-// @Param request body commentDomain.UpdateCommentRequest true "Updated content"
-// @Success 200 {object} commentDomain.CommentResponse
+// @Param request body comment.UpdateCommentRequest true "Updated content"
+// @Success 200 {object} comment.CommentResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 403 {object} response.ErrorResponse "Not the comment owner"
@@ -288,8 +288,8 @@ func (h *Handler) DeleteComment(c *gin.Context) {
 // @Param id path string true "Trace ID"
 // @Param comment_id path string true "Comment ID"
 // @Param project_id query string true "Project ID"
-// @Param request body commentDomain.ToggleReactionRequest true "Reaction emoji"
-// @Success 200 {array} commentDomain.ReactionSummary
+// @Param request body comment.ToggleReactionRequest true "Reaction emoji"
+// @Success 200 {array} comment.ReactionSummary
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Comment not found"
@@ -354,8 +354,8 @@ func (h *Handler) ToggleReaction(c *gin.Context) {
 // @Param id path string true "Trace ID"
 // @Param comment_id path string true "Parent Comment ID"
 // @Param project_id query string true "Project ID"
-// @Param request body commentDomain.CreateCommentRequest true "Reply content"
-// @Success 201 {object} commentDomain.CommentResponse
+// @Param request body comment.CreateCommentRequest true "Reply content"
+// @Success 201 {object} comment.CommentResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Comment or Trace not found"

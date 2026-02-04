@@ -14,7 +14,7 @@ type QueryExecutionRequest struct {
 	WidgetID       *string                `json:"widget_id,omitempty"` // nil = all widgets
 	TimeRange      *TimeRange             `json:"time_range,omitempty"`
 	ForceRefresh   bool                   `json:"force_refresh,omitempty"`
-	VariableValues map[string]interface{} `json:"variable_values,omitempty"`
+	VariableValues map[string]interface{} `json:"variable_values,omitempty" swaggertype:"object"`
 }
 
 // VariableOptionsRequest represents a request to get variable options
@@ -33,7 +33,7 @@ type VariableOptionsResponse struct {
 // QueryResult represents the result of a widget query
 type QueryResult struct {
 	WidgetID string                   `json:"widget_id"`
-	Data     []map[string]interface{} `json:"data"`
+	Data     []map[string]interface{} `json:"data" swaggertype:"array,object"`
 	Metadata *QueryMetadata           `json:"metadata,omitempty"`
 	Error    string                   `json:"error,omitempty"`
 }

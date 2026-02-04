@@ -16,9 +16,9 @@ type FilterPreset struct {
 	Name             string          `json:"name" gorm:"column:name;not null"`
 	Description      *string         `json:"description,omitempty" gorm:"column:description"`
 	TargetTable      string          `json:"table_name" gorm:"column:table_name;not null;default:traces"` // "traces" or "spans"
-	Filters          json.RawMessage `json:"filters" gorm:"column:filters;type:jsonb;not null"`           // Array of filter conditions
-	ColumnOrder      json.RawMessage `json:"column_order,omitempty" gorm:"column:column_order;type:jsonb"`
-	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty" gorm:"column:column_visibility;type:jsonb"`
+	Filters          json.RawMessage `json:"filters" gorm:"column:filters;type:jsonb;not null" swaggertype:"object"`           // Array of filter conditions
+	ColumnOrder      json.RawMessage `json:"column_order,omitempty" gorm:"column:column_order;type:jsonb" swaggertype:"object"`
+	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty" gorm:"column:column_visibility;type:jsonb" swaggertype:"object"`
 	SearchQuery      *string         `json:"search_query,omitempty" gorm:"column:search_query"`
 	SearchTypes      StringArray     `json:"search_types,omitempty" gorm:"column:search_types;type:text[]"`
 	IsPublic         bool            `json:"is_public" gorm:"column:is_public;not null;default:false"`
@@ -81,9 +81,9 @@ type CreateFilterPresetRequest struct {
 	Name             string          `json:"name" validate:"required,min=1,max=255"`
 	Description      *string         `json:"description,omitempty" validate:"omitempty,max=1000"`
 	TargetTable      string          `json:"table_name" validate:"required,oneof=traces spans"`
-	Filters          json.RawMessage `json:"filters" validate:"required"`
-	ColumnOrder      json.RawMessage `json:"column_order,omitempty"`
-	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty"`
+	Filters          json.RawMessage `json:"filters" validate:"required" swaggertype:"object"`
+	ColumnOrder      json.RawMessage `json:"column_order,omitempty" swaggertype:"object"`
+	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty" swaggertype:"object"`
 	SearchQuery      *string         `json:"search_query,omitempty" validate:"omitempty,max=500"`
 	SearchTypes      []string        `json:"search_types,omitempty"`
 	IsPublic         bool            `json:"is_public"`
@@ -93,9 +93,9 @@ type CreateFilterPresetRequest struct {
 type UpdateFilterPresetRequest struct {
 	Name             *string         `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
 	Description      *string         `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Filters          json.RawMessage `json:"filters,omitempty"`
-	ColumnOrder      json.RawMessage `json:"column_order,omitempty"`
-	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty"`
+	Filters          json.RawMessage `json:"filters,omitempty" swaggertype:"object"`
+	ColumnOrder      json.RawMessage `json:"column_order,omitempty" swaggertype:"object"`
+	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty" swaggertype:"object"`
 	SearchQuery      *string         `json:"search_query,omitempty" validate:"omitempty,max=500"`
 	SearchTypes      []string        `json:"search_types,omitempty"`
 	IsPublic         *bool           `json:"is_public,omitempty"`

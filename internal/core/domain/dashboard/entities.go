@@ -155,7 +155,7 @@ type Dashboard struct {
 	CreatedBy   *ulid.ULID      `json:"created_by,omitempty" gorm:"type:char(26)"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt  `json:"deleted_at,omitempty" gorm:"index"`
+	DeletedAt   gorm.DeletedAt  `json:"deleted_at,omitempty" gorm:"index" swaggertype:"string"`
 }
 
 // TableName returns the database table name for Dashboard.

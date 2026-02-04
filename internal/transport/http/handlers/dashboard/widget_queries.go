@@ -25,6 +25,24 @@ type TimeRangeRequest struct {
 	Relative string     `json:"relative,omitempty"` // "1h", "24h", "7d", "30d"
 }
 
+// QueryResult represents the result of a widget query (swagger doc type)
+// This mirrors dashboardDomain.QueryResult for swagger documentation purposes
+type QueryResult struct {
+	WidgetID string                   `json:"widget_id"`
+	Data     []map[string]interface{} `json:"data" swaggertype:"array,object"`
+	Metadata *QueryMetadata           `json:"metadata,omitempty"`
+	Error    string                   `json:"error,omitempty"`
+}
+
+// QueryMetadata contains metadata about the query execution (swagger doc type)
+type QueryMetadata struct {
+	ExecutedAt     time.Time  `json:"executed_at"`
+	DurationMs     int64      `json:"duration_ms"`
+	RowCount       int        `json:"row_count"`
+	Cached         bool       `json:"cached"`
+	CacheExpiresAt *time.Time `json:"cache_expires_at,omitempty"`
+}
+
 // ExecuteDashboardQueries handles POST /api/v1/projects/:projectId/dashboards/:dashboardId/execute
 // @Summary Execute all widget queries for a dashboard
 // @Description Execute queries for all widgets in a dashboard and return results

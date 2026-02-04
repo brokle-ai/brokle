@@ -384,7 +384,7 @@ type UsageBudget struct {
 	CurrentCost   decimal.Decimal `json:"current_cost" db:"current_cost" gorm:"type:decimal(18,6)"`
 
 	// Alert thresholds (flexible array of percentages, e.g., [50, 80, 100])
-	AlertThresholds pq.Int64Array `json:"alert_thresholds" gorm:"column:alert_thresholds;type:integer[];default:'{50,80,100}'"`
+	AlertThresholds pq.Int64Array `json:"alert_thresholds" gorm:"column:alert_thresholds;type:integer[];default:'{50,80,100}'" swaggertype:"array,integer"`
 
 	IsActive  bool      `json:"is_active" db:"is_active"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
@@ -531,7 +531,7 @@ type ContractHistory struct {
 	ChangedBy      string         `json:"changed_by,omitempty" gorm:"column:changed_by"`
 	ChangedByEmail string         `json:"changed_by_email,omitempty" gorm:"column:changed_by_email"`
 	ChangedAt      time.Time      `json:"changed_at" gorm:"column:changed_at"`
-	Changes        datatypes.JSON `json:"changes" gorm:"column:changes;type:jsonb"`
+	Changes        datatypes.JSON `json:"changes" gorm:"column:changes;type:jsonb" swaggertype:"object"`
 	Reason         string         `json:"reason,omitempty" gorm:"column:reason;type:text"`
 }
 

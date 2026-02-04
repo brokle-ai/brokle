@@ -11,31 +11,31 @@ import (
 // ValidateTemplateRequest represents the request body for template validation.
 type ValidateTemplateRequest struct {
 	Template interface{}                  `json:"template" binding:"required"`
-	Type     promptDomain.PromptType      `json:"type" binding:"required"`
-	Dialect  promptDomain.TemplateDialect `json:"dialect,omitempty"` // Optional: auto-detect if not specified
+	Type     promptDomain.PromptType      `json:"type" binding:"required" swaggertype:"string"`
+	Dialect  promptDomain.TemplateDialect `json:"dialect,omitempty" swaggertype:"string"` // Optional: auto-detect if not specified
 }
 
 // ValidateTemplateResponse represents the response for template validation.
 type ValidateTemplateResponse struct {
 	Valid     bool                          `json:"valid"`
-	Dialect   promptDomain.TemplateDialect  `json:"dialect"`
+	Dialect   promptDomain.TemplateDialect  `json:"dialect" swaggertype:"string"`
 	Variables []string                      `json:"variables"`
-	Errors    []promptDomain.SyntaxError    `json:"errors,omitempty"`
-	Warnings  []promptDomain.SyntaxWarning  `json:"warnings,omitempty"`
+	Errors    []promptDomain.SyntaxError    `json:"errors,omitempty" swaggertype:"array,object"`
+	Warnings  []promptDomain.SyntaxWarning  `json:"warnings,omitempty" swaggertype:"array,object"`
 }
 
 // PreviewTemplateRequest represents the request body for template preview/compilation.
 type PreviewTemplateRequest struct {
 	Template  interface{}                  `json:"template" binding:"required"`
-	Type      promptDomain.PromptType      `json:"type" binding:"required"`
-	Variables map[string]any               `json:"variables" binding:"required"`
-	Dialect   promptDomain.TemplateDialect `json:"dialect,omitempty"` // Optional: auto-detect if not specified
+	Type      promptDomain.PromptType      `json:"type" binding:"required" swaggertype:"string"`
+	Variables map[string]any               `json:"variables" binding:"required" swaggertype:"object"`
+	Dialect   promptDomain.TemplateDialect `json:"dialect,omitempty" swaggertype:"string"` // Optional: auto-detect if not specified
 }
 
 // PreviewTemplateResponse represents the response for template preview.
 type PreviewTemplateResponse struct {
 	Compiled interface{}                  `json:"compiled"`
-	Dialect  promptDomain.TemplateDialect `json:"dialect"`
+	Dialect  promptDomain.TemplateDialect `json:"dialect" swaggertype:"string"`
 }
 
 // ValidateTemplate handles POST /api/v1/projects/:projectId/prompts/validate-template
@@ -249,10 +249,10 @@ func (h *Handler) DetectDialect(c *gin.Context) {
 // DetectDialectRequest represents the request body for dialect detection.
 type DetectDialectRequest struct {
 	Template interface{}             `json:"template" binding:"required"`
-	Type     promptDomain.PromptType `json:"type" binding:"required"`
+	Type     promptDomain.PromptType `json:"type" binding:"required" swaggertype:"string"`
 }
 
 // DetectDialectResponse represents the response for dialect detection.
 type DetectDialectResponse struct {
-	Dialect promptDomain.TemplateDialect `json:"dialect"`
+	Dialect promptDomain.TemplateDialect `json:"dialect" swaggertype:"string"`
 }

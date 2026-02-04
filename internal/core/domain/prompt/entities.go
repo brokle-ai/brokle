@@ -95,16 +95,16 @@ type ModelConfig struct {
 
 	// Tools defines function calling tools for the LLM (OpenAI format).
 	// Each tool is stored as raw JSON to preserve provider-specific fields.
-	Tools []json.RawMessage `json:"tools,omitempty"`
+	Tools []json.RawMessage `json:"tools,omitempty" swaggertype:"array,object"`
 
 	// ToolChoice controls how the model uses tools ("auto", "none", "required", or specific function).
 	// Can be a string or an object like {"type": "function", "function": {"name": "..."}}
-	ToolChoice json.RawMessage `json:"tool_choice,omitempty"`
+	ToolChoice json.RawMessage `json:"tool_choice,omitempty" swaggertype:"object"`
 
 	// ResponseFormat specifies output format for structured outputs.
 	// Examples: {"type": "text"}, {"type": "json_object"}, {"type": "json_schema", "json_schema": {...}}
 	// Note: Anthropic doesn't support response_format natively.
-	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
+	ResponseFormat json.RawMessage `json:"response_format,omitempty" swaggertype:"object"`
 
 	// APIKey is the resolved API key for execution (not persisted).
 	// Set by handler after credential resolution. Excluded from JSON serialization.
@@ -320,7 +320,7 @@ type LLMResponse struct {
 	Usage        *LLMUsage         `json:"usage,omitempty"`
 	Cost         *float64          `json:"cost,omitempty"`
 	FinishReason string            `json:"finish_reason,omitempty"`
-	ToolCalls    []json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCalls    []json.RawMessage `json:"tool_calls,omitempty" swaggertype:"array,object"`
 }
 
 type LLMUsage struct {
@@ -354,7 +354,7 @@ type StreamResult struct {
 	FinishReason  string            `json:"finish_reason,omitempty"`     // Completion reason
 	TTFTMs        *float64          `json:"ttft_ms,omitempty"`           // Time to first token (ms)
 	TotalDuration int64             `json:"total_duration_ms,omitempty"` // Total execution time (ms)
-	ToolCalls     []json.RawMessage `json:"tool_calls,omitempty"`        // Tool calls if finish_reason is "tool_calls"
+	ToolCalls     []json.RawMessage `json:"tool_calls,omitempty" swaggertype:"array,object"` // Tool calls if finish_reason is "tool_calls"
 }
 
 // UpsertResponse is the response for the SDK upsert endpoint.

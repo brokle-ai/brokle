@@ -26,7 +26,7 @@ func NewEvaluatorExecutionHandler(
 
 // ExecutionListResponse wraps the list response with pagination metadata.
 type ExecutionListResponse struct {
-	Executions []*evaluationDomain.EvaluatorExecutionResponse `json:"executions"`
+	Executions []*evaluationDomain.EvaluatorExecutionResponse `json:"executions" swaggertype:"array,object"`
 	Total      int64                                          `json:"total"`
 	Page       int                                            `json:"page"`
 	Limit      int                                            `json:"limit"`
