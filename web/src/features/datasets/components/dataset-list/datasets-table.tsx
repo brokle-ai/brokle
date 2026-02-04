@@ -19,8 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTablePagination } from '@/components/data-table'
-import { Skeleton } from '@/components/ui/skeleton'
+import { DataTablePagination, DataTableSkeleton } from '@/components/data-table'
 import { useDatasetsTableState, type SortField } from '../../hooks/use-datasets-table-state'
 import { DatasetsToolbar } from './datasets-toolbar'
 import { createDatasetsColumns } from './datasets-columns'
@@ -164,42 +163,7 @@ export function DatasetsTable({
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-[250px]" />
-          <Skeleton className="h-8 w-[100px]" />
-        </div>
-        <div className="overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {Array(6).fill(0).map((_, index) => (
-                  <TableHead key={index}>
-                    <Skeleton className="h-6 w-20" />
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array(5).fill(0).map((_, index) => (
-                <TableRow key={index}>
-                  {Array(6).fill(0).map((_, colIndex) => (
-                    <TableCell key={colIndex}>
-                      <Skeleton className="h-6 w-16" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-[200px]" />
-          <Skeleton className="h-8 w-[100px]" />
-        </div>
-      </div>
-    )
+    return <DataTableSkeleton columns={6} rows={5} toolbarSlots={2} />
   }
 
   return (

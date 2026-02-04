@@ -46,7 +46,7 @@ export function ScoreTag({
 }: ScoreTagProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { containerClass, indicatorClass, textClass } = getScoreTagClasses(score.name)
-  const { symbol: typeSymbol } = getDataTypeIndicator(score.data_type)
+  const { symbol: typeSymbol } = getDataTypeIndicator(score.type)
   const { label: sourceLabel, className: sourceClassName } = getSourceIndicator(score.source)
 
   // Format value based on data type
@@ -137,7 +137,7 @@ function ScoreTagDetails({
   onDelete?: (scoreId: string) => void
 }) {
   const { indicatorClass, textClass } = getScoreTagClasses(score.name)
-  const { symbol: typeSymbol, label: typeLabel } = getDataTypeIndicator(score.data_type)
+  const { symbol: typeSymbol, label: typeLabel } = getDataTypeIndicator(score.type)
   const { label: sourceLabel, className: sourceClassName } = getSourceIndicator(score.source)
 
   return (
@@ -195,7 +195,7 @@ function ScoreTagDetails({
  * Format score value based on data type
  */
 function formatScoreValue(score: Score): string {
-  switch (score.data_type) {
+  switch (score.type) {
     case 'BOOLEAN':
       if (score.value === undefined || score.value === null) return '-'
       return score.value === 1 ? 'True' : 'False'

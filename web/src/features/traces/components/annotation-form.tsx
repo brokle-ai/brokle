@@ -58,7 +58,7 @@ export function AnnotationForm({
     setBooleanValue(null)
     if (selectedConfig) {
       // Set default value based on config
-      if (selectedConfig.data_type === 'NUMERIC') {
+      if (selectedConfig.type === 'NUMERIC') {
         const min = selectedConfig.min_value ?? 0
         const max = selectedConfig.max_value ?? 10
         setNumericValue(Math.round((min + max) / 2))
@@ -72,22 +72,22 @@ export function AnnotationForm({
     const name = isCustom ? customName : (selectedConfig?.name ?? '')
     if (!name) return
 
-    let data_type = selectedConfig?.data_type ?? 'NUMERIC'
+    let type = selectedConfig?.type ?? 'NUMERIC'
     if (isCustom) {
-      data_type = 'NUMERIC' // Default for custom scores
+      type = 'NUMERIC' // Default for custom scores
     }
 
     const data: CreateAnnotationRequest = {
       name,
-      data_type,
+      type,
       reason: reason || null,
     }
 
-    if (data_type === 'NUMERIC' && numericValue !== null) {
+    if (type === 'NUMERIC' && numericValue !== null) {
       data.value = numericValue
-    } else if (data_type === 'CATEGORICAL' && stringValue) {
+    } else if (type === 'CATEGORICAL' && stringValue) {
       data.string_value = stringValue
-    } else if (data_type === 'BOOLEAN' && booleanValue !== null) {
+    } else if (type === 'BOOLEAN' && booleanValue !== null) {
       data.value = booleanValue ? 1 : 0
     }
 
@@ -107,7 +107,7 @@ export function AnnotationForm({
     if (isCustom && !customName.trim()) return false
 
     if (selectedConfig) {
-      switch (selectedConfig.data_type) {
+      switch (selectedConfig.type) {
         case 'NUMERIC':
           return numericValue !== null
         case 'CATEGORICAL':
@@ -138,7 +138,7 @@ export function AnnotationForm({
                 <div className='flex items-center gap-2'>
                   <span>{config.name}</span>
                   <span className='text-xs text-muted-foreground'>
-                    ({config.data_type.toLowerCase()})
+                    ({config.type.toLowerCase()})
                   </span>
                 </div>
               </SelectItem>
@@ -173,7 +173,7 @@ export function AnnotationForm({
       {(selectedConfig || isCustom) && (
         <div className='space-y-2'>
           <Label>Value</Label>
-          {(isCustom || selectedConfig?.data_type === 'NUMERIC') && (
+          {(isCustom || selectedConfig?.type === 'NUMERIC') && (
             <NumericInput
               value={numericValue}
               onChange={setNumericValue}
@@ -181,14 +181,14 @@ export function AnnotationForm({
               max={selectedConfig?.max_value ?? 10}
             />
           )}
-          {selectedConfig?.data_type === 'CATEGORICAL' && (
+          {selectedConfig?.type === 'CATEGORICAL' && (
             <CategoricalInput
               value={stringValue}
               onChange={setStringValue}
               categories={selectedConfig.categories ?? []}
             />
           )}
-          {selectedConfig?.data_type === 'BOOLEAN' && (
+          {selectedConfig?.type === 'BOOLEAN' && (
             <BooleanInput
               value={booleanValue}
               onChange={setBooleanValue}

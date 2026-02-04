@@ -19,8 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTablePagination } from '@/components/data-table'
-import { Skeleton } from '@/components/ui/skeleton'
+import { DataTablePagination, DataTableSkeleton } from '@/components/data-table'
 import { useExperimentsTableState, type SortField } from '../../hooks/use-experiments-table-state'
 import { ExperimentsToolbar } from './experiments-toolbar'
 import { createExperimentsColumns } from './experiments-columns'
@@ -177,42 +176,7 @@ export function ExperimentsTable({
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-[250px]" />
-          <Skeleton className="h-8 w-[100px]" />
-        </div>
-        <div className="overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {Array(7).fill(0).map((_, index) => (
-                  <TableHead key={index}>
-                    <Skeleton className="h-6 w-20" />
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array(5).fill(0).map((_, index) => (
-                <TableRow key={index}>
-                  {Array(7).fill(0).map((_, colIndex) => (
-                    <TableCell key={colIndex}>
-                      <Skeleton className="h-6 w-16" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-[200px]" />
-          <Skeleton className="h-8 w-[100px]" />
-        </div>
-      </div>
-    )
+    return <DataTableSkeleton columns={7} rows={5} toolbarSlots={2} />
   }
 
   return (

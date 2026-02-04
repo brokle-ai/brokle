@@ -60,10 +60,10 @@ export function AnnotationFormDialog({
 }: AnnotationFormDialogProps) {
   // Form state
   const [value, setValue] = React.useState<number | string | boolean | null>(() => {
-    if (score.data_type === 'BOOLEAN') {
+    if (score.type === 'BOOLEAN') {
       return score.value === 1 ? true : score.value === 0 ? false : null
     }
-    if (score.data_type === 'CATEGORICAL') {
+    if (score.type === 'CATEGORICAL') {
       return score.string_value ?? null
     }
     return score.value ?? null
@@ -72,9 +72,9 @@ export function AnnotationFormDialog({
 
   // Reset form when score changes
   React.useEffect(() => {
-    if (score.data_type === 'BOOLEAN') {
+    if (score.type === 'BOOLEAN') {
       setValue(score.value === 1 ? true : score.value === 0 ? false : null)
-    } else if (score.data_type === 'CATEGORICAL') {
+    } else if (score.type === 'CATEGORICAL') {
       setValue(score.string_value ?? null)
     } else {
       setValue(score.value ?? null)
@@ -89,9 +89,9 @@ export function AnnotationFormDialog({
       reason: reason || null,
     }
 
-    if (score.data_type === 'BOOLEAN') {
+    if (score.type === 'BOOLEAN') {
       data.value = value === true ? 1 : value === false ? 0 : null
-    } else if (score.data_type === 'CATEGORICAL') {
+    } else if (score.type === 'CATEGORICAL') {
       data.string_value = value as string | null
     } else {
       data.value = value as number | null
@@ -120,7 +120,7 @@ export function AnnotationFormDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Value</label>
             <ScoreInputField
-              dataType={score.data_type}
+              dataType={score.type}
               value={value}
               onChange={setValue}
               config={config}

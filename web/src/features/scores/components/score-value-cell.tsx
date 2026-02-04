@@ -43,7 +43,7 @@ function formatValue(score: Score): string {
  * - Categorical: neutral outline
  */
 function getValueVariant(
-  dataType: ScoreDataType,
+  dataType: ScoreType,
   value: number | undefined | null
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (dataType === 'BOOLEAN') {

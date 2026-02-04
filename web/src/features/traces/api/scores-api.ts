@@ -17,7 +17,7 @@ export interface Annotation {
   name: string
   value?: number | null
   string_value?: string | null
-  data_type: ScoreDataType
+  type: ScoreDataType
   source: ScoreSource
   reason?: string | null
   created_by?: string | null
@@ -28,7 +28,7 @@ export interface CreateAnnotationRequest {
   name: string
   value?: number | null
   string_value?: string | null
-  data_type: ScoreDataType
+  type: ScoreDataType
   reason?: string | null
 }
 

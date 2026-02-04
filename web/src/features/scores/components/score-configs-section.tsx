@@ -1,16 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, Target, AlertCircle, Loader2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Target, AlertCircle, AlertTriangle } from 'lucide-react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -29,12 +27,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DataTableSkeleton,
+  DataTableEmptyState,
+  DataTablePagination,
+} from '@/components/shared/tables'
+import {
   useScoreConfigsQuery,
   useCreateScoreConfigMutation,
   useUpdateScoreConfigMutation,
   useDeleteScoreConfigMutation,
 } from '../hooks/use-score-configs'
 import { ScoreConfigForm } from './score-config-form'
+import { createScoreConfigsColumns } from './score-configs-columns'
 import type { ScoreConfig, CreateScoreConfigRequest, UpdateScoreConfigRequest } from '../types'
 
 interface ScoreConfigsSectionProps {
@@ -50,7 +54,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   const [pageSize, setPageSize] = useState(10)
 
   const { data: configsResponse, isLoading, isFetching, error, refetch } = useScoreConfigsQuery(projectId, { page, limit: pageSize })
-  const configs = configsResponse?.data
+  const configs = configsResponse?.data || []
   const totalCount = configsResponse?.pagination?.total ?? 0
   const totalPages = Math.ceil(totalCount / pageSize)
   const createMutation = useCreateScoreConfigMutation(projectId)
@@ -93,31 +97,46 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
     }
   }
 
-  const getConstraintDisplay = (config: ScoreConfig) => {
-    if (config.type === 'NUMERIC') {
-      if (config.min_value !== undefined || config.max_value !== undefined) {
-        return `${config.min_value ?? '−∞'} to ${config.max_value ?? '∞'}`
+  // Create columns
+  const columns = useMemo(
+    () =>
+      createScoreConfigsColumns({
+        onEdit: handleEditClick,
+        onDelete: handleDeleteClick,
+        isDeleting: deleteMutation.isPending,
+      }),
+    [deleteMutation.isPending]
+  )
+
+  // Initialize React Table
+  const table = useReactTable({
+    data: configs,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    manualPagination: true,
+    pageCount: totalPages,
+    state: {
+      pagination: {
+        pageIndex: page - 1,
+        pageSize,
+      },
+    },
+    onPaginationChange: (updater) => {
+      const newState = typeof updater === 'function'
+        ? updater({ pageIndex: page - 1, pageSize })
+        : updater
+      setPage(newState.pageIndex + 1)
+      if (newState.pageSize !== pageSize) {
+        setPageSize(newState.pageSize)
+        setPage(1)
       }
-      return 'Any number'
-    }
-    if (config.type === 'CATEGORICAL' && config.categories?.length) {
-      return config.categories.join(', ')
-    }
-    if (config.type === 'BOOLEAN') {
-      return 'true / false'
-    }
-    return '—'
-  }
+    },
+  })
 
   return (
     <div className="space-y-8">
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading score configs...</p>
-          </div>
-        </div>
+        <DataTableSkeleton columns={5} rows={5} showToolbar={false} />
       )}
 
       {error && (
@@ -138,7 +157,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-medium">
-                Score Configs {configs && `(${configs.length})`}
+                Score Configs {totalCount > 0 && `(${totalCount})`}
               </h3>
               <p className="text-sm text-muted-foreground">
                 Define validation rules for evaluation scores
@@ -152,133 +171,60 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
 
           <div className="rounded-md border">
             <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Data Type</TableHead>
-              <TableHead>Constraints</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-[100px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {configs?.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                  <div className="flex flex-col items-center gap-2">
-                    <Target className="h-8 w-8 text-muted-foreground/50" />
-                    <p>No score configs yet.</p>
-                    <p className="text-xs">
-                      Add a config to define validation rules for your scores.
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              configs?.map((config) => (
-                <TableRow key={config.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{config.name}</div>
-                      {config.description && (
-                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                          {config.description}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{config.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                      {getConstraintDisplay(config)}
-                    </code>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {new Date(config.created_at).toLocaleDateString()}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditClick(config)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteClick(config)}
-                        disabled={deleteMutation.isPending}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                      >
-                        {deleteMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                      <DataTableEmptyState
+                        title="No score configs yet"
+                        description="Add a config to define validation rules for your scores."
+                        icon={<Target className="h-8 w-8 text-muted-foreground/50" />}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
 
           {/* Pagination */}
           {totalCount > 0 && (
-            <div className="flex items-center justify-end space-x-6 py-4">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium">Rows per page</p>
-                <Select
-                  value={`${pageSize}`}
-                  onValueChange={(value) => {
-                    setPageSize(Number(value))
-                    setPage(1)
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[70px]">
-                    <SelectValue placeholder={pageSize} />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 25, 50, 100].map((size) => (
-                      <SelectItem key={size} value={`${size}`}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                Page {page} of {totalPages}
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setPage(page - 1)}
-                  disabled={page <= 1 || isFetching}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setPage(page + 1)}
-                  disabled={page >= totalPages || isFetching}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <DataTablePagination
+              table={table}
+              pageSizes={[10, 25, 50, 100]}
+              isPending={isFetching}
+              serverPagination={{
+                page,
+                pageSize,
+                total: totalCount,
+                totalPages,
+                hasNextPage: page < totalPages,
+                hasPreviousPage: page > 1,
+              }}
+            />
           )}
         </div>
       )}
@@ -356,14 +302,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete Config'
-              )}
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Config'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -30,7 +30,7 @@ function toScoresFeatureScore(score: Score): ScoresFeatureScore {
     name: score.name,
     value: score.value,
     string_value: score.string_value,
-    data_type: score.data_type as ScoresFeatureScore['data_type'],
+    type: score.type as ScoresFeatureScore['type'],
     source: mapSource(score.source),
     reason: score.comment,
     metadata: score.evaluator_config as Record<string, unknown>,
