@@ -67,7 +67,7 @@ Brokle follows **OpenTelemetry (OTEL) semantic conventions** with extensions fro
 | `brokle.trace.tags` | JSON Array | Filterable tags | `traces.tags` |
 | `brokle.trace.metadata` | JSON Object | Custom metadata | `traces.metadata` |
 | `brokle.release` | String | Global app version (e.g., "v2.1.24") | `traces.metadata.brokle.release` → materialized column `traces.release` |
-| `brokle.version` | String | Trace-level experiment/version (e.g., "experiment-A") | `traces.metadata.brokle.version` → materialized column `traces.version` |
+| `brokle.span.version` | String | Per-span experiment/version (e.g., "experiment-A") | `span_attributes['brokle.span.version']` → materialized column `span_version` |
 | `brokle.environment` | String | Environment (production/staging/dev) | `traces.environment` |
 
 #### Span Categorization
@@ -75,7 +75,7 @@ Brokle follows **OpenTelemetry (OTEL) semantic conventions** with extensions fro
 |-----------|------|-------------|--------|------------------|
 | `brokle.span.type` | String | Operation type | `generation`, `span`, `tool`, `agent`, `chain`, `retrieval` | `spans.attributes.brokle.span.type` → materialized column `spans.span_type` |
 | `brokle.span.level` | String | Importance level | `DEBUG`, `DEFAULT`, `WARNING`, `ERROR` | `spans.attributes.brokle.span.level` |
-| `brokle.span.version` | String | Span-level version (e.g., "prompt-v2", "model-exp-1") | `spans.attributes.brokle.span.version` → materialized column `spans.version` |
+
 
 #### LLM Analytics (Extracted by Backend)
 | Attribute | Type | Description |
@@ -140,61 +140,59 @@ When multiple attributes are present, backend uses this priority:
 
 ---
 
-## Release & Version Fields: Three Distinct Concepts
+## Release & Version Fields: Two Distinct Concepts
 
-Brokle supports three different version fields for different use cases:
+Brokle supports two version-related fields for different use cases:
 
 ### Field Comparison Table
 
 | Field | Set By | SDK Support | Namespace Key | Storage Location | Use Case |
 |-------|--------|-------------|---------------|------------------|----------|
-| **release** (trace) | User (global app version) | `Brokle(release="v2.1.24")` | `brokle.release` | `traces.metadata.brokle.release` → `traces.release` | Track which app version generated this trace |
-| **version** (trace) | User (trace-level experiment) | `Brokle(version="experiment-A")` | `brokle.version` | `traces.metadata.brokle.version` → `traces.version` | A/B testing trace-level experiments |
-| **version** (span) | User (span-level version) | `start_span(..., version="prompt-v2")` | `brokle.span.version` | `spans.attributes.brokle.span.version` → `spans.version` | Fine-grained per-span versioning |
+| **release** | User (global app version) | `Brokle(release="v2.1.24")` | `brokle.release` | Resource attribute → `traces.release` | Track which app version generated this trace |
+| **version** (span) | User (per-span version) | `start_span(..., version="prompt-v3")` | `brokle.span.version` | `span_attributes['brokle.span.version']` → `spans.span_version` | Per-span A/B testing and experiment tracking |
+
+**Note**: `version` is exclusively a **per-span parameter**. It is NOT available as a constructor/config option. Use `release` for global app versioning.
 
 ### Usage Examples
 
-**Python - Setting All Three Fields**:
+**Python - Setting Release and Per-Span Version**:
 ```python
 from brokle import Brokle
 
-# Initialize with release and trace-level version
+# Initialize with release (global app version)
 client = Brokle(
-    release="v2.1.24",              # Global app version
-    version="experiment-fast-mode"   # Trace-level experiment
+    release="v2.1.24",              # Global app version (resource attribute)
 )
 
-# Start span with span-level version
+# Start span with per-span version (for A/B testing)
 with client.start_as_current_span(
     "llm-generation",
-    version="prompt-v3"  # Span-level version (overrides trace version for this span)
+    version="prompt-v3"  # Per-span version
 ) as span:
     # Do work
     pass
 ```
 
-**JavaScript - Setting All Three Fields**:
+**JavaScript - Setting Release and Per-Span Version**:
 ```typescript
 import { Brokle } from '@brokle/sdk';
 
-// Initialize with release and trace-level version
+// Initialize with release (global app version)
 const client = new Brokle({
-  release: 'v2.1.24',              // Global app version
-  version: 'experiment-fast-mode'   // Trace-level experiment
+  release: 'v2.1.24',              // Global app version (resource attribute)
 });
 
-// Start span with span-level version
-await client.traced('llm-generation', async (span) => {
+// Start span with per-span version (for A/B testing)
+await client.startActiveSpan('llm-generation', async (span) => {
   // Do work
 }, undefined, {
-  version: 'prompt-v3'  // Span-level version
+  version: 'prompt-v3'  // Per-span version
 });
 ```
 
 **Storage Behavior**:
-- `release="v2.1.24"` → Stored in `traces.metadata.brokle.release` → Materialized to `traces.release` column
-- `version="experiment-A"` (trace) → Stored in `traces.metadata.brokle.version` → Materialized to `traces.version` column
-- `version="prompt-v3"` (span) → Stored in `spans.attributes.brokle.span.version` → Materialized to `spans.version` column
+- `release="v2.1.24"` → Resource attribute (`brokle.release`) → Materialized to `traces.release` column
+- `version="prompt-v3"` (span) → Span attribute (`brokle.span.version`) → Materialized to `spans.span_version` column
 
 ### Query Examples
 
@@ -206,15 +204,7 @@ WHERE release = 'v2.1.24'
 ORDER BY start_time DESC;
 ```
 
-**Filter traces by experiment version**:
-```sql
-SELECT trace_id, name, version
-FROM traces
-WHERE version = 'experiment-fast-mode'
-ORDER BY start_time DESC;
-```
-
-**Filter spans by span version**:
+**Filter spans by version**:
 ```sql
 SELECT span_id, span_name, version
 FROM spans
@@ -725,10 +715,9 @@ def test_is_chatml_format():
   - `gen_ai.usage.reasoning_tokens` - Reasoning tokens (OpenAI o1 models)
   - `gen_ai.usage.image_tokens` - Image processing tokens (Vision models)
   - `gen_ai.usage.video_tokens` - Video tokens (future multi-modal)
-- Release & Version fields (3 distinct):
+- Release & Version fields (2 distinct):
   - `brokle.release` - Global app version (trace-level, in metadata)
-  - `brokle.version` - Trace-level experiment ID (in metadata)
-  - `brokle.span.version` - Span-level version (in attributes)
+  - `brokle.span.version` - Per-span version identifier (span-level in attributes)
 - Span types: `agent`, `chain` for AI agent workflows
 - Flexible backend storage via usage_details/cost_details Maps
 - Pricing snapshot for billing audit trail

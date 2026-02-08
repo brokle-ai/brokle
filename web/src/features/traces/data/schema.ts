@@ -96,7 +96,7 @@ export type Span = {
   model_name?: string          // From attributes.gen_ai.request.model
   provider_name?: string       // From attributes.gen_ai.provider.name
   span_type?: string          // From attributes.brokle.span.type
-  version?: string            // From attributes.brokle.span.version
+  version?: string            // From span_attributes['brokle.span.version']
   level?: string              // From attributes.brokle.span.level
 
   // Usage & Cost Maps

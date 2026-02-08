@@ -42,7 +42,7 @@ const SpanSelectFields = `
 	usage_details, cost_details, pricing_snapshot, total_cost,
 	events_timestamp, events_name, events_attributes,
 	links_trace_id, links_span_id, links_trace_state, links_attributes,
-	brokle_version, deleted_at,
+	span_version, deleted_at,
 	model_name, provider_name, span_type, span_level,
 	service_name
 `
@@ -143,6 +143,7 @@ var MaterializedColumns = map[string]string{
 	"gen_ai.system":        "provider_name",
 	"gen_ai.provider.name": "provider_name",
 	"brokle.span.type":     "span_type",
+	"brokle.span.version":  "span_version",
 	"user.id":              "user_id",
 	"session.id":           "session_id",
 	"span.name":            "span_name",
