@@ -13,6 +13,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	commentDomain "brokle/internal/core/domain/comment"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	dashboardDomain "brokle/internal/core/domain/dashboard"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
 	websiteDomain "brokle/internal/core/domain/website"
@@ -96,6 +97,13 @@ type Deps struct {
 
 	// Website contact-form handler.
 	Website websiteDomain.WebsiteService
+
+	// Dashboard domain: dashboards, widget query execution, and
+	// pre-defined templates. Three-service trio to match the
+	// pre-migration gin layout.
+	Dashboard         dashboardDomain.DashboardService
+	DashboardQuery    dashboardDomain.WidgetQueryService
+	DashboardTemplate dashboardDomain.TemplateService
 }
 
 // authMiddlewareDeps assembles the middleware.AuthDeps struct from

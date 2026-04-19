@@ -761,9 +761,6 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	_ = experimentWizardSvc
 	_ = evaluatorSvc
 	_ = evaluatorExecutionSvc
-	_ = dashboardSvc
-	_ = widgetQuerySvc
-	_ = templateSvc
 
 	httpServer, err := server.New(server.Deps{
 		Config:     core.Config,
@@ -788,7 +785,10 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		Overview:      core.Services.Analytics.Overview,
 		Credential:             credentialsSvc,
 		CredentialModelCatalog: modelCatalogSvc,
-		Website:       core.Services.Website,
+		Website:           core.Services.Website,
+		Dashboard:         dashboardSvc,
+		DashboardQuery:    widgetQuerySvc,
+		DashboardTemplate: templateSvc,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP server: %w", err)

@@ -13,6 +13,7 @@ import (
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	commentHandler "brokle/internal/transport/http/handlers/comment"
 	credentialsHandler "brokle/internal/transport/http/handlers/credentials"
+	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
 	overviewHandler "brokle/internal/transport/http/handlers/overview"
 	projectHandler "brokle/internal/transport/http/handlers/project"
 	userHandler "brokle/internal/transport/http/handlers/user"
@@ -153,6 +154,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 			overviewHandler.RegisterRoutes(apiAdmin, d.Overview, d.Logger)
 			credentialsHandler.RegisterRoutes(apiAdmin, d.Credential, d.CredentialModelCatalog, d.Logger)
 			projectHandler.RegisterRoutes(apiAdmin, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
+			dashboardHandler.RegisterRoutes(apiAdmin, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 			// Per-domain authed dashboard registrations land here.
 			// organization.RegisterRoutes(apiAdmin, d.Organization, d.OrgMember)  // Step 4
 			// ... remaining domains
