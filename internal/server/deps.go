@@ -12,14 +12,19 @@ import (
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	authDomain "brokle/internal/core/domain/auth"
 	annotationDomain "brokle/internal/core/domain/annotation"
+	billingDomain "brokle/internal/core/domain/billing"
 	commentDomain "brokle/internal/core/domain/comment"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
+	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
+	playgroundDomain "brokle/internal/core/domain/playground"
+	promptDomain "brokle/internal/core/domain/prompt"
 	userDomain "brokle/internal/core/domain/user"
 	websiteDomain "brokle/internal/core/domain/website"
 	authService "brokle/internal/core/services/auth"
 	credentialsService "brokle/internal/core/services/credentials"
+	observabilityService "brokle/internal/core/services/observability"
 	"brokle/internal/core/services/registration"
 	"brokle/internal/transport/http/middleware"
 )
@@ -110,6 +115,50 @@ type Deps struct {
 	AnnotationQueue      annotationDomain.QueueService
 	AnnotationItem       annotationDomain.ItemService
 	AnnotationAssignment annotationDomain.AssignmentService
+
+	// Billing domain: usage tracking, budgets, contracts, pricing.
+	BillingUsage    billingDomain.BillableUsageService
+	BillingBudget   billingDomain.BudgetService
+	BillingContract billingDomain.ContractService
+	BillingPricing  billingDomain.PricingService
+
+	// RBAC / auth-extended domain services consumed by the rbac handler
+	// (read-only role/permission discovery + custom-role lifecycle +
+	// scope checks). Distinct from the middleware-facing invariants
+	// (JWT / Blacklist / OrgMember) already above.
+	Role       authDomain.RoleService
+	Permission authDomain.PermissionService
+	Scope      authDomain.ScopeService
+
+	// Organization: invitations + settings. The OrganizationService +
+	// MemberService (OrgMemberOrg) are already declared above.
+	Invitation       orgDomain.InvitationService
+	OrgSettings      orgDomain.OrganizationSettingsService
+
+	// Prompt domain: prompt + version CRUD + compile/preview.
+	Prompt         promptDomain.PromptService
+	PromptCompiler promptDomain.CompilerService
+
+	// Playground domain: execute + session CRUD + streaming.
+	Playground playgroundDomain.PlaygroundService
+
+	// Evaluation domain: datasets, experiments, evaluators, score
+	// configs, executions. Largest service surface in the codebase.
+	EvalScoreConfig        evaluationDomain.ScoreConfigService
+	EvalDataset            evaluationDomain.DatasetService
+	EvalDatasetItem        evaluationDomain.DatasetItemService
+	EvalDatasetVersion     evaluationDomain.DatasetVersionService
+	EvalExperiment         evaluationDomain.ExperimentService
+	EvalExperimentItem     evaluationDomain.ExperimentItemService
+	EvalExperimentWizard   evaluationDomain.ExperimentWizardService
+	EvalEvaluator          evaluationDomain.EvaluatorService
+	EvalEvaluatorExecution evaluationDomain.EvaluatorExecutionService
+
+	// Observability: trace/span/score/filter-preset + OTLP ingest.
+	// We carry the observability ServiceRegistry pointer directly —
+	// both handler-plane services and the OTLP plain-chi mount draw
+	// from the same registry.
+	Observability *observabilityService.ServiceRegistry
 }
 
 // authMiddlewareDeps assembles the middleware.AuthDeps struct from

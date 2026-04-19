@@ -1,9 +1,29 @@
+// OTLP HTTP ingestion (traces, logs, metrics) — HUMA-EXEMPT.
+//
+// The OTLP HTTP endpoints accept raw protobuf (and protobuf-JSON) bodies
+// per the OpenTelemetry spec and do not fit Huma v2's JSON-first operation
+// shape without substantial adapter code. They are mounted as plain chi
+// handlers via RegisterOTLPChiRoutes alongside the Huma apiPublic routes
+// on the SDK plane. The routes MUST be wired under the same chi Group
+// that attaches middleware.RequireSDKAuth + middleware.LimitByAPIKey.
+//
+// Endpoints:
+//   POST /v1/traces   — OTLP trace export (protobuf or application/json)
+//   POST /v1/logs     — OTLP logs export
+//   POST /v1/metrics  — OTLP metrics export
+//
+// Response shape: standard APIResponse envelope (JSON), matching the
+// existing client contract. Not strict OTLP spec response (protobuf
+// ExportTraceServiceResponse) — Brokle SDKs already consume the APIResponse
+// envelope from this endpoint, and third-party OTLP senders accept a 200
+// as success per the spec's "at-least-once" semantics.
 package observability
 
 import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,225 +31,216 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"brokle/internal/core/domain/observability"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/streams"
-	"brokle/internal/transport/http/middleware"
+	"brokle/internal/transport/http/httpctx"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 	"brokle/pkg/uid"
 )
 
-// OTLPHandler handles OTLP HTTP requests
-type OTLPHandler struct {
-	streamProducer       *streams.TelemetryStreamProducer
-	deduplicationService observability.TelemetryDeduplicationService
-	otlpConverter        *obsServices.OTLPConverterService
-	logger               *slog.Logger
+// OTLPDeps bundles all services required by the OTLP ingestion endpoints.
+type OTLPDeps struct {
+	StreamProducer       *streams.TelemetryStreamProducer
+	DeduplicationService observability.TelemetryDeduplicationService
+	OTLPConverter        *obsServices.OTLPConverterService
+	LogsConverter        *obsServices.OTLPLogsConverterService
+	EventsConverter      *obsServices.OTLPEventsConverterService
+	MetricsConverter     *obsServices.OTLPMetricsConverterService
+	Logger               *slog.Logger
 }
 
-// NewOTLPHandler creates a new OTLP handler
-func NewOTLPHandler(
-	streamProducer *streams.TelemetryStreamProducer,
-	deduplicationService observability.TelemetryDeduplicationService,
-	otlpConverter *obsServices.OTLPConverterService,
-	logger *slog.Logger,
-) *OTLPHandler {
-	return &OTLPHandler{
-		streamProducer:       streamProducer,
-		deduplicationService: deduplicationService,
-		otlpConverter:        otlpConverter,
-		logger:               logger,
-	}
+// RegisterOTLPChiRoutes mounts the three OTLP HTTP ingestion endpoints as
+// plain chi handlers. The caller is responsible for applying
+// RequireSDKAuth and rate-limit middleware on the surrounding chi group.
+func RegisterOTLPChiRoutes(r chi.Router, deps OTLPDeps) {
+	h := &otlpHandler{deps: deps}
+	r.Post("/v1/traces", h.handleTraces)
+	r.Post("/v1/logs", h.handleLogs)
+	r.Post("/v1/metrics", h.handleMetrics)
 }
 
-// HandleTraces handles POST /v1/traces
-// @Summary OTLP trace ingestion endpoint (OpenTelemetry spec compliant)
-// @Description Accepts OpenTelemetry Protocol (OTLP) traces in JSON or Protobuf format
-// @Tags SDK - OTLP
-// @Accept json
-// @Accept application/x-protobuf
-// @Produce json
-// @Security ApiKeyAuth
-// @Param request body observability.OTLPRequest true "OTLP trace export request"
-// @Success 200 {object} response.APIResponse{data=map[string]any} "Traces accepted"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid OTLP request"
-// @Failure 401 {object} response.APIResponse{error=response.APIError} "Invalid or missing API key"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /v1/traces [post]
-func (h *OTLPHandler) HandleTraces(c *gin.Context) {
-	ctx := c.Request.Context()
+type otlpHandler struct {
+	deps OTLPDeps
+}
 
-	projectUUID := middleware.MustGetProjectID(c)
-	projectID := projectUUID.String()
-	organizationUUID := middleware.MustGetOrganizationID(c)
+const otlpMaxRequestSize = 10 * 1024 * 1024 // 10MB, matches OTEL Collector default
 
-	// Validate Content-Type header (OTLP specification requires explicit Content-Type)
-	contentType := c.GetHeader("Content-Type")
-	validContentType := strings.Contains(contentType, "application/x-protobuf") ||
-		strings.Contains(contentType, "application/json")
-
-	if !validContentType {
-		h.logger.Warn("Unsupported Content-Type for OTLP endpoint", "content_type", contentType)
-		response.ErrorWithStatus(c, 415, "unsupported_media_type",
+// readOTLPBody validates Content-Type, enforces the 10MB cap, and
+// transparently decompresses gzip. Returns the decoded content bytes and
+// the matched content type ("application/x-protobuf" or
+// "application/json").
+func readOTLPBody(w http.ResponseWriter, r *http.Request, logger *slog.Logger, endpoint string) ([]byte, string, bool) {
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/x-protobuf") && !strings.Contains(contentType, "application/json") {
+		logger.Warn("Unsupported Content-Type for OTLP endpoint", "endpoint", endpoint, "content_type", contentType)
+		writeOTLPError(w, http.StatusUnsupportedMediaType, "unsupported_media_type",
 			"Content-Type must be 'application/x-protobuf' or 'application/json'", "")
-		return
+		return nil, "", false
 	}
 
-	// Enforce 10MB request size limit (OTEL Collector default, prevents DoS attacks)
-	const maxRequestSize = 10 * 1024 * 1024 // 10MB
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestSize)
-
-	// Read raw request body
-	body, err := io.ReadAll(c.Request.Body)
+	r.Body = http.MaxBytesReader(w, r.Body, otlpMaxRequestSize)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		// Check if error is due to size limit
-		if err.Error() == "http: request body too large" {
-			h.logger.Warn("OTLP request exceeds maximum size limit", "max_size", maxRequestSize, "error", err.Error())
-			response.ErrorWithStatus(c, 413, "payload_too_large",
-				fmt.Sprintf("Request body exceeds maximum size of %d bytes", maxRequestSize), "")
-			return
+		if strings.Contains(err.Error(), "request body too large") {
+			logger.Warn("OTLP request exceeds maximum size limit", "endpoint", endpoint, "max_size", otlpMaxRequestSize)
+			writeOTLPError(w, http.StatusRequestEntityTooLarge, "payload_too_large",
+				fmt.Sprintf("Request body exceeds maximum size of %d bytes", otlpMaxRequestSize), "")
+			return nil, "", false
 		}
-
-		h.logger.Error("Failed to read OTLP request body", "error", err)
-		response.BadRequest(c, "invalid request", "Failed to read request body")
-		return
+		logger.Error("Failed to read OTLP request body", "endpoint", endpoint, "error", err)
+		writeOTLPError(w, http.StatusBadRequest, "invalid_request", "Failed to read request body", "")
+		return nil, "", false
 	}
 
-	// Decompress if Content-Encoding is gzip
-	contentEncoding := c.GetHeader("Content-Encoding")
-	originalSize := len(body)
-
-	if strings.Contains(contentEncoding, "gzip") {
-		h.logger.Debug("Decompressing gzip-encoded OTLP request")
-
-		gzipReader, err := gzip.NewReader(bytes.NewReader(body))
-		if err != nil {
-			h.logger.Error("Failed to create gzip reader", "error", err)
-			response.BadRequest(c, "invalid encoding", "Failed to decompress gzip data")
-			return
+	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		originalSize := len(body)
+		gzipReader, gerr := gzip.NewReader(bytes.NewReader(body))
+		if gerr != nil {
+			logger.Error("Failed to create gzip reader", "endpoint", endpoint, "error", gerr)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_encoding", "Failed to decompress gzip data", "")
+			return nil, "", false
 		}
 		defer func() {
-			if err := gzipReader.Close(); err != nil {
-				h.logger.Warn("Failed to close gzip reader", "error", err)
+			if cerr := gzipReader.Close(); cerr != nil {
+				logger.Warn("Failed to close gzip reader", "endpoint", endpoint, "error", cerr)
 			}
 		}()
-
 		body, err = io.ReadAll(gzipReader)
 		if err != nil {
-			h.logger.Error("Failed to decompress gzip data", "error", err)
-			response.BadRequest(c, "invalid encoding", "Failed to read decompressed data")
-			return
+			logger.Error("Failed to decompress gzip data", "endpoint", endpoint, "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_encoding", "Failed to read decompressed data", "")
+			return nil, "", false
 		}
-
-		h.logger.Info("Gzip decompression successful", "original_size", originalSize, "decompressed_size", len(body), "compression_ratio", float64(originalSize)/float64(len(body)))
+		logger.Info("Gzip decompression successful", "endpoint", endpoint, "original_size", originalSize, "decompressed_size", len(body))
 	}
 
-	// Parse request based on content type (already validated above)
-	var otlpReq observability.OTLPRequest
+	return body, contentType, true
+}
 
+// writeOTLPError writes an APIResponse error envelope directly to the
+// stdlib ResponseWriter (no gin.Context in scope).
+func writeOTLPError(w http.ResponseWriter, status int, code, message, details string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": false,
+		"error": map[string]any{
+			"type":    string(appErrors.FromHTTPStatus(status, message).Type),
+			"code":    code,
+			"message": message,
+			"details": details,
+		},
+	})
+}
+
+// writeOTLPSuccess writes a 200 APIResponse envelope with the given data
+// payload.
+func writeOTLPSuccess(w http.ResponseWriter, data map[string]any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"data":    data,
+	})
+}
+
+// writeOTLPServiceError maps an AppError / generic error to an HTTP status
+// and APIResponse envelope. Used after the protobuf is parsed but a
+// downstream service fails.
+func writeOTLPServiceError(w http.ResponseWriter, err error) {
+	response.WriteError(w, err)
+}
+
+// ==================================================================
+// TRACES
+// ==================================================================
+
+func (h *otlpHandler) handleTraces(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := h.deps.Logger
+
+	projectUUID := httpctx.MustGetProjectID(ctx)
+	projectID := projectUUID.String()
+	organizationUUID := httpctx.MustGetOrganizationID(ctx)
+
+	body, contentType, ok := readOTLPBody(w, r, logger, "traces")
+	if !ok {
+		return
+	}
+
+	var protoReq coltracepb.ExportTraceServiceRequest
 	if strings.Contains(contentType, "application/x-protobuf") {
-		// Parse Protobuf format (more efficient)
-		h.logger.Debug("Parsing OTLP Protobuf request")
-
-		var protoReq coltracepb.ExportTraceServiceRequest
 		if err := proto.Unmarshal(body, &protoReq); err != nil {
-			h.logger.Error("Failed to unmarshal OTLP protobuf", "error", err)
-			response.ValidationError(c, "invalid OTLP protobuf", err.Error())
-			return
-		}
-
-		// Convert protobuf to internal format
-		otlpReq, err = convertProtoToInternal(&protoReq)
-		if err != nil {
-			h.logger.Error("Failed to convert protobuf to internal format", "error", err)
-			response.InternalServerError(c, "Failed to process OTLP protobuf")
+			logger.Error("Failed to unmarshal OTLP traces protobuf", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_protobuf", "Invalid OTLP protobuf", err.Error())
 			return
 		}
 	} else {
-		// Parse JSON format (default, for debugging)
-		h.logger.Debug("Parsing OTLP JSON request")
-
-		var protoReq coltracepb.ExportTraceServiceRequest
 		if err := protojson.Unmarshal(body, &protoReq); err != nil {
-			h.logger.Error("Failed to parse OTLP JSON", "error", err)
-			response.ValidationError(c, "invalid OTLP JSON", err.Error())
-			return
-		}
-
-		// Convert protobuf to internal format (same as Protobuf path)
-		otlpReq, err = convertProtoToInternal(&protoReq)
-		if err != nil {
-			h.logger.Error("Failed to convert JSON to internal format", "error", err)
-			response.InternalServerError(c, "Failed to process OTLP JSON")
+			logger.Error("Failed to parse OTLP traces JSON", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_json", "Invalid OTLP JSON", err.Error())
 			return
 		}
 	}
 
-	// Validate request has resource spans
-	if len(otlpReq.ResourceSpans) == 0 {
-		response.ValidationError(c, "empty request", "OTLP request must contain at least one resource span")
-		return
-	}
-
-	h.logger.Debug("Received OTLP trace request", "project_id", projectID, "resource_spans", len(otlpReq.ResourceSpans))
-
-	// Convert OTLP spans to Brokle telemetry events using converter service (with cost calculation)
-	brokleEvents, err := h.otlpConverter.ConvertOTLPToBrokleEvents(c.Request.Context(), &otlpReq, projectID)
+	otlpReq, err := convertProtoToInternal(&protoReq)
 	if err != nil {
-		h.logger.Error("Failed to convert OTLP to Brokle events", "error", err)
-		response.InternalServerError(c, "Failed to process OTLP traces")
+		logger.Error("Failed to convert protobuf to internal format", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process OTLP traces", "")
+		return
+	}
+	if len(otlpReq.ResourceSpans) == 0 {
+		writeOTLPError(w, http.StatusBadRequest, "empty_request", "OTLP request must contain at least one resource span", "")
 		return
 	}
 
-	h.logger.Debug("Converted OTLP spans to Brokle events", "project_id", projectID, "otlp_spans", countSpans(&otlpReq), "brokle_events", len(brokleEvents))
+	brokleEvents, err := h.deps.OTLPConverter.ConvertOTLPToBrokleEvents(ctx, &otlpReq, projectID)
+	if err != nil {
+		logger.Error("Failed to convert OTLP to Brokle events", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process OTLP traces", "")
+		return
+	}
 
-	// OTLP-native processing: deduplication + Redis Streams publishing
-
-	// 1. Extract composite dedup IDs for spans (trace_id:span_id)
+	// Deduplication across spans
 	dedupIDs := make([]string, 0, len(brokleEvents))
-	dedupIDToFirstIndex := make(map[string]int) // Track first occurrence index for intra-batch deduplication
-
+	dedupIDToFirstIndex := make(map[string]int)
 	for i, event := range brokleEvents {
-		// Only deduplicate spans (spans have unique span_id)
 		if event.EventType == observability.TelemetryEventTypeSpan {
 			if event.SpanID == "" {
-				h.logger.Error("Span missing span_id, skipping deduplication", "event_id", event.EventID.String(), "trace_id", event.TraceID, "event_type", event.EventType)
+				logger.Error("Span missing span_id, skipping deduplication", "event_id", event.EventID.String(), "trace_id", event.TraceID)
 				continue
 			}
-
-			// Build composite key: trace_id:span_id (prevents cross-trace collisions)
 			dedupID := fmt.Sprintf("%s:%s", event.TraceID, event.SpanID)
 			dedupIDs = append(dedupIDs, dedupID)
-
-			// Track first occurrence index within this batch (for intra-batch deduplication)
 			if _, exists := dedupIDToFirstIndex[dedupID]; !exists {
 				dedupIDToFirstIndex[dedupID] = i
 			}
 		}
 	}
 
-	// 2. Claim spans atomically (24h TTL, prevents duplicates)
 	batchID := uid.New()
 	var claimedIDs, duplicateIDs []string
-
 	if len(dedupIDs) > 0 {
-		claimedIDs, duplicateIDs, err = h.deduplicationService.ClaimEvents(
-			ctx, projectUUID, batchID, dedupIDs, 24*time.Hour,
-		)
+		claimedIDs, duplicateIDs, err = h.deps.DeduplicationService.ClaimEvents(ctx, projectUUID, batchID, dedupIDs, 24*time.Hour)
 		if err != nil {
-			h.logger.Error("Failed to claim OTLP spans for deduplication", "error", err)
-			response.InternalServerError(c, "Failed to claim events for deduplication")
+			logger.Error("Failed to claim OTLP spans for deduplication", "error", err)
+			writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to claim events for deduplication", "")
 			return
 		}
 	}
 
-	// 3. Skip if all spans were duplicates and no traces
 	hasTraces := false
 	for _, event := range brokleEvents {
 		if event.EventType == observability.TelemetryEventTypeTrace {
@@ -239,16 +250,11 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	}
 
 	if len(claimedIDs) == 0 && !hasTraces {
-		h.logger.Info("All OTLP spans were duplicates, skipping", "project_id", projectID, "duplicates", len(duplicateIDs))
-
-		response.Success(c, map[string]any{
-			"status":          "all_duplicates",
-			"duplicate_spans": len(duplicateIDs),
-		})
+		logger.Info("All OTLP spans were duplicates, skipping", "project_id", projectID, "duplicates", len(duplicateIDs))
+		writeOTLPSuccess(w, map[string]any{"status": "all_duplicates", "duplicate_spans": len(duplicateIDs)})
 		return
 	}
 
-	// 4. Filter to claimed spans + all traces
 	claimedSet := make(map[string]bool, len(claimedIDs))
 	for _, id := range claimedIDs {
 		claimedSet[id] = true
@@ -256,7 +262,6 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 	claimedEventData := make([]streams.TelemetryEventData, 0, len(brokleEvents))
 	for i, event := range brokleEvents {
-		// Always include traces (no dedup)
 		if event.EventType == observability.TelemetryEventTypeTrace {
 			claimedEventData = append(claimedEventData, streams.TelemetryEventData{
 				EventID:      event.EventID,
@@ -267,16 +272,10 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 			})
 			continue
 		}
-
-		// Spans: include ONLY if (1) first occurrence in batch AND (2) claimed
 		if event.EventType == observability.TelemetryEventTypeSpan {
 			dedupID := fmt.Sprintf("%s:%s", event.TraceID, event.SpanID)
 			firstIndex := dedupIDToFirstIndex[dedupID]
 			isFirstOccurrence := (i == firstIndex)
-
-			// Two-level deduplication:
-			// 1. Intra-batch: only process first occurrence within this batch
-			// 2. Inter-batch: only process if claimed by Redis (not a global duplicate)
 			if isFirstOccurrence && claimedSet[dedupID] {
 				claimedEventData = append(claimedEventData, streams.TelemetryEventData{
 					EventID:      event.EventID,
@@ -289,7 +288,6 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		}
 	}
 
-	// 5. Publish to Redis Streams for async processing
 	streamMsg := &streams.TelemetryStreamMessage{
 		BatchID:          batchID,
 		ProjectID:        projectUUID,
@@ -306,20 +304,21 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		Timestamp: time.Now(),
 	}
 
-	streamID, err := h.streamProducer.PublishBatch(ctx, streamMsg)
+	streamID, err := h.deps.StreamProducer.PublishBatch(ctx, streamMsg)
 	if err != nil {
-		// CRITICAL: Rollback claimed events on publish failure
-		if rollbackErr := h.deduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
-			h.logger.Error("CRITICAL: Failed to rollback OTLP deduplication claims after publish failure", "rollback_error", rollbackErr.Error(), "original_error", err.Error(), "batch_id", batchID.String())
+		if rollbackErr := h.deps.DeduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
+			logger.Error("CRITICAL: Failed to rollback OTLP deduplication claims after publish failure",
+				"rollback_error", rollbackErr.Error(), "original_error", err.Error(), "batch_id", batchID.String())
 		}
-		response.InternalServerError(c, "Failed to publish events to stream")
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to publish events to stream", "")
 		return
 	}
 
-	h.logger.Info("OTLP traces published to stream successfully", "batch_id", batchID.String(), "stream_id", streamID, "claimed_events", len(claimedIDs), "duplicates", len(duplicateIDs), "project_id", projectID)
+	logger.Info("OTLP traces published to stream successfully",
+		"batch_id", batchID.String(), "stream_id", streamID,
+		"claimed_events", len(claimedIDs), "duplicates", len(duplicateIDs), "project_id", projectID)
 
-	// 6. Return OTLP-compatible success response (using standard APIResponse envelope)
-	response.Success(c, map[string]any{
+	writeOTLPSuccess(w, map[string]any{
 		"status":          "accepted",
 		"batch_id":        batchID.String(),
 		"stream_id":       streamID,
@@ -328,7 +327,178 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	})
 }
 
-// countSpans counts total spans in OTLP request
+// ==================================================================
+// LOGS
+// ==================================================================
+
+func (h *otlpHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := h.deps.Logger
+
+	projectID := httpctx.MustGetProjectID(ctx)
+
+	body, contentType, ok := readOTLPBody(w, r, logger, "logs")
+	if !ok {
+		return
+	}
+
+	var protoReq collogspb.ExportLogsServiceRequest
+	if strings.Contains(contentType, "application/x-protobuf") {
+		if err := proto.Unmarshal(body, &protoReq); err != nil {
+			logger.Error("Failed to unmarshal OTLP logs protobuf", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_protobuf", "Invalid OTLP protobuf", err.Error())
+			return
+		}
+	} else {
+		if err := protojson.Unmarshal(body, &protoReq); err != nil {
+			logger.Error("Failed to parse OTLP logs JSON", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_json", "Invalid OTLP JSON", err.Error())
+			return
+		}
+	}
+
+	if len(protoReq.GetResourceLogs()) == 0 {
+		writeOTLPError(w, http.StatusBadRequest, "empty_request", "OTLP request must contain at least one resource logs", "")
+		return
+	}
+
+	logsData := &logspb.LogsData{ResourceLogs: protoReq.GetResourceLogs()}
+
+	logEvents, err := h.deps.LogsConverter.ConvertLogsRequest(ctx, logsData, projectID)
+	if err != nil {
+		logger.Error("Failed to convert OTLP logs to Brokle events", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process OTLP logs", "")
+		return
+	}
+	genaiEvents, err := h.deps.EventsConverter.ConvertGenAIEventsRequest(ctx, logsData, projectID)
+	if err != nil {
+		logger.Error("Failed to convert GenAI events to Brokle events", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process GenAI events", "")
+		return
+	}
+
+	brokleEvents := append(logEvents, genaiEvents...)
+
+	eventData := make([]streams.TelemetryEventData, 0, len(brokleEvents))
+	for _, event := range brokleEvents {
+		eventData = append(eventData, streams.TelemetryEventData{
+			EventID:      event.EventID,
+			SpanID:       event.SpanID,
+			TraceID:      event.TraceID,
+			EventType:    string(event.EventType),
+			EventPayload: event.Payload,
+		})
+	}
+
+	batchID := uid.New()
+	streamMessage := &streams.TelemetryStreamMessage{
+		BatchID:   batchID,
+		ProjectID: projectID,
+		Events:    eventData,
+		Timestamp: uid.TimeFromID(batchID),
+	}
+
+	streamID, err := h.deps.StreamProducer.PublishBatch(ctx, streamMessage)
+	if err != nil {
+		logger.Error("Failed to publish logs batch to Redis Streams", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process logs batch", "")
+		return
+	}
+
+	logger.Info("Successfully published OTLP logs batch to Redis Streams",
+		"project_id", projectID.String(), "batch_id", batchID.String(), "stream_id", streamID, "event_count", len(brokleEvents))
+
+	writeOTLPSuccess(w, map[string]any{
+		"batch_id":    batchID.String(),
+		"event_count": len(brokleEvents),
+		"status":      "accepted",
+	})
+}
+
+// ==================================================================
+// METRICS
+// ==================================================================
+
+func (h *otlpHandler) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := h.deps.Logger
+
+	projectID := httpctx.MustGetProjectID(ctx)
+
+	body, contentType, ok := readOTLPBody(w, r, logger, "metrics")
+	if !ok {
+		return
+	}
+
+	var protoReq colmetricspb.ExportMetricsServiceRequest
+	if strings.Contains(contentType, "application/x-protobuf") {
+		if err := proto.Unmarshal(body, &protoReq); err != nil {
+			logger.Error("Failed to unmarshal OTLP metrics protobuf", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_protobuf", "Invalid OTLP protobuf", err.Error())
+			return
+		}
+	} else {
+		if err := protojson.Unmarshal(body, &protoReq); err != nil {
+			logger.Error("Failed to parse OTLP metrics JSON", "error", err)
+			writeOTLPError(w, http.StatusBadRequest, "invalid_otlp_json", "Invalid OTLP JSON", err.Error())
+			return
+		}
+	}
+
+	if len(protoReq.GetResourceMetrics()) == 0 {
+		writeOTLPError(w, http.StatusBadRequest, "empty_request", "OTLP request must contain at least one resource metrics", "")
+		return
+	}
+
+	metricsData := &metricspb.MetricsData{ResourceMetrics: protoReq.GetResourceMetrics()}
+	brokleEvents, err := h.deps.MetricsConverter.ConvertMetricsRequest(ctx, metricsData, projectID)
+	if err != nil {
+		logger.Error("Failed to convert OTLP metrics to Brokle events", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process OTLP metrics", "")
+		return
+	}
+
+	eventData := make([]streams.TelemetryEventData, 0, len(brokleEvents))
+	for _, event := range brokleEvents {
+		eventData = append(eventData, streams.TelemetryEventData{
+			EventID:      event.EventID,
+			SpanID:       event.SpanID,
+			TraceID:      event.TraceID,
+			EventType:    string(event.EventType),
+			EventPayload: event.Payload,
+		})
+	}
+
+	batchID := uid.New()
+	streamMessage := &streams.TelemetryStreamMessage{
+		BatchID:   batchID,
+		ProjectID: projectID,
+		Events:    eventData,
+		Timestamp: uid.TimeFromID(batchID),
+	}
+
+	streamID, err := h.deps.StreamProducer.PublishBatch(ctx, streamMessage)
+	if err != nil {
+		logger.Error("Failed to publish metrics batch to Redis Streams", "error", err)
+		writeOTLPError(w, http.StatusInternalServerError, "internal_error", "Failed to process metrics batch", "")
+		return
+	}
+
+	logger.Info("Successfully published OTLP metrics batch to Redis Streams",
+		"project_id", projectID.String(), "batch_id", batchID.String(), "stream_id", streamID, "event_count", len(brokleEvents))
+
+	writeOTLPSuccess(w, map[string]any{
+		"batch_id":    batchID.String(),
+		"event_count": len(brokleEvents),
+		"status":      "accepted",
+	})
+}
+
+// ==================================================================
+// Protobuf → internal conversion (trace path)
+// ==================================================================
+
+// countSpans counts total spans in OTLP request.
 func countSpans(req *observability.OTLPRequest) int {
 	count := 0
 	for _, rs := range req.ResourceSpans {
@@ -339,14 +509,14 @@ func countSpans(req *observability.OTLPRequest) int {
 	return count
 }
 
-// convertProtoToInternal converts official OTLP protobuf to internal format
+// convertProtoToInternal converts official OTLP protobuf to the internal
+// Brokle OTLPRequest shape.
 func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (observability.OTLPRequest, error) {
 	var internalReq observability.OTLPRequest
 
 	for _, protoRS := range protoReq.ResourceSpans {
 		internalRS := observability.ResourceSpan{}
 
-		// Convert Resource
 		if protoRS.Resource != nil {
 			internalResource := &observability.Resource{}
 			for _, attr := range protoRS.Resource.Attributes {
@@ -358,11 +528,9 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 			internalRS.Resource = internalResource
 		}
 
-		// Convert ScopeSpans
 		for _, protoSS := range protoRS.ScopeSpans {
 			internalSS := observability.ScopeSpan{}
 
-			// Convert Scope
 			if protoSS.Scope != nil {
 				internalScope := &observability.Scope{
 					Name:    protoSS.Scope.Name,
@@ -377,9 +545,7 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 				internalSS.Scope = internalScope
 			}
 
-			// Convert Spans
 			for _, protoSpan := range protoSS.Spans {
-				// Convert byte arrays to hex strings for internal format
 				traceIDHex := hex.EncodeToString(protoSpan.TraceId)
 				spanIDHex := hex.EncodeToString(protoSpan.SpanId)
 				var parentSpanIDHex any
@@ -397,7 +563,6 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 					EndTimeUnixNano:   int64(protoSpan.EndTimeUnixNano),
 				}
 
-				// Convert Attributes
 				for _, attr := range protoSpan.Attributes {
 					internalSpan.Attributes = append(internalSpan.Attributes, observability.KeyValue{
 						Key:   attr.Key,
@@ -405,7 +570,6 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 					})
 				}
 
-				// Convert Status
 				if protoSpan.Status != nil {
 					internalSpan.Status = &observability.Status{
 						Code:    int(protoSpan.Status.Code),
@@ -413,7 +577,6 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 					}
 				}
 
-				// Convert Events
 				for _, protoEvent := range protoSpan.Events {
 					internalEvent := observability.Event{
 						TimeUnixNano: int64(protoEvent.TimeUnixNano),
@@ -440,12 +603,11 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 	return internalReq, nil
 }
 
-// convertProtoAnyValue converts protobuf AnyValue to any
+// convertProtoAnyValue converts a protobuf AnyValue to a Go `any`.
 func convertProtoAnyValue(value *commonpb.AnyValue) any {
 	if value == nil {
 		return nil
 	}
-
 	switch v := value.Value.(type) {
 	case *commonpb.AnyValue_StringValue:
 		return v.StringValue
@@ -479,3 +641,10 @@ func convertProtoAnyValue(value *commonpb.AnyValue) any {
 		return nil
 	}
 }
+
+// writeOTLPServiceError is kept for future use if callers ever need to
+// propagate an AppError directly from within an OTLP handler — currently
+// unused because we emit specific error codes at each failure point. The
+// function is intentionally retained so new failure paths have a drop-in
+// error-renderer that matches the rest of the stack.
+var _ = writeOTLPServiceError

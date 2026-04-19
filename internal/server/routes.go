@@ -12,11 +12,18 @@ import (
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
+	billingHandler "brokle/internal/transport/http/handlers/billing"
 	commentHandler "brokle/internal/transport/http/handlers/comment"
 	credentialsHandler "brokle/internal/transport/http/handlers/credentials"
 	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
+	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
+	observabilityHandler "brokle/internal/transport/http/handlers/observability"
+	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	overviewHandler "brokle/internal/transport/http/handlers/overview"
+	playgroundHandler "brokle/internal/transport/http/handlers/playground"
 	projectHandler "brokle/internal/transport/http/handlers/project"
+	promptHandler "brokle/internal/transport/http/handlers/prompt"
+	rbacHandler "brokle/internal/transport/http/handlers/rbac"
 	userHandler "brokle/internal/transport/http/handlers/user"
 	websiteHandler "brokle/internal/transport/http/handlers/website"
 	"brokle/internal/transport/http/middleware"
@@ -102,9 +109,28 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireSDKAuth(sdkAuthD))
 		r.Use(middleware.LimitByAPIKey(rateLimitD))
-		// Per-domain authed SDK route registrations land here as
-		// Step 4 converts handlers — observability, prompt, etc.
 		annotationHandler.RegisterSDKRoutes(apiPublic, d.AnnotationItem, d.Logger)
+		promptHandler.RegisterSDKRoutes(apiPublic, d.Prompt, d.Logger)
+		playgroundHandler.RegisterSDKRoutes(apiPublic, d.Playground, d.Logger)
+		observabilityHandler.RegisterSDKRoutes(apiPublic, d.Observability.SpanQueryService, d.Logger)
+		evaluationHandler.RegisterSDKRoutes(
+			apiPublic,
+			d.EvalScoreConfig, d.EvalDataset, d.EvalDatasetItem, d.EvalDatasetVersion,
+			d.EvalExperiment, d.EvalExperimentItem,
+			d.Observability.ScoreService,
+			d.Logger,
+		)
+		// OTLP ingestion — HUMA-EXEMPT, mounted on chi under the same
+		// SDK-auth + rate-limit middleware stack.
+		observabilityHandler.RegisterOTLPChiRoutes(r, observabilityHandler.OTLPDeps{
+			StreamProducer:       d.Observability.StreamProducer,
+			DeduplicationService: d.Observability.DeduplicationService,
+			OTLPConverter:        d.Observability.OTLPConverterService,
+			LogsConverter:        d.Observability.OTLPLogsConverterService,
+			EventsConverter:      d.Observability.OTLPEventsConverterService,
+			MetricsConverter:     d.Observability.OTLPMetricsConverterService,
+			Logger:               d.Logger,
+		})
 	})
 
 	// 5. Dashboard plane: /api/v1/* — apiAdmin Huma operations.
@@ -157,9 +183,26 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 			projectHandler.RegisterRoutes(apiAdmin, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 			dashboardHandler.RegisterRoutes(apiAdmin, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 			annotationHandler.RegisterRoutes(apiAdmin, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
-			// Per-domain authed dashboard registrations land here.
-			// organization.RegisterRoutes(apiAdmin, d.Organization, d.OrgMember)  // Step 4
-			// ... remaining domains
+			billingHandler.RegisterRoutes(apiAdmin, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
+			organizationHandler.RegisterRoutes(apiAdmin, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
+			promptHandler.RegisterRoutes(apiAdmin, d.Prompt, d.PromptCompiler, d.Logger)
+			rbacHandler.RegisterRoutes(apiAdmin, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
+			playgroundHandler.RegisterRoutes(apiAdmin, d.Playground, d.Project, d.Logger)
+			observabilityHandler.RegisterRoutes(
+				apiAdmin,
+				d.Observability.TraceService,
+				d.Observability.ScoreService,
+				d.Observability.ScoreAnalyticsService,
+				d.Observability.FilterPresetService,
+				d.Logger,
+			)
+			evaluationHandler.RegisterRoutes(
+				apiAdmin,
+				d.EvalScoreConfig, d.EvalDataset, d.EvalDatasetItem, d.EvalDatasetVersion,
+				d.EvalExperiment, d.EvalExperimentItem, d.EvalExperimentWizard,
+				d.EvalEvaluator, d.EvalEvaluatorExecution,
+				d.Logger,
+			)
 		})
 	})
 }

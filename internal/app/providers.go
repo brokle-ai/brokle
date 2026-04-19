@@ -746,21 +746,6 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	// handler domains are NOT listed here — they will appear as they
 	// migrate, not before (CLAUDE.md scaffolded-but-unreachable rule).
 	//
-	// Suppress unused variables for services whose handler domain
-	// hasn't been ported yet. They are referenced by the core service
-	// wiring above and will land in Deps as their domains migrate.
-	_ = credentialsSvc
-	_ = modelCatalogSvc
-	_ = playgroundSvc
-	_ = scoreConfigSvc
-	_ = datasetSvc
-	_ = datasetItemSvc
-	_ = datasetVersionSvc
-	_ = experimentSvc
-	_ = experimentItemSvc
-	_ = experimentWizardSvc
-	_ = evaluatorSvc
-	_ = evaluatorExecutionSvc
 
 	httpServer, err := server.New(server.Deps{
 		Config:     core.Config,
@@ -792,6 +777,35 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		AnnotationQueue:      core.Services.Annotation.Queue,
 		AnnotationItem:       core.Services.Annotation.Item,
 		AnnotationAssignment: core.Services.Annotation.Assignment,
+
+		BillingUsage:    core.Services.Billing.BillableUsage,
+		BillingBudget:   core.Services.Billing.Budget,
+		BillingContract: core.Services.Billing.Contract,
+		BillingPricing:  core.Services.Billing.Pricing,
+
+		Role:       core.Services.Auth.Role,
+		Permission: core.Services.Auth.Permission,
+		Scope:      core.Services.Auth.Scope,
+
+		Invitation:  core.Services.InvitationService,
+		OrgSettings: core.Services.SettingsService,
+
+		Prompt:         core.Services.Prompt.Prompt,
+		PromptCompiler: core.Services.Prompt.Compiler,
+
+		Playground: playgroundSvc,
+
+		EvalScoreConfig:        scoreConfigSvc,
+		EvalDataset:            datasetSvc,
+		EvalDatasetItem:        datasetItemSvc,
+		EvalDatasetVersion:     datasetVersionSvc,
+		EvalExperiment:         experimentSvc,
+		EvalExperimentItem:     experimentItemSvc,
+		EvalExperimentWizard:   experimentWizardSvc,
+		EvalEvaluator:          evaluatorSvc,
+		EvalEvaluatorExecution: evaluatorExecutionSvc,
+
+		Observability: core.Services.Observability,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP server: %w", err)
