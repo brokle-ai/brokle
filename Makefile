@@ -4,7 +4,7 @@
 # and deployment of the Brokle platform.
 
 # Available commands:
-.PHONY: help setup install-deps install-tools ensure-swag setup-databases
+.PHONY: help setup install-deps install-tools setup-databases
 .PHONY: dev dev-server dev-worker dev-frontend stop-dev
 .PHONY: build build-oss build-enterprise build-server-oss build-worker-oss
 .PHONY: build-server-enterprise build-worker-enterprise build-frontend build-all
@@ -45,10 +45,9 @@ install-deps: ## Install Go and Node.js dependencies
 	go mod download
 	cd web && pnpm install
 
-install-tools: ## Install development tools (swag, air, golangci-lint, sqlc)
+install-tools: ## Install development tools (air, golangci-lint, sqlc)
 	@echo "🔧 Installing development tools..."
-	@echo "Installing Go development tools (swag, air, sqlc)..."
-	@go install github.com/swaggo/swag/cmd/swag@v1.16.6
+	@echo "Installing Go development tools (air, sqlc)..."
 	@go install github.com/air-verse/air@latest
 	@go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
 	@echo "Installing golangci-lint v2.6.2 (Go 1.25 compatible)..."
@@ -60,13 +59,6 @@ ensure-sqlc: ## Ensure sqlc is installed (auto-installs if missing)
 		echo "⚠️  sqlc not found, installing sqlc v1.30.0..."; \
 		go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0; \
 		echo "✅ sqlc installed successfully"; \
-	}
-
-ensure-swag: ## Ensure swag is installed (auto-installs if missing)
-	@command -v swag >/dev/null 2>&1 || { \
-		echo "⚠️  swag not found, installing swag v1.16.6..."; \
-		go install github.com/swaggo/swag/cmd/swag@v1.16.6; \
-		echo "✅ swag installed successfully"; \
 	}
 
 setup-databases: ## Start databases with Docker Compose
@@ -232,9 +224,7 @@ fmt-frontend: ## Format frontend code
 
 ##@ Documentation
 
-generate: ensure-swag generate-sqlc ## Generate swagger docs + sqlc types and run go generate
-	@echo "📚 Generating swagger documentation..."
-	swag init -g cmd/server/main.go --output docs
+generate: generate-sqlc ## Generate sqlc types (OpenAPI 3.1 is served at runtime via Huma — no swagger step)
 	@echo "✅ Code generation complete"
 
 generate-sqlc: ensure-sqlc ## Generate type-safe Go bindings from SQL queries

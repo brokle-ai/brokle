@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "brokle/docs" // swagger docs
 	"brokle/internal/app"
 	"brokle/internal/config"
 	"brokle/internal/migration"
