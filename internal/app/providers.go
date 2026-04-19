@@ -782,6 +782,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		Registration:  core.Services.Registration,
 		Session:       core.Services.Auth.Sessions,
 		OAuthProvider: core.Services.Auth.OAuthProvider,
+		Organization:  core.Services.OrganizationService,
+		Comment:       core.Services.Comment,
 		Website:       core.Services.Website,
 	})
 	if err != nil {

@@ -9,7 +9,10 @@ import (
 	"github.com/jub0bs/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
+	commentHandler "brokle/internal/transport/http/handlers/comment"
+	userHandler "brokle/internal/transport/http/handlers/user"
 	websiteHandler "brokle/internal/transport/http/handlers/website"
 	"brokle/internal/transport/http/middleware"
 )
@@ -141,10 +144,13 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 				Config:        d.Config,
 				Logger:        d.Logger,
 			})
+			userHandler.RegisterRoutes(apiAdmin, d.User, d.Profile, d.Organization, d.Logger)
+			apikeyHandler.RegisterRoutes(apiAdmin, d.APIKey, d.Logger)
+			commentHandler.RegisterRoutes(apiAdmin, d.Comment, d.Logger)
 			// Per-domain authed dashboard registrations land here.
 			// organization.RegisterRoutes(apiAdmin, d.Organization, d.OrgMember)  // Step 4
 			// project.RegisterRoutes(apiAdmin, d.Project)                          // Step 4
-			// ... 20 more domains
+			// ... 17 more domains
 		})
 	})
 }

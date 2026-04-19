@@ -10,6 +10,7 @@ import (
 
 	"brokle/internal/config"
 	authDomain "brokle/internal/core/domain/auth"
+	commentDomain "brokle/internal/core/domain/comment"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
 	websiteDomain "brokle/internal/core/domain/website"
@@ -65,6 +66,14 @@ type Deps struct {
 	Registration  registration.RegistrationService
 	Session       authDomain.SessionService
 	OAuthProvider *authService.OAuthProviderService
+
+	// Organization service is used by the user handler's
+	// get-user-profile op to render the org hierarchy in the
+	// dashboard sidebar.
+	Organization orgDomain.OrganizationService
+
+	// Comment service powers the trace-attached discussion threads.
+	Comment commentDomain.Service
 
 	// Website contact-form handler.
 	Website websiteDomain.WebsiteService
