@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"brokle/internal/config"
+	analyticsDomain "brokle/internal/core/domain/analytics"
 	authDomain "brokle/internal/core/domain/auth"
 	commentDomain "brokle/internal/core/domain/comment"
 	orgDomain "brokle/internal/core/domain/organization"
@@ -74,6 +75,9 @@ type Deps struct {
 
 	// Comment service powers the trace-attached discussion threads.
 	Comment commentDomain.Service
+
+	// Overview service powers the project-overview dashboard page.
+	Overview analyticsDomain.OverviewService
 
 	// Website contact-form handler.
 	Website websiteDomain.WebsiteService
