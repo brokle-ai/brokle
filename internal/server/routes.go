@@ -9,6 +9,7 @@ import (
 	"github.com/jub0bs/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	commentHandler "brokle/internal/transport/http/handlers/comment"
@@ -103,7 +104,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 		r.Use(middleware.LimitByAPIKey(rateLimitD))
 		// Per-domain authed SDK route registrations land here as
 		// Step 4 converts handlers — observability, prompt, etc.
-		_ = apiPublic
+		annotationHandler.RegisterSDKRoutes(apiPublic, d.AnnotationItem, d.Logger)
 	})
 
 	// 5. Dashboard plane: /api/v1/* — apiAdmin Huma operations.
@@ -155,6 +156,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyS
 			credentialsHandler.RegisterRoutes(apiAdmin, d.Credential, d.CredentialModelCatalog, d.Logger)
 			projectHandler.RegisterRoutes(apiAdmin, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 			dashboardHandler.RegisterRoutes(apiAdmin, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
+			annotationHandler.RegisterRoutes(apiAdmin, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 			// Per-domain authed dashboard registrations land here.
 			// organization.RegisterRoutes(apiAdmin, d.Organization, d.OrgMember)  // Step 4
 			// ... remaining domains

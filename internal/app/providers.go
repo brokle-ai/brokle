@@ -785,10 +785,13 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		Overview:      core.Services.Analytics.Overview,
 		Credential:             credentialsSvc,
 		CredentialModelCatalog: modelCatalogSvc,
-		Website:           core.Services.Website,
-		Dashboard:         dashboardSvc,
-		DashboardQuery:    widgetQuerySvc,
-		DashboardTemplate: templateSvc,
+		Website:              core.Services.Website,
+		Dashboard:            dashboardSvc,
+		DashboardQuery:       widgetQuerySvc,
+		DashboardTemplate:    templateSvc,
+		AnnotationQueue:      core.Services.Annotation.Queue,
+		AnnotationItem:       core.Services.Annotation.Item,
+		AnnotationAssignment: core.Services.Annotation.Assignment,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP server: %w", err)

@@ -11,6 +11,7 @@ import (
 	"brokle/internal/config"
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	authDomain "brokle/internal/core/domain/auth"
+	annotationDomain "brokle/internal/core/domain/annotation"
 	commentDomain "brokle/internal/core/domain/comment"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
@@ -104,6 +105,11 @@ type Deps struct {
 	Dashboard         dashboardDomain.DashboardService
 	DashboardQuery    dashboardDomain.WidgetQueryService
 	DashboardTemplate dashboardDomain.TemplateService
+
+	// Annotation domain: HITL review queues, items, assignments.
+	AnnotationQueue      annotationDomain.QueueService
+	AnnotationItem       annotationDomain.ItemService
+	AnnotationAssignment annotationDomain.AssignmentService
 }
 
 // authMiddlewareDeps assembles the middleware.AuthDeps struct from
