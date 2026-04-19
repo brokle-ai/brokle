@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/version"
+	"brokle/pkg/response"
 )
 
 // Server bundles the chi router, the two Huma API instances, the
@@ -47,6 +48,13 @@ func New(deps Deps) (*Server, error) {
 	if deps.Config == nil {
 		return nil, errors.New("server: Deps.Config is required")
 	}
+
+	// Install the APIResponse error envelope override before any
+	// huma.API is constructed — newAPIPublic/newAPIAdmin and every
+	// subsequent huma.Register pick up the new huma.NewError factory.
+	// Idempotent; safe if tests or other bootstrappers have installed
+	// it earlier.
+	response.InstallHumaErrorFactory()
 
 	mux := chi.NewRouter()
 	apiPublic := newAPIPublic(mux, version.Get())

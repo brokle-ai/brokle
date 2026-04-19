@@ -246,15 +246,3 @@ func crossOriginProtection() *http.CrossOriginProtection {
 	return http.NewCrossOriginProtection()
 }
 
-// todoNotImplemented is a placeholder handler used while Step 4 is
-// in progress — returns 501 with a stable JSON payload so a probe
-// against an un-converted route fails loudly instead of returning
-// a misleading 404. Removed once every gin handler has been
-// converted to a Huma operation.
-func todoNotImplemented(reason string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusNotImplemented)
-		_, _ = w.Write([]byte(`{"success":false,"error":{"type":"not_implemented","code":"not_implemented","message":"` + reason + `"}}`))
-	}
-}
