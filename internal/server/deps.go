@@ -12,10 +12,12 @@ import (
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	authDomain "brokle/internal/core/domain/auth"
 	commentDomain "brokle/internal/core/domain/comment"
+	credentialsDomain "brokle/internal/core/domain/credentials"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
 	websiteDomain "brokle/internal/core/domain/website"
 	authService "brokle/internal/core/services/auth"
+	credentialsService "brokle/internal/core/services/credentials"
 	"brokle/internal/core/services/registration"
 	"brokle/internal/transport/http/middleware"
 )
@@ -78,6 +80,12 @@ type Deps struct {
 
 	// Overview service powers the project-overview dashboard page.
 	Overview analyticsDomain.OverviewService
+
+	// Credentials: AI provider credential CRUD + connection-test +
+	// model-catalog discovery (available models derived from
+	// configured providers).
+	Credential           credentialsDomain.ProviderCredentialService
+	CredentialModelCatalog credentialsService.ModelCatalogService
 
 	// Website contact-form handler.
 	Website websiteDomain.WebsiteService
