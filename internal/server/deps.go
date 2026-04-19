@@ -49,8 +49,15 @@ type Deps struct {
 	OrgMember authDomain.OrganizationMemberService
 	APIKey    authDomain.APIKeyService
 
-	// Project service used by RequireProjectAccess.
+	// Project service used by RequireProjectAccess and the project
+	// handler domain.
 	Project orgDomain.ProjectService
+
+	// OrgMemberOrg is the organization-domain member service (distinct
+	// from OrgMember above, which is auth.OrganizationMemberService).
+	// Consumed by the project handler for per-org membership checks on
+	// list/create.
+	OrgMemberOrg orgDomain.MemberService
 
 	// Domain services. Add as handler domains migrate to Huma. The
 	// list grows with each vertical slice; domains not yet converted
