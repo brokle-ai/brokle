@@ -16,20 +16,34 @@ import (
 )
 
 // Server bundles the chi router, the two Huma API instances, the
-// http.Server, and the readyState used by the two-phase drain. Use
-// New to construct one and Start / Shutdown / ServeErr to drive it.
+// outer probe dispatcher, the http.Server, and the readyState used
+// by the two-phase drain. Use New to construct one and Start /
+// Shutdown / ServeErr to drive it.
 //
 // The struct is the package's only exported handle; the addRoutes /
-// newAPI* / readyState plumbing is intentionally package-private so
-// callers can't accidentally re-wire half the stack.
+// newAPI* / readyState / probe-dispatch plumbing is intentionally
+// package-private so callers can't accidentally re-wire half the
+// stack.
+//
+// Handler architecture (outer → inner):
+//
+//   handler (http.ServeMux: /livez, /readyz, /healthz, /metrics, /*)
+//     └── catch-all /* → mux (chi.Mux: global middleware stack)
+//                         ├── Huma apiPublic meta + domain routes
+//                         ├── Huma apiAdmin meta + domain routes
+//                         └── per-group sub-stacks (auth, CORS, CSRF, …)
+//
+// The outer dispatcher is what http.Server.Handler points at; chi
+// never sees ops-plane traffic.
 type Server struct {
-	deps   Deps
-	mux    *chi.Mux
-	api    apiPair // {public, admin}
-	http   *http.Server
-	listen net.Listener
-	ready  *readyState
-	errCh  chan error
+	deps    Deps
+	mux     *chi.Mux
+	handler http.Handler
+	api     apiPair // {public, admin}
+	http    *http.Server
+	listen  net.Listener
+	ready   *readyState
+	errCh   chan error
 }
 
 // New constructs a Server. Building the chi mux, the two huma.API
@@ -57,24 +71,46 @@ func New(deps Deps) (*Server, error) {
 	response.InstallHumaErrorFactory()
 
 	mux := chi.NewRouter()
+
+	// Global middleware MUST be installed before any route is
+	// registered on mux — chi.Mux.Use panics once the mux has any
+	// route (go-chi/chi/v5/mux.go:100-104). The Huma API
+	// construction below registers /openapi, /docs, /schemas routes
+	// immediately, so middleware must be in place first.
+	installGlobalMiddleware(mux, deps)
+
+	// Huma APIs — humachi.New registers meta routes on mux; they
+	// inherit the middleware stack installed above.
 	apiPublic := newAPIPublic(mux, version.Get())
 	apiAdmin := newAPIAdmin(mux, version.Get())
 
+	// Domain routes + group-scoped middleware (auth, rate limit,
+	// CORS, CSRF). Sub-routers (r.Route / r.Group) have independent
+	// middleware stacks and can add more layers without violating
+	// chi's mux-level Use invariant.
+	addRoutes(mux, apiPublic, apiAdmin, deps)
 	ready := newReadyState()
-	addRoutes(mux, apiPublic, apiAdmin, deps, ready)
+
+	// Outer dispatcher: probe + /metrics paths bypass chi (and its
+	// middleware) entirely so ops-plane traffic doesn't pollute
+	// request logs or the http_requests_total counter. This is what
+	// http.Server actually serves — chi only receives non-ops
+	// requests via the catch-all route.
+	handler := newProbeDispatcher(mux, ready, deps.healthDeps())
 
 	s := &Server{
-		deps:  deps,
-		mux:   mux,
-		api:   apiPair{Public: apiPublic, Admin: apiAdmin},
-		ready: ready,
-		errCh: make(chan error, 1),
+		deps:    deps,
+		mux:     mux,
+		handler: handler,
+		api:     apiPair{Public: apiPublic, Admin: apiAdmin},
+		ready:   ready,
+		errCh:   make(chan error, 1),
 	}
 
 	addr := fmt.Sprintf(":%d", deps.Config.Server.Port)
 	s.http = &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: handler,
 		// Tier-1 production defaults. ReadHeaderTimeout is the
 		// load-bearing one — without it, a malicious client that
 		// dribbles headers indefinitely (Slowloris) holds connections
@@ -158,10 +194,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Handler returns the underlying chi mux. Exposed for tests that
-// drive the server via httptest.NewRecorder without a real
-// listener.
-func (s *Server) Handler() http.Handler { return s.mux }
+// Handler returns the outer http.Handler served by the http.Server
+// — the probe dispatcher wrapping the chi mux. Exposed for tests
+// that drive the server via httptest.NewRecorder without a real
+// listener; the dispatcher is the realistic surface a live client
+// would hit, including the probe-bypass routing.
+func (s *Server) Handler() http.Handler { return s.handler }
 
 // apiPair holds the two huma.API instances side by side. Keeping
 // them in one struct (rather than two separate fields on Server)

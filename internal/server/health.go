@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
 	"brokle/internal/version"
@@ -23,12 +24,13 @@ import (
 // readiness status code varies (200 vs 503), which would conflict
 // with the APIResponse `success: true` invariant.
 //
-// Mounted on the chi router BEFORE global middleware (RequestID,
-// Logger, Metrics) so that the high-frequency probe traffic
-// (kubelet probes ~6/min × pod count) doesn't dominate the
-// structured logs or pollute Prometheus label cardinality. The
-// recoverer is the only middleware that wraps health routes (it
-// applies via http.Server's outermost handler).
+// Mounted on a stdlib http.ServeMux wrapper (see newProbeDispatcher)
+// that sits OUTSIDE the chi mux and its global middleware stack, so
+// the high-frequency probe traffic (kubelet probes ~6/min × pod
+// count) and Prometheus scrapes don't dominate the structured logs
+// or pollute the http_requests_total counter. The outer dispatcher
+// is what http.Server.Handler is actually set to; chi only sees the
+// non-ops traffic.
 
 // readyState tracks whether the server should accept new requests.
 // Set to true by Server.Start once routes are wired; flipped to
@@ -224,3 +226,41 @@ func writeHealth(w http.ResponseWriter, status int, body healthBody) {
 }
 
 func nowRFC3339() string { return time.Now().UTC().Format(time.RFC3339) }
+
+// newProbeDispatcher returns the outer http.Handler served by the
+// http.Server. It routes the four ops-plane paths
+// (/livez, /readyz, /healthz, /metrics) to raw handlers — bypassing
+// the chi mux and its global middleware stack entirely — and
+// forwards every other request to app.
+//
+// Purpose: keep Kubernetes liveness/readiness probes and Prometheus
+// scrapes out of the request logger and the http_requests_total
+// counter. Probes fire every ~10s; routing them through the full
+// middleware stack floods logs, skews request histograms, and
+// inflates label cardinality.
+//
+// Pattern verified in production at Grafana Loki, HashiCorp Consul,
+// HashiCorp Vault, and the Kubernetes apiserver — all filter
+// ops-plane paths before logging/metrics middleware. The
+// separate-admin-port variant (OpenTelemetry Collector, SigNoz) is
+// reserved for deployments where probes have a distinct trust
+// boundary from the public API; not applicable here.
+//
+// Recoverer coverage: probe handlers are ~10 lines of stateless
+// stdlib code and do not need the custom Recoverer. net/http's
+// default server still recovers handler panics and emits a 500
+// (net/http/server.go — serverHandler.ServeHTTP).
+//
+// DO NOT add domain routes to the returned dispatcher — it exists
+// solely to bypass middleware for ops-plane paths. API routes belong
+// on the chi mux. New ops-plane paths (e.g. /debug/pprof/*) are the
+// only legitimate additions here.
+func newProbeDispatcher(app http.Handler, ready *readyState, hd healthDeps) http.Handler {
+	root := http.NewServeMux()
+	root.HandleFunc("GET /livez", handleLivez())
+	root.HandleFunc("GET /readyz", handleReadyz(ready, hd))
+	root.HandleFunc("GET /healthz", handleHealthz())
+	root.Handle("GET /metrics", promhttp.Handler())
+	root.Handle("/", app)
+	return root
+}

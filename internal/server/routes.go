@@ -5,9 +5,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jub0bs/cors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
@@ -34,58 +32,43 @@ import (
 // authoritative dependency map for the service — when a route 404s,
 // this is the file to grep.
 //
-// Layout (top-to-bottom matches request flow):
+// Scope: addRoutes owns only the chi-side of the request pipeline.
+// The ops-plane paths (/livez, /readyz, /healthz, /metrics) live on
+// the outer probe dispatcher built by newProbeDispatcher in
+// health.go and never reach chi. The mux-level global middleware
+// stack (RequestID, RealIP, RequestMetadata, RequestLogger,
+// Recoverer, Metrics) is installed by installGlobalMiddleware in
+// middleware.go BEFORE server.New calls humachi.New — chi's Mux.Use
+// panics once any route is registered, so the call order is
+// load-bearing.
 //
-//  1. Health + metrics endpoints — mounted BEFORE global middleware
-//     so probe traffic doesn't dominate logs/metrics. The recoverer
-//     still wraps them via http.Server's outermost handler. K8s API
-//     server convention (/livez, /readyz, /healthz).
-//  2. Global middleware — RequestID, RealIP, RequestLogger,
-//     Recoverer, Metrics. Order matters; see middleware/recoverer.go
-//     for the http.ErrAbortHandler caveat.
-//  3. CORS — jub0bs/cors, applied to /v1 and /api/v1 separately so
+// Layout (top-to-bottom matches request flow within chi):
+//
+//  1. CORS — jub0bs/cors, applied to /v1 and /api/v1 separately so
 //     each surface declares its own allowlist (SDK vs dashboard
 //     origins differ in cookie-credentials posture).
-//  4. SDK plane (/v1/*) — RequireSDKAuth + LimitByAPIKey + apiPublic
+//  2. SDK plane (/v1/*) — RequireSDKAuth + LimitByAPIKey + apiPublic
 //     Huma operations. The validate-key endpoint is the one
 //     exception that runs without SDK auth (it accepts a raw key for
 //     introspection); IP + key-prefix rate limit defends against
 //     brute force.
-//  5. Dashboard plane (/api/v1/*) — LimitByIP envelope; CSRF-style
+//  3. Dashboard plane (/api/v1/*) — LimitByIP envelope; CSRF-style
 //     protection via stdlib http.CrossOriginProtection (Go 1.25);
 //     public auth routes (login/signup) followed by an authed group
 //     (RequireAuth + LimitByUser) for everything else.
-//  6. Per-domain RegisterRoutes calls — each handler domain exposes
+//  4. Per-domain RegisterRoutes calls — each handler domain exposes
 //     RegisterRoutes(api huma.API, services...) and self-registers
-//     against the appropriate Huma instance. New domains get added
-//     as Step 4 converts handlers from gin-shape to Huma operations.
-func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps, ready *readyState) {
-	// 1. Health + metrics — mounted before middleware so probes are silent.
-	healthD := d.healthDeps()
-	r.Get("/livez", handleLivez())
-	r.Get("/readyz", handleReadyz(ready, healthD))
-	r.Get("/healthz", handleHealthz())
-	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
-
-	// 2. Global middleware — order is intentional.
-	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
-	// RequestMetadata runs after RealIP (which normalises
-	// r.RemoteAddr) so the IP stuffed into httpctx is already the
-	// proxy-resolved value. Nil resolver = trust r.RemoteAddr
-	// verbatim, which is safe here because RealIP has already done
-	// the header-to-RemoteAddr rewrite when the peer is in the
-	// trust boundary. TODO: wire a *clientip.Resolver with
-	// configured trusted-proxy CIDRs once the config field exists.
-	r.Use(middleware.RequestMetadata(nil))
-	r.Use(middleware.RequestLogger(d.Logger))
-	r.Use(middleware.Recoverer(d.Logger))
-	r.Use(middleware.Metrics())
-
-	// 3. CORS at the route-group level (each plane declares its own
-	//    allowlist). Centralised cors.Middleware is constructed from
-	//    config so misconfig fails fast at boot — jub0bs/cors panics
-	//    on insecure combinations (credentials + wildcard, etc.).
+//     against the appropriate Huma instance.
+//
+// NEVER call r.Use(...) on the top-level chi.Mux here — that belongs
+// in installGlobalMiddleware. Sub-routers (r.Route / r.Group) are
+// free to attach their own middleware stacks; those are independent
+// of the mux-level stack and do not trigger chi's panic.
+func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
+	// CORS at the route-group level (each plane declares its own
+	// allowlist). Centralised cors.Middleware is constructed from
+	// config so misconfig fails fast at boot — jub0bs/cors panics
+	// on insecure combinations (credentials + wildcard, etc.).
 	corsAdmin := mustCORS(d, "dashboard")
 
 	// 4. SDK plane: /v1/* — apiPublic Huma operations.
