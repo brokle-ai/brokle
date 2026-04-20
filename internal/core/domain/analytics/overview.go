@@ -99,8 +99,8 @@ type OverviewStats struct {
 	ErrorRateTrend float64 `json:"error_rate_trend"` // Percentage change vs previous period
 }
 
-// TimeSeriesPoint represents a single point in a time series
-type TimeSeriesPoint struct {
+// OverviewTimeSeriesPoint represents a single point in a time series
+type OverviewTimeSeriesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Value     float64   `json:"value"`
 }
@@ -134,7 +134,7 @@ type ScoreSummary struct {
 	Name      string            `json:"name"`
 	AvgValue  float64           `json:"avg_value"`
 	Trend     float64           `json:"trend"` // Percentage change vs previous period
-	Sparkline []TimeSeriesPoint `json:"sparkline"`
+	Sparkline []OverviewTimeSeriesPoint `json:"sparkline"`
 }
 
 // ChecklistStatus represents the onboarding checklist state
@@ -148,10 +148,10 @@ type ChecklistStatus struct {
 // OverviewResponse is the complete response for the overview endpoint
 type OverviewResponse struct {
 	Stats           OverviewStats     `json:"stats"`
-	TraceVolume     []TimeSeriesPoint `json:"trace_volume"`
-	CostTimeSeries  []TimeSeriesPoint `json:"cost_time_series"`  // Cost over time
-	TokenTimeSeries []TimeSeriesPoint `json:"token_time_series"` // Tokens over time
-	ErrorTimeSeries []TimeSeriesPoint `json:"error_time_series"` // Error count over time
+	TraceVolume     []OverviewTimeSeriesPoint `json:"trace_volume"`
+	CostTimeSeries  []OverviewTimeSeriesPoint `json:"cost_time_series"`  // Cost over time
+	TokenTimeSeries []OverviewTimeSeriesPoint `json:"token_time_series"` // Tokens over time
+	ErrorTimeSeries []OverviewTimeSeriesPoint `json:"error_time_series"` // Error count over time
 	CostByModel     []CostByModel     `json:"cost_by_model"`
 	RecentTraces    []RecentTrace     `json:"recent_traces"`
 	TopErrors       []TopError        `json:"top_errors"`
@@ -199,16 +199,16 @@ type OverviewRepository interface {
 	GetStats(ctx context.Context, filter *OverviewFilter) (*OverviewStats, error)
 
 	// GetTraceVolume retrieves the time series data for trace volume
-	GetTraceVolume(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+	GetTraceVolume(ctx context.Context, filter *OverviewFilter) ([]OverviewTimeSeriesPoint, error)
 
 	// GetCostTimeSeries retrieves the time series data for cost
-	GetCostTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+	GetCostTimeSeries(ctx context.Context, filter *OverviewFilter) ([]OverviewTimeSeriesPoint, error)
 
 	// GetTokenTimeSeries retrieves the time series data for tokens
-	GetTokenTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+	GetTokenTimeSeries(ctx context.Context, filter *OverviewFilter) ([]OverviewTimeSeriesPoint, error)
 
 	// GetErrorTimeSeries retrieves the time series data for error count
-	GetErrorTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+	GetErrorTimeSeries(ctx context.Context, filter *OverviewFilter) ([]OverviewTimeSeriesPoint, error)
 
 	// GetCostByModel retrieves the cost breakdown by model (top 5)
 	GetCostByModel(ctx context.Context, filter *OverviewFilter) ([]CostByModel, error)

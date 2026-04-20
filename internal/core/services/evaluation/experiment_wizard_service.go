@@ -194,7 +194,7 @@ func (s *experimentWizardService) ValidateStep(
 ) (*evaluation.ValidateStepResponse, error) {
 	response := &evaluation.ValidateStepResponse{
 		IsValid:  true,
-		Errors:   []evaluation.ValidationError{},
+		Errors:   []evaluation.EvaluationValidationError{},
 		Warnings: []string{},
 	}
 
@@ -229,12 +229,12 @@ func (s *experimentWizardService) validateStep1(
 	// Validate name
 	name, ok := data["name"].(string)
 	if !ok || name == "" {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "name",
 			Message: "name is required",
 		})
 	} else if len(name) > 255 {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "name",
 			Message: "name must be at most 255 characters",
 		})
@@ -246,14 +246,14 @@ func (s *experimentWizardService) validateStep1(
 	// Validate prompt_id
 	promptIDStr, ok := data["prompt_id"].(string)
 	if !ok || promptIDStr == "" {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "prompt_id",
 			Message: "prompt_id is required",
 		})
 	} else {
 		promptID, err := uuid.Parse(promptIDStr)
 		if err != nil {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "prompt_id",
 				Message: "must be a valid UUID",
 			})
@@ -261,13 +261,13 @@ func (s *experimentWizardService) validateStep1(
 			// Verify prompt exists AND belongs to this project
 			p, err := s.promptRepo.GetByID(ctx, promptID)
 			if err != nil {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "prompt_id",
 					Message: "prompt not found",
 				})
 			} else if p.ProjectID != projectID {
 				// Same error message to avoid leaking cross-project prompt existence
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "prompt_id",
 					Message: "prompt not found",
 				})
@@ -280,14 +280,14 @@ func (s *experimentWizardService) validateStep1(
 	// Validate prompt_version_id
 	versionIDStr, ok := data["prompt_version_id"].(string)
 	if !ok || versionIDStr == "" {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "prompt_version_id",
 			Message: "prompt_version_id is required",
 		})
 	} else {
 		versionID, err := uuid.Parse(versionIDStr)
 		if err != nil {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "prompt_version_id",
 				Message: "must be a valid UUID",
 			})
@@ -295,13 +295,13 @@ func (s *experimentWizardService) validateStep1(
 			// Verify version exists AND belongs to the validated prompt
 			v, err := s.versionRepo.GetByID(ctx, versionID)
 			if err != nil {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "prompt_version_id",
 					Message: "prompt version not found",
 				})
 			} else if validatedPromptID != nil && v.PromptID != *validatedPromptID {
 				// Same error message to avoid leaking cross-prompt version existence
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "prompt_version_id",
 					Message: "prompt version not found",
 				})
@@ -319,20 +319,20 @@ func (s *experimentWizardService) validateStep2(
 	// Validate dataset_id
 	datasetIDStr, ok := data["dataset_id"].(string)
 	if !ok || datasetIDStr == "" {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "dataset_id",
 			Message: "dataset_id is required",
 		})
 	} else {
 		datasetID, err := uuid.Parse(datasetIDStr)
 		if err != nil {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "dataset_id",
 				Message: "must be a valid UUID",
 			})
 		} else {
 			if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "dataset_id",
 					Message: "dataset not found",
 				})
@@ -350,7 +350,7 @@ func (s *experimentWizardService) validateStep2(
 
 			varName, _ := mapping["variable_name"].(string)
 			if varName == "" {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "variable_mapping",
 					Message: fmt.Sprintf("variable_name is required at index %d", i),
 				})
@@ -363,7 +363,7 @@ func (s *experimentWizardService) validateStep2(
 				"dataset_metadata": true,
 			}
 			if !validSources[source] {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "variable_mapping",
 					Message: fmt.Sprintf("invalid source '%s' at index %d", source, i),
 				})
@@ -371,7 +371,7 @@ func (s *experimentWizardService) validateStep2(
 
 			fieldPath, _ := mapping["field_path"].(string)
 			if fieldPath == "" {
-				response.Errors = append(response.Errors, evaluation.ValidationError{
+				response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 					Field:   "variable_mapping",
 					Message: fmt.Sprintf("field_path is required at index %d", i),
 				})
@@ -388,7 +388,7 @@ func (s *experimentWizardService) validateStep3(
 	// Validate evaluators
 	evaluators, ok := data["evaluators"].([]any)
 	if !ok || len(evaluators) == 0 {
-		response.Errors = append(response.Errors, evaluation.ValidationError{
+		response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 			Field:   "evaluators",
 			Message: "at least one evaluator is required",
 		})
@@ -403,7 +403,7 @@ func (s *experimentWizardService) validateStep3(
 
 		name, _ := eval["name"].(string)
 		if name == "" {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "evaluators",
 				Message: fmt.Sprintf("name is required at index %d", i),
 			})
@@ -416,14 +416,14 @@ func (s *experimentWizardService) validateStep3(
 			"regex":   true,
 		}
 		if !validTypes[scorerType] {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "evaluators",
 				Message: fmt.Sprintf("invalid scorer_type '%s' at index %d", scorerType, i),
 			})
 		}
 
 		if _, ok := eval["scorer_config"].(map[string]any); !ok {
-			response.Errors = append(response.Errors, evaluation.ValidationError{
+			response.Errors = append(response.Errors, evaluation.EvaluationValidationError{
 				Field:   "evaluators",
 				Message: fmt.Sprintf("scorer_config is required at index %d", i),
 			})

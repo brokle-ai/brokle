@@ -296,13 +296,6 @@ func float64ToDecimalPtr(f *float64) *decimal.Decimal {
 // Usage
 // ============================================================================
 
-type GetUsageOverviewInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-type GetUsageOverviewOutput struct {
-	Body *billingDomain.UsageOverview
-}
-
 func (h *handler) getUsageOverview(ctx context.Context, in *GetUsageOverviewInput) (*GetUsageOverviewOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -313,18 +306,6 @@ func (h *handler) getUsageOverview(ctx context.Context, in *GetUsageOverviewInpu
 		return nil, appErrors.NewInternalError("Failed to get usage overview", err)
 	}
 	return &GetUsageOverviewOutput{Body: overview}, nil
-}
-
-type UsageTimeSeriesInput struct {
-	OrgID       string `path:"orgId" format:"uuid"`
-	TimeRange   string `query:"time_range" required:"false" enum:"15m,30m,1h,3h,6h,12h,24h,7d,14d,30d"`
-	From        string `query:"from" required:"false" doc:"Custom range start (RFC3339)"`
-	To          string `query:"to" required:"false" doc:"Custom range end (RFC3339)"`
-	Granularity string `query:"granularity" required:"false" enum:"hourly,daily"`
-}
-
-type UsageTimeSeriesOutput struct {
-	Body []*billingDomain.BillableUsage
 }
 
 func (h *handler) getUsageTimeSeries(ctx context.Context, in *UsageTimeSeriesInput) (*UsageTimeSeriesOutput, error) {
@@ -351,17 +332,6 @@ func (h *handler) getUsageTimeSeries(ctx context.Context, in *UsageTimeSeriesInp
 	return &UsageTimeSeriesOutput{Body: usage}, nil
 }
 
-type UsageByProjectInput struct {
-	OrgID     string `path:"orgId" format:"uuid"`
-	TimeRange string `query:"time_range" required:"false" enum:"15m,30m,1h,3h,6h,12h,24h,7d,14d,30d"`
-	From      string `query:"from" required:"false"`
-	To        string `query:"to" required:"false"`
-}
-
-type UsageByProjectOutput struct {
-	Body []*billingDomain.BillableUsageSummary
-}
-
 func (h *handler) getUsageByProject(ctx context.Context, in *UsageByProjectInput) (*UsageByProjectOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -376,24 +346,6 @@ func (h *handler) getUsageByProject(ctx context.Context, in *UsageByProjectInput
 		return nil, appErrors.NewInternalError("Failed to get usage by project", err)
 	}
 	return &UsageByProjectOutput{Body: summaries}, nil
-}
-
-type ExportUsageInput struct {
-	OrgID       string `path:"orgId" format:"uuid"`
-	TimeRange   string `query:"time_range" required:"false" enum:"15m,30m,1h,3h,6h,12h,24h,7d,14d,30d"`
-	From        string `query:"from" required:"false"`
-	To          string `query:"to" required:"false"`
-	Format      string `query:"format" required:"false" enum:"csv,json"`
-	Granularity string `query:"granularity" required:"false" enum:"hourly,daily"`
-}
-
-// ExportUsageOutput streams a file attachment. Body bypasses the
-// APIResponse envelope because the client is expected to save the
-// payload directly to disk.
-type ExportUsageOutput struct {
-	ContentType        string `header:"Content-Type"`
-	ContentDisposition string `header:"Content-Disposition"`
-	Body               []byte
 }
 
 func (h *handler) exportUsage(ctx context.Context, in *ExportUsageInput) (*ExportUsageOutput, error) {
@@ -479,13 +431,6 @@ func (h *handler) exportUsage(ctx context.Context, in *ExportUsageInput) (*Expor
 // Budgets
 // ============================================================================
 
-type ListBudgetsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-type ListBudgetsOutput struct {
-	Body []*billingDomain.UsageBudget
-}
-
 func (h *handler) listBudgets(ctx context.Context, in *ListBudgetsInput) (*ListBudgetsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -497,14 +442,6 @@ func (h *handler) listBudgets(ctx context.Context, in *ListBudgetsInput) (*ListB
 		return nil, appErrors.NewInternalError("Failed to list budgets", err)
 	}
 	return &ListBudgetsOutput{Body: budgets}, nil
-}
-
-type GetBudgetInput struct {
-	OrgID    string `path:"orgId" format:"uuid"`
-	BudgetID string `path:"budgetId" format:"uuid"`
-}
-type GetBudgetOutput struct {
-	Body *billingDomain.UsageBudget
 }
 
 func (h *handler) getBudget(ctx context.Context, in *GetBudgetInput) (*GetBudgetOutput, error) {
@@ -524,26 +461,6 @@ func (h *handler) getBudget(ctx context.Context, in *GetBudgetInput) (*GetBudget
 		return nil, appErrors.NewForbiddenError("Access denied to this budget")
 	}
 	return &GetBudgetOutput{Body: budget}, nil
-}
-
-type CreateBudgetInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  createBudgetBody
-}
-
-type createBudgetBody struct {
-	Name            string   `json:"name" minLength:"1" maxLength:"100"`
-	ProjectID       *string  `json:"project_id,omitempty" doc:"Optional project scope (UUID)"`
-	BudgetType      string   `json:"budget_type" enum:"monthly,weekly"`
-	SpanLimit       *int64   `json:"span_limit,omitempty"`
-	BytesLimit      *int64   `json:"bytes_limit,omitempty"`
-	ScoreLimit      *int64   `json:"score_limit,omitempty"`
-	CostLimit       *float64 `json:"cost_limit,omitempty"`
-	AlertThresholds []int64  `json:"alert_thresholds,omitempty" doc:"Percentages (e.g. [50,80,100]). Omit for default; empty [] disables alerts."`
-}
-
-type CreateBudgetOutput struct {
-	Body *billingDomain.UsageBudget
 }
 
 func (h *handler) createBudget(ctx context.Context, in *CreateBudgetInput) (*CreateBudgetOutput, error) {
@@ -589,26 +506,6 @@ func (h *handler) createBudget(ctx context.Context, in *CreateBudgetInput) (*Cre
 		return nil, err
 	}
 	return &CreateBudgetOutput{Body: budget}, nil
-}
-
-type UpdateBudgetInput struct {
-	OrgID    string `path:"orgId" format:"uuid"`
-	BudgetID string `path:"budgetId" format:"uuid"`
-	Body     updateBudgetBody
-}
-
-type updateBudgetBody struct {
-	Name            *string  `json:"name,omitempty" minLength:"1" maxLength:"100"`
-	SpanLimit       *int64   `json:"span_limit,omitempty"`
-	BytesLimit      *int64   `json:"bytes_limit,omitempty"`
-	ScoreLimit      *int64   `json:"score_limit,omitempty"`
-	CostLimit       *float64 `json:"cost_limit,omitempty"`
-	AlertThresholds []int64  `json:"alert_thresholds,omitempty"`
-	IsActive        *bool    `json:"is_active,omitempty"`
-}
-
-type UpdateBudgetOutput struct {
-	Body *billingDomain.UsageBudget
 }
 
 func (h *handler) updateBudget(ctx context.Context, in *UpdateBudgetInput) (*UpdateBudgetOutput, error) {
@@ -660,12 +557,6 @@ func (h *handler) updateBudget(ctx context.Context, in *UpdateBudgetInput) (*Upd
 	return &UpdateBudgetOutput{Body: budget}, nil
 }
 
-type DeleteBudgetInput struct {
-	OrgID    string `path:"orgId" format:"uuid"`
-	BudgetID string `path:"budgetId" format:"uuid"`
-}
-type DeleteBudgetOutput struct{}
-
 func (h *handler) deleteBudget(ctx context.Context, in *DeleteBudgetInput) (*DeleteBudgetOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -689,14 +580,6 @@ func (h *handler) deleteBudget(ctx context.Context, in *DeleteBudgetInput) (*Del
 	return &DeleteBudgetOutput{}, nil
 }
 
-type GetBudgetAlertsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Limit int    `query:"limit" required:"false" minimum:"1" maximum:"100" default:"50"`
-}
-type GetBudgetAlertsOutput struct {
-	Body []*billingDomain.UsageAlert
-}
-
 func (h *handler) getBudgetAlerts(ctx context.Context, in *GetBudgetAlertsInput) (*GetBudgetAlertsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -712,16 +595,6 @@ func (h *handler) getBudgetAlerts(ctx context.Context, in *GetBudgetAlertsInput)
 		return nil, appErrors.NewInternalError("Failed to get alerts", err)
 	}
 	return &GetBudgetAlertsOutput{Body: alerts}, nil
-}
-
-type AcknowledgeBudgetAlertInput struct {
-	OrgID   string `path:"orgId" format:"uuid"`
-	AlertID string `path:"alertId" format:"uuid"`
-}
-type AcknowledgeBudgetAlertOutput struct {
-	Body struct {
-		Acknowledged bool `json:"acknowledged"`
-	}
 }
 
 func (h *handler) acknowledgeBudgetAlert(ctx context.Context, in *AcknowledgeBudgetAlertInput) (*AcknowledgeBudgetAlertOutput, error) {
@@ -748,41 +621,6 @@ func (h *handler) acknowledgeBudgetAlert(ctx context.Context, in *AcknowledgeBud
 // ============================================================================
 // Contracts
 // ============================================================================
-
-type CreateContractInput struct {
-	Body createContractBody
-}
-
-type createContractBody struct {
-	OrganizationID          string                    `json:"organization_id" format:"uuid"`
-	ContractName            string                    `json:"contract_name" minLength:"1"`
-	ContractNumber          string                    `json:"contract_number" minLength:"1"`
-	StartsAt                time.Time                 `json:"starts_at" doc:"RFC3339 contract start"`
-	ExpiresAt               *time.Time                `json:"expires_at,omitempty" doc:"RFC3339 expiry (null = no expiration)"`
-	MinimumCommitAmount     *float64                  `json:"minimum_commit_amount,omitempty"`
-	Currency                string                    `json:"currency,omitempty" doc:"Defaults to USD"`
-	AccountOwner            string                    `json:"account_owner,omitempty"`
-	SalesRepEmail           string                    `json:"sales_rep_email,omitempty"`
-	CustomFreeSpans         *int64                    `json:"custom_free_spans,omitempty"`
-	CustomPricePer100KSpans *float64                  `json:"custom_price_per_100k_spans,omitempty"`
-	CustomFreeGB            *float64                  `json:"custom_free_gb,omitempty"`
-	CustomPricePerGB        *float64                  `json:"custom_price_per_gb,omitempty"`
-	CustomFreeScores        *int64                    `json:"custom_free_scores,omitempty"`
-	CustomPricePer1KScores  *float64                  `json:"custom_price_per_1k_scores,omitempty"`
-	Notes                   string                    `json:"notes,omitempty"`
-	VolumeTiers             []createVolumeTierRequest `json:"volume_tiers,omitempty"`
-}
-
-type createVolumeTierRequest struct {
-	Dimension    string  `json:"dimension" enum:"spans,bytes,scores"`
-	TierMin      int64   `json:"tier_min" minimum:"0"`
-	TierMax      *int64  `json:"tier_max,omitempty"`
-	PricePerUnit float64 `json:"price_per_unit" minimum:"0"`
-}
-
-type CreateContractOutput struct {
-	Body *billingDomain.Contract
-}
 
 func (h *handler) createContract(ctx context.Context, in *CreateContractInput) (*CreateContractOutput, error) {
 	orgID, err := uuid.Parse(in.Body.OrganizationID)
@@ -850,13 +688,6 @@ func (h *handler) createContract(ctx context.Context, in *CreateContractInput) (
 	return &CreateContractOutput{Body: result}, nil
 }
 
-type GetContractInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-}
-type GetContractOutput struct {
-	Body *billingDomain.Contract
-}
-
 func (h *handler) getContract(ctx context.Context, in *GetContractInput) (*GetContractOutput, error) {
 	contractID, err := parseContract(in.ContractID)
 	if err != nil {
@@ -867,13 +698,6 @@ func (h *handler) getContract(ctx context.Context, in *GetContractInput) (*GetCo
 		return nil, err
 	}
 	return &GetContractOutput{Body: contract}, nil
-}
-
-type ListContractsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-type ListContractsOutput struct {
-	Body []*billingDomain.Contract
 }
 
 func (h *handler) listContracts(ctx context.Context, in *ListContractsInput) (*ListContractsOutput, error) {
@@ -887,31 +711,6 @@ func (h *handler) listContracts(ctx context.Context, in *ListContractsInput) (*L
 		return nil, appErrors.NewInternalError("Failed to get contracts", err)
 	}
 	return &ListContractsOutput{Body: contracts}, nil
-}
-
-type UpdateContractInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-	Body       updateContractBody
-}
-
-type updateContractBody struct {
-	ContractName            *string    `json:"contract_name,omitempty"`
-	StartsAt                *time.Time `json:"starts_at,omitempty"`
-	ExpiresAt               *time.Time `json:"expires_at,omitempty"`
-	MinimumCommitAmount     *float64   `json:"minimum_commit_amount,omitempty"`
-	AccountOwner            *string    `json:"account_owner,omitempty"`
-	SalesRepEmail           *string    `json:"sales_rep_email,omitempty"`
-	CustomFreeSpans         *int64     `json:"custom_free_spans,omitempty"`
-	CustomPricePer100KSpans *float64   `json:"custom_price_per_100k_spans,omitempty"`
-	CustomFreeGB            *float64   `json:"custom_free_gb,omitempty"`
-	CustomPricePerGB        *float64   `json:"custom_price_per_gb,omitempty"`
-	CustomFreeScores        *int64     `json:"custom_free_scores,omitempty"`
-	CustomPricePer1KScores  *float64   `json:"custom_price_per_1k_scores,omitempty"`
-	Notes                   *string    `json:"notes,omitempty"`
-}
-
-type UpdateContractOutput struct {
-	Body *billingDomain.Contract
 }
 
 func (h *handler) updateContract(ctx context.Context, in *UpdateContractInput) (*UpdateContractOutput, error) {
@@ -973,16 +772,6 @@ func (h *handler) updateContract(ctx context.Context, in *UpdateContractInput) (
 	return &UpdateContractOutput{Body: contract}, nil
 }
 
-type ActivateContractInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-}
-type ActivateContractOutput struct {
-	Body struct {
-		Message string `json:"message"`
-		Status  string `json:"status"`
-	}
-}
-
 func (h *handler) activateContract(ctx context.Context, in *ActivateContractInput) (*ActivateContractOutput, error) {
 	contractID, err := parseContract(in.ContractID)
 	if err != nil {
@@ -1000,19 +789,6 @@ func (h *handler) activateContract(ctx context.Context, in *ActivateContractInpu
 	return out, nil
 }
 
-type CancelContractInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-	Body       struct {
-		Reason string `json:"reason" minLength:"1"`
-	}
-}
-type CancelContractOutput struct {
-	Body struct {
-		Message string `json:"message"`
-		Status  string `json:"status"`
-	}
-}
-
 func (h *handler) cancelContract(ctx context.Context, in *CancelContractInput) (*CancelContractOutput, error) {
 	contractID, err := parseContract(in.ContractID)
 	if err != nil {
@@ -1027,19 +803,6 @@ func (h *handler) cancelContract(ctx context.Context, in *CancelContractInput) (
 	out.Body.Message = "Contract cancelled successfully"
 	out.Body.Status = "cancelled"
 	return out, nil
-}
-
-type UpdateContractTiersInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-	Body       struct {
-		Tiers []createVolumeTierRequest `json:"tiers"`
-	}
-}
-type UpdateContractTiersOutput struct {
-	Body struct {
-		Message    string `json:"message"`
-		TiersCount int    `json:"tiers_count"`
-	}
 }
 
 func (h *handler) updateContractTiers(ctx context.Context, in *UpdateContractTiersInput) (*UpdateContractTiersOutput, error) {
@@ -1070,13 +833,6 @@ func (h *handler) updateContractTiers(ctx context.Context, in *UpdateContractTie
 	return out, nil
 }
 
-type GetContractHistoryInput struct {
-	ContractID string `path:"contractId" format:"uuid"`
-}
-type GetContractHistoryOutput struct {
-	Body []*billingDomain.ContractHistory
-}
-
 func (h *handler) getContractHistory(ctx context.Context, in *GetContractHistoryInput) (*GetContractHistoryOutput, error) {
 	contractID, err := parseContract(in.ContractID)
 	if err != nil {
@@ -1088,13 +844,6 @@ func (h *handler) getContractHistory(ctx context.Context, in *GetContractHistory
 		return nil, appErrors.NewInternalError("Failed to get contract history", err)
 	}
 	return &GetContractHistoryOutput{Body: history}, nil
-}
-
-type GetEffectivePricingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-type GetEffectivePricingOutput struct {
-	Body *billingDomain.EffectivePricing
 }
 
 func (h *handler) getEffectivePricing(ctx context.Context, in *GetEffectivePricingInput) (*GetEffectivePricingOutput, error) {

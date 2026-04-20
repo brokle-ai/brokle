@@ -8,9 +8,10 @@
 // that attaches middleware.RequireSDKAuth + middleware.LimitByAPIKey.
 //
 // Endpoints:
-//   POST /v1/traces   — OTLP trace export (protobuf or application/json)
-//   POST /v1/logs     — OTLP logs export
-//   POST /v1/metrics  — OTLP metrics export
+//
+//	POST /v1/traces   — OTLP trace export (protobuf or application/json)
+//	POST /v1/logs     — OTLP logs export
+//	POST /v1/metrics  — OTLP metrics export
 //
 // Response shape: standard APIResponse envelope (JSON), matching the
 // existing client contract. Not strict OTLP spec response (protobuf
@@ -32,9 +33,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
@@ -42,7 +43,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"brokle/internal/core/domain/observability"
-	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/streams"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
@@ -50,29 +50,12 @@ import (
 	"brokle/pkg/uid"
 )
 
-// OTLPDeps bundles all services required by the OTLP ingestion endpoints.
-type OTLPDeps struct {
-	StreamProducer       *streams.TelemetryStreamProducer
-	DeduplicationService observability.TelemetryDeduplicationService
-	OTLPConverter        *obsServices.OTLPConverterService
-	LogsConverter        *obsServices.OTLPLogsConverterService
-	EventsConverter      *obsServices.OTLPEventsConverterService
-	MetricsConverter     *obsServices.OTLPMetricsConverterService
-	Logger               *slog.Logger
-}
-
-// RegisterOTLPChiRoutes mounts the three OTLP HTTP ingestion endpoints as
-// plain chi handlers. The caller is responsible for applying
-// RequireSDKAuth and rate-limit middleware on the surrounding chi group.
-func RegisterOTLPChiRoutes(r chi.Router, deps OTLPDeps) {
-	h := &otlpHandler{deps: deps}
+// registerOTLPOps wires the three OTLP HTTP ingestion endpoints as
+// plain chi handlers. Called from RegisterOTLPChiRoutes in handlers.go.
+func registerOTLPOps(r chi.Router, h *otlpHandler) {
 	r.Post("/v1/traces", h.handleTraces)
 	r.Post("/v1/logs", h.handleLogs)
 	r.Post("/v1/metrics", h.handleMetrics)
-}
-
-type otlpHandler struct {
-	deps OTLPDeps
 }
 
 const otlpMaxRequestSize = 10 * 1024 * 1024 // 10MB, matches OTEL Collector default

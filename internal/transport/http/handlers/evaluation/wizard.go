@@ -5,8 +5,6 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-
-	evaluationDomain "brokle/internal/core/domain/evaluation"
 )
 
 func registerWizardRoutes(api huma.API, h *handler) {
@@ -57,11 +55,6 @@ func registerWizardRoutes(api huma.API, h *handler) {
 	}, h.wizardGetConfig)
 }
 
-type WizardCreateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      evaluationDomain.CreateExperimentFromWizardRequest
-}
-
 func (h *handler) wizardCreate(ctx context.Context, in *WizardCreateInput) (*ExperimentOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -73,14 +66,6 @@ func (h *handler) wizardCreate(ctx context.Context, in *WizardCreateInput) (*Exp
 		return nil, err
 	}
 	return &ExperimentOutput{Body: exp.ToResponse()}, nil
-}
-
-type WizardValidateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      evaluationDomain.ValidateStepRequest
-}
-type WizardValidateOutput struct {
-	Body *evaluationDomain.ValidateStepResponse
 }
 
 func (h *handler) wizardValidate(ctx context.Context, in *WizardValidateInput) (*WizardValidateOutput, error) {
@@ -96,14 +81,6 @@ func (h *handler) wizardValidate(ctx context.Context, in *WizardValidateInput) (
 	return &WizardValidateOutput{Body: res}, nil
 }
 
-type WizardEstimateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      evaluationDomain.EstimateCostRequest
-}
-type WizardEstimateOutput struct {
-	Body *evaluationDomain.EstimateCostResponse
-}
-
 func (h *handler) wizardEstimate(ctx context.Context, in *WizardEstimateInput) (*WizardEstimateOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -115,14 +92,6 @@ func (h *handler) wizardEstimate(ctx context.Context, in *WizardEstimateInput) (
 		return nil, err
 	}
 	return &WizardEstimateOutput{Body: res}, nil
-}
-
-type WizardDatasetFieldsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-}
-type WizardDatasetFieldsOutput struct {
-	Body *evaluationDomain.DatasetFieldsResponse
 }
 
 func (h *handler) wizardDatasetFields(ctx context.Context, in *WizardDatasetFieldsInput) (*WizardDatasetFieldsOutput, error) {
@@ -139,14 +108,6 @@ func (h *handler) wizardDatasetFields(ctx context.Context, in *WizardDatasetFiel
 		return nil, err
 	}
 	return &WizardDatasetFieldsOutput{Body: res}, nil
-}
-
-type WizardGetConfigInput struct {
-	ProjectID    string `path:"projectId" format:"uuid"`
-	ExperimentID string `path:"experimentId" format:"uuid"`
-}
-type WizardGetConfigOutput struct {
-	Body *evaluationDomain.ExperimentConfigResponse
 }
 
 func (h *handler) wizardGetConfig(ctx context.Context, in *WizardGetConfigInput) (*WizardGetConfigOutput, error) {

@@ -26,7 +26,7 @@ func NewWidgetQueryBuilder() *WidgetQueryBuilder {
 	return &WidgetQueryBuilder{}
 }
 
-type QueryResult struct {
+type queryResult struct {
 	Query string
 	Args  []any
 }
@@ -41,7 +41,7 @@ func (b *WidgetQueryBuilder) BuildWidgetQuery(
 	query *dashboardDomain.WidgetQuery,
 	projectID string,
 	startTime, endTime *time.Time,
-) (*QueryResult, error) {
+) (*queryResult, error) {
 	b.paramCount = 0
 
 	viewDef := dashboardDomain.GetViewDefinition(query.View)
@@ -169,7 +169,7 @@ func (b *WidgetQueryBuilder) BuildWidgetQuery(
 
 	queryBuilder.WriteString("\nLIMIT ?")
 
-	return &QueryResult{
+	return &queryResult{
 		Query: queryBuilder.String(),
 		Args:  allArgs,
 	}, nil
@@ -328,7 +328,7 @@ func (b *WidgetQueryBuilder) BuildTraceListQuery(
 	query *dashboardDomain.WidgetQuery,
 	projectID string,
 	startTime, endTime *time.Time,
-) (*QueryResult, error) {
+) (*queryResult, error) {
 	b.paramCount = 0
 	viewDef := dashboardDomain.TracesViewDefinition()
 
@@ -419,7 +419,7 @@ func (b *WidgetQueryBuilder) BuildTraceListQuery(
 	queryBuilder.WriteString(orderBy)
 	queryBuilder.WriteString("\nLIMIT ?")
 
-	return &QueryResult{
+	return &queryResult{
 		Query: queryBuilder.String(),
 		Args:  allArgs,
 	}, nil
@@ -430,7 +430,7 @@ func (b *WidgetQueryBuilder) BuildHistogramQuery(
 	projectID string,
 	startTime, endTime *time.Time,
 	bucketCount int,
-) (*QueryResult, error) {
+) (*queryResult, error) {
 	b.paramCount = 0
 
 	if bucketCount <= 0 {
@@ -509,7 +509,7 @@ func (b *WidgetQueryBuilder) BuildHistogramQuery(
 		queryBuilder.WriteString(strings.Join(whereConditions, " AND "))
 	}
 
-	return &QueryResult{
+	return &queryResult{
 		Query: queryBuilder.String(),
 		Args:  allArgs,
 	}, nil
@@ -520,7 +520,7 @@ func (b *WidgetQueryBuilder) BuildVariableOptionsQuery(
 	columnSQL string,
 	projectID string,
 	limit int,
-) *QueryResult {
+) *queryResult {
 	viewDef := dashboardDomain.GetViewDefinition(view)
 	if viewDef == nil {
 		return nil
@@ -555,7 +555,7 @@ func (b *WidgetQueryBuilder) BuildVariableOptionsQuery(
 	queryBuilder.WriteString("\nORDER BY value ASC")
 	queryBuilder.WriteString("\nLIMIT ?")
 
-	return &QueryResult{
+	return &queryResult{
 		Query: queryBuilder.String(),
 		Args:  []any{projectID, limit},
 	}

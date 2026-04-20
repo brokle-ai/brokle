@@ -254,13 +254,6 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 
 // ---- pagination / list helpers --------------------------------------
 
-type listPromptsResponse struct {
-	Data  []*promptDomain.PromptListItem `json:"data"`
-	Total int64                          `json:"total"`
-	Page  int                            `json:"page"`
-	Limit int                            `json:"limit"`
-}
-
 func buildPromptFilters(typeStr, tagsStr, search string, page, limit int, sortBy, sortDir string) (*promptDomain.PromptFilters, error) {
 	filters := &promptDomain.PromptFilters{}
 
@@ -296,21 +289,6 @@ func buildPromptFilters(typeStr, tagsStr, search string, page, limit int, sortBy
 
 // ---- prompts: list --------------------------------------------------
 
-type ListPromptsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Type      string `query:"type" required:"false" enum:"text,chat"`
-	Tags      string `query:"tags" required:"false" doc:"Comma-separated tag list"`
-	Search    string `query:"search" required:"false"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-	SortBy    string `query:"sort_by" required:"false"`
-	SortDir   string `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
-
-type ListPromptsOutput struct {
-	Body listPromptsResponse
-}
-
 func (h *handler) listPrompts(ctx context.Context, in *ListPromptsInput) (*ListPromptsOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -335,15 +313,6 @@ func (h *handler) listPrompts(ctx context.Context, in *ListPromptsInput) (*ListP
 
 // ---- prompts: create ------------------------------------------------
 
-type CreatePromptInput struct {
-	ProjectID string                           `path:"projectId" format:"uuid"`
-	Body      promptDomain.CreatePromptRequest
-}
-
-type CreatePromptOutput struct {
-	Body *promptDomain.PromptResponse
-}
-
 func (h *handler) createPrompt(ctx context.Context, in *CreatePromptInput) (*CreatePromptOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -364,15 +333,6 @@ func (h *handler) createPrompt(ctx context.Context, in *CreatePromptInput) (*Cre
 }
 
 // ---- prompts: get ---------------------------------------------------
-
-type GetPromptInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	PromptID  string `path:"promptId" format:"uuid"`
-}
-
-type GetPromptOutput struct {
-	Body *promptDomain.PromptResponse
-}
 
 func (h *handler) getPrompt(ctx context.Context, in *GetPromptInput) (*GetPromptOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
@@ -398,16 +358,6 @@ func (h *handler) getPrompt(ctx context.Context, in *GetPromptInput) (*GetPrompt
 
 // ---- prompts: update ------------------------------------------------
 
-type UpdatePromptInput struct {
-	ProjectID string                           `path:"projectId" format:"uuid"`
-	PromptID  string                           `path:"promptId" format:"uuid"`
-	Body      promptDomain.UpdatePromptRequest
-}
-
-type UpdatePromptOutput struct {
-	Body *promptDomain.Prompt
-}
-
 func (h *handler) updatePrompt(ctx context.Context, in *UpdatePromptInput) (*UpdatePromptOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -427,9 +377,6 @@ func (h *handler) updatePrompt(ctx context.Context, in *UpdatePromptInput) (*Upd
 
 // ---- prompts: delete ------------------------------------------------
 
-type DeletePromptInput = GetPromptInput
-type DeletePromptOutput struct{}
-
 func (h *handler) deletePrompt(ctx context.Context, in *DeletePromptInput) (*DeletePromptOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -447,11 +394,6 @@ func (h *handler) deletePrompt(ctx context.Context, in *DeletePromptInput) (*Del
 }
 
 // ---- versions: list -------------------------------------------------
-
-type ListVersionsInput = GetPromptInput
-type ListVersionsOutput struct {
-	Body []*promptDomain.VersionResponse
-}
 
 func (h *handler) listVersions(ctx context.Context, in *ListVersionsInput) (*ListVersionsOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
@@ -471,16 +413,6 @@ func (h *handler) listVersions(ctx context.Context, in *ListVersionsInput) (*Lis
 }
 
 // ---- versions: create -----------------------------------------------
-
-type CreateVersionInput struct {
-	ProjectID string                            `path:"projectId" format:"uuid"`
-	PromptID  string                            `path:"promptId" format:"uuid"`
-	Body      promptDomain.CreateVersionRequest
-}
-
-type CreateVersionOutput struct {
-	Body *promptDomain.VersionResponse
-}
 
 func (h *handler) createVersion(ctx context.Context, in *CreateVersionInput) (*CreateVersionOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
@@ -503,18 +435,6 @@ func (h *handler) createVersion(ctx context.Context, in *CreateVersionInput) (*C
 }
 
 // ---- versions: get (ID or version-number) ---------------------------
-
-type GetVersionInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	PromptID  string `path:"promptId" format:"uuid"`
-	// VersionID may be either a UUID or an integer version number, so we
-	// deliberately do NOT tag it with format:"uuid".
-	VersionID string `path:"versionId" doc:"Version UUID or integer version number"`
-}
-
-type GetVersionOutput struct {
-	Body *promptDomain.VersionResponse
-}
 
 func (h *handler) getVersion(ctx context.Context, in *GetVersionInput) (*GetVersionOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
@@ -547,17 +467,6 @@ func (h *handler) getVersion(ctx context.Context, in *GetVersionInput) (*GetVers
 
 // ---- versions: diff -------------------------------------------------
 
-type GetVersionDiffInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	PromptID  string `path:"promptId" format:"uuid"`
-	From      int    `query:"from" required:"true" doc:"From version number"`
-	To        int    `query:"to" required:"true" doc:"To version number"`
-}
-
-type GetVersionDiffOutput struct {
-	Body *promptDomain.VersionDiffResponse
-}
-
 func (h *handler) getVersionDiff(ctx context.Context, in *GetVersionDiffInput) (*GetVersionDiffOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -576,21 +485,6 @@ func (h *handler) getVersionDiff(ctx context.Context, in *GetVersionDiffInput) (
 }
 
 // ---- labels: set on version -----------------------------------------
-
-type SetLabelsInput struct {
-	ProjectID string                        `path:"projectId" format:"uuid"`
-	PromptID  string                        `path:"promptId" format:"uuid"`
-	VersionID string                        `path:"versionId" format:"uuid"`
-	Body      promptDomain.SetLabelsRequest
-}
-
-type labelsResponse struct {
-	Labels []string `json:"labels"`
-}
-
-type SetLabelsOutput struct {
-	Body labelsResponse
-}
 
 func (h *handler) setLabels(ctx context.Context, in *SetLabelsInput) (*SetLabelsOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
@@ -618,18 +512,6 @@ func (h *handler) setLabels(ctx context.Context, in *SetLabelsInput) (*SetLabels
 
 // ---- labels: protected (get / set) ----------------------------------
 
-type ProtectedLabelsPathInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type protectedLabelsResponse struct {
-	ProtectedLabels []string `json:"protected_labels"`
-}
-
-type GetProtectedLabelsOutput struct {
-	Body protectedLabelsResponse
-}
-
 func (h *handler) getProtectedLabels(ctx context.Context, in *ProtectedLabelsPathInput) (*GetProtectedLabelsOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
@@ -644,15 +526,6 @@ func (h *handler) getProtectedLabels(ctx context.Context, in *ProtectedLabelsPat
 		labels = []string{}
 	}
 	return &GetProtectedLabelsOutput{Body: protectedLabelsResponse{ProtectedLabels: labels}}, nil
-}
-
-type SetProtectedLabelsInput struct {
-	ProjectID string                              `path:"projectId" format:"uuid"`
-	Body      promptDomain.ProtectedLabelsRequest
-}
-
-type SetProtectedLabelsOutput struct {
-	Body protectedLabelsResponse
 }
 
 func (h *handler) setProtectedLabels(ctx context.Context, in *SetProtectedLabelsInput) (*SetProtectedLabelsOutput, error) {
@@ -677,50 +550,6 @@ func (h *handler) setProtectedLabels(ctx context.Context, in *SetProtectedLabels
 // stay in this package — they are handler-plane shapes that wrap the
 // compiler service. Kept exported so the generated OpenAPI schema has
 // stable names on the SDK side.
-
-type ValidateTemplateRequest struct {
-	Template any                          `json:"template"`
-	Type     promptDomain.PromptType      `json:"type"`
-	Dialect  promptDomain.TemplateDialect `json:"dialect,omitempty"`
-}
-
-type ValidateTemplateResponse struct {
-	Valid     bool                         `json:"valid"`
-	Dialect   promptDomain.TemplateDialect `json:"dialect"`
-	Variables []string                     `json:"variables"`
-	Errors    []promptDomain.SyntaxError   `json:"errors"`
-	Warnings  []promptDomain.SyntaxWarning `json:"warnings"`
-}
-
-type PreviewTemplateRequest struct {
-	Template  any                          `json:"template"`
-	Type      promptDomain.PromptType      `json:"type"`
-	Variables map[string]any               `json:"variables"`
-	Dialect   promptDomain.TemplateDialect `json:"dialect,omitempty"`
-}
-
-type PreviewTemplateResponse struct {
-	Compiled any                          `json:"compiled"`
-	Dialect  promptDomain.TemplateDialect `json:"dialect"`
-}
-
-type DetectDialectRequest struct {
-	Template any                     `json:"template"`
-	Type     promptDomain.PromptType `json:"type"`
-}
-
-type DetectDialectResponse struct {
-	Dialect promptDomain.TemplateDialect `json:"dialect"`
-}
-
-type ValidateTemplateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      ValidateTemplateRequest
-}
-
-type ValidateTemplateOutput struct {
-	Body ValidateTemplateResponse
-}
 
 func (h *handler) validateTemplate(ctx context.Context, in *ValidateTemplateInput) (*ValidateTemplateOutput, error) {
 	if _, err := parseProject(in.ProjectID); err != nil {
@@ -767,15 +596,6 @@ func (h *handler) validateTemplate(ctx context.Context, in *ValidateTemplateInpu
 		Errors:    errs,
 		Warnings:  warns,
 	}}, nil
-}
-
-type PreviewTemplateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      PreviewTemplateRequest
-}
-
-type PreviewTemplateOutput struct {
-	Body PreviewTemplateResponse
 }
 
 func (h *handler) previewTemplate(ctx context.Context, in *PreviewTemplateInput) (*PreviewTemplateOutput, error) {
@@ -825,15 +645,6 @@ func (h *handler) previewTemplate(ctx context.Context, in *PreviewTemplateInput)
 	return &PreviewTemplateOutput{Body: PreviewTemplateResponse{Compiled: wrapped, Dialect: dialect}}, nil
 }
 
-type DetectDialectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      DetectDialectRequest
-}
-
-type DetectDialectOutput struct {
-	Body DetectDialectResponse
-}
-
 func (h *handler) detectDialect(ctx context.Context, in *DetectDialectInput) (*DetectDialectOutput, error) {
 	if _, err := parseProject(in.ProjectID); err != nil {
 		return nil, err
@@ -853,14 +664,6 @@ func (h *handler) detectDialect(ctx context.Context, in *DetectDialectInput) (*D
 
 // ---- SDK: upsert ----------------------------------------------------
 
-type UpsertPromptInput struct {
-	Body promptDomain.UpsertPromptRequest
-}
-
-type UpsertPromptOutput struct {
-	Body *promptDomain.UpsertResponse
-}
-
 func (h *handler) upsertPrompt(ctx context.Context, in *UpsertPromptInput) (*UpsertPromptOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx)
 	if in.Body.Name == "" {
@@ -878,16 +681,6 @@ func (h *handler) upsertPrompt(ctx context.Context, in *UpsertPromptInput) (*Ups
 }
 
 // ---- SDK: list ------------------------------------------------------
-
-type ListPromptsSDKInput struct {
-	Type    string `query:"type" required:"false" enum:"text,chat"`
-	Tags    string `query:"tags" required:"false" doc:"Comma-separated tag list"`
-	Search  string `query:"search" required:"false"`
-	Page    int    `query:"page" required:"false" minimum:"1"`
-	Limit   int    `query:"limit" required:"false"`
-	SortBy  string `query:"sort_by" required:"false"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
 
 func (h *handler) listPromptsSDK(ctx context.Context, in *ListPromptsSDKInput) (*ListPromptsOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx)
@@ -909,17 +702,6 @@ func (h *handler) listPromptsSDK(ctx context.Context, in *ListPromptsSDKInput) (
 }
 
 // ---- SDK: get by name ----------------------------------------------
-
-type GetPromptByNameInput struct {
-	Name     string `path:"name" doc:"Prompt name"`
-	Label    string `query:"label" required:"false" doc:"Label to resolve (default: latest)"`
-	Version  int    `query:"version" required:"false" doc:"Specific version number (takes precedence over label)"`
-	CacheTTL int    `query:"cache_ttl" required:"false" doc:"Cache TTL in seconds"`
-}
-
-type GetPromptByNameOutput struct {
-	Body *promptDomain.PromptResponse
-}
 
 func (h *handler) getPromptByName(ctx context.Context, in *GetPromptByNameInput) (*GetPromptByNameOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx)

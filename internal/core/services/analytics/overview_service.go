@@ -43,10 +43,10 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 	// Result holders (protected by errgroup's synchronization)
 	var (
 		stats           *analytics.OverviewStats
-		traceVolume     []analytics.TimeSeriesPoint
-		costTimeSeries  []analytics.TimeSeriesPoint
-		tokenTimeSeries []analytics.TimeSeriesPoint
-		errorTimeSeries []analytics.TimeSeriesPoint
+		traceVolume     []analytics.OverviewTimeSeriesPoint
+		costTimeSeries  []analytics.OverviewTimeSeriesPoint
+		tokenTimeSeries []analytics.OverviewTimeSeriesPoint
+		errorTimeSeries []analytics.OverviewTimeSeriesPoint
 		costByModel     []analytics.CostByModel
 		recentTraces    []analytics.RecentTrace
 		topErrors       []analytics.TopError

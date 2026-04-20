@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -121,17 +120,6 @@ func RegisterRoutes(
 	}, h.unarchive)
 }
 
-// project is the wire shape for list / get / create / update.
-type project struct {
-	ID             uuid.UUID `json:"id"`
-	Name           string    `json:"name"`
-	Description    *string   `json:"description,omitempty"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
 func toProject(p *organization.Project) project {
 	return project{
 		ID:             p.ID,
@@ -146,31 +134,7 @@ func toProject(p *organization.Project) project {
 
 // ----- list -----------------------------------------------------------
 
-type ListInput struct {
-	OrganizationID string `query:"organization_id" required:"false" format:"uuid" doc:"Optional organization filter"`
-	Status         string `query:"status" required:"false" enum:"active,paused,archived" doc:"Filter by project status"`
-	Search         string `query:"search" required:"false" doc:"Search by name"`
-	Page           int    `query:"page" required:"false" minimum:"1" doc:"Page number, 1-indexed"`
-	Limit          int    `query:"limit" required:"false" doc:"Items per page (10, 25, 50, 100)"`
-	SortBy         string `query:"sort_by" required:"false" enum:"created_at,name" doc:"Sort field"`
-	SortDir        string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Sort direction"`
-}
-
-type ListOutput struct {
-	Body listResponse
-}
-
-type listResponse struct {
-	Data []project `json:"data"`
-	Meta listMeta  `json:"meta"`
-}
-
-type listMeta struct {
-	Pagination *pagination.Params `json:"pagination,omitempty"`
-	Total      int                `json:"total"`
-}
-
-func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) {
+func (h *handler) list(ctx context.Context, in *ListProjectsInput) (*ListProjectsOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 	params := parsePagination(in.Page, in.Limit, in.SortBy, in.SortDir)
 
@@ -249,7 +213,7 @@ func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) 
 		out[i] = toProject(p)
 	}
 
-	return &ListOutput{
+	return &ListProjectsOutput{
 		Body: listResponse{
 			Data: out,
 			Meta: listMeta{
@@ -262,21 +226,7 @@ func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) 
 
 // ----- create ----------------------------------------------------------
 
-type CreateInput struct {
-	Body createBody
-}
-
-type createBody struct {
-	Name           string `json:"name" minLength:"2" maxLength:"100" doc:"Project name"`
-	Description    string `json:"description,omitempty" maxLength:"500" doc:"Optional description"`
-	OrganizationID string `json:"organization_id" format:"uuid" doc:"Organization the project belongs to"`
-}
-
-type CreateOutput struct {
-	Body project
-}
-
-func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, error) {
+func (h *handler) create(ctx context.Context, in *CreateProjectInput) (*CreateProjectOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
 	orgID, err := uuid.Parse(in.Body.OrganizationID)
@@ -303,20 +253,12 @@ func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, e
 	}
 
 	h.logger.InfoContext(ctx, "project: created", "user_id", userID, "org_id", orgID, "project_id", p.ID)
-	return &CreateOutput{Body: toProject(p)}, nil
+	return &CreateProjectOutput{Body: toProject(p)}, nil
 }
 
 // ----- get ------------------------------------------------------------
 
-type GetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type GetOutput struct {
-	Body project
-}
-
-func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
+func (h *handler) get(ctx context.Context, in *GetProjectInput) (*GetProjectOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -332,26 +274,12 @@ func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GetOutput{Body: toProject(p)}, nil
+	return &GetProjectOutput{Body: toProject(p)}, nil
 }
 
 // ----- update ---------------------------------------------------------
 
-type UpdateInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      updateBody
-}
-
-type updateBody struct {
-	Name        *string `json:"name,omitempty" minLength:"2" maxLength:"100"`
-	Description *string `json:"description,omitempty" maxLength:"500"`
-}
-
-type UpdateOutput struct {
-	Body project
-}
-
-func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, error) {
+func (h *handler) update(ctx context.Context, in *UpdateProjectInput) (*UpdateProjectOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -377,18 +305,12 @@ func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, e
 	}
 
 	h.logger.InfoContext(ctx, "project: updated", "user_id", userID, "project_id", projectID)
-	return &UpdateOutput{Body: toProject(p)}, nil
+	return &UpdateProjectOutput{Body: toProject(p)}, nil
 }
 
 // ----- delete ---------------------------------------------------------
 
-type DeleteInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type DeleteOutput struct{}
-
-func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, error) {
+func (h *handler) delete(ctx context.Context, in *DeleteProjectInput) (*DeleteProjectOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -406,18 +328,12 @@ func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, e
 	}
 
 	h.logger.InfoContext(ctx, "project: deleted", "user_id", userID, "project_id", projectID)
-	return &DeleteOutput{}, nil
+	return &DeleteProjectOutput{}, nil
 }
 
 // ----- archive / unarchive -------------------------------------------
 
-type ArchiveInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type ArchiveOutput struct{}
-
-func (h *handler) archive(ctx context.Context, in *ArchiveInput) (*ArchiveOutput, error) {
+func (h *handler) archive(ctx context.Context, in *ArchiveProjectInput) (*ArchiveProjectOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -433,16 +349,10 @@ func (h *handler) archive(ctx context.Context, in *ArchiveInput) (*ArchiveOutput
 	}
 
 	h.logger.InfoContext(ctx, "project: archived", "user_id", userID, "project_id", projectID)
-	return &ArchiveOutput{}, nil
+	return &ArchiveProjectOutput{}, nil
 }
 
-type UnarchiveInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type UnarchiveOutput struct{}
-
-func (h *handler) unarchive(ctx context.Context, in *UnarchiveInput) (*UnarchiveOutput, error) {
+func (h *handler) unarchive(ctx context.Context, in *UnarchiveProjectInput) (*UnarchiveProjectOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -458,7 +368,7 @@ func (h *handler) unarchive(ctx context.Context, in *UnarchiveInput) (*Unarchive
 	}
 
 	h.logger.InfoContext(ctx, "project: unarchived", "user_id", userID, "project_id", projectID)
-	return &UnarchiveOutput{}, nil
+	return &UnarchiveProjectOutput{}, nil
 }
 
 // parsePagination normalises query-param tuple into pagination.Params.

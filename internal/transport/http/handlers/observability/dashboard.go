@@ -1,18 +1,8 @@
-// Package observability exposes observability operations on both
-// planes:
-//
-//   - Dashboard plane (apiAdmin, RequireAuth) — traces browse, spans
-//     list/get/delete, scores CRUD, sessions list, filter-preset CRUD.
-//   - SDK plane (apiPublic, RequireSDKAuth) — span query + filter
-//     validation (see handlers_sdk.go).
-//   - OTLP ingestion (/v1/traces, /v1/logs, /v1/metrics) is HUMA-EXEMPT
-//     and mounted as plain chi handlers — see otlp.go.
 package observability
 
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -20,42 +10,15 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
-	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/uid"
 )
 
-type dashboardHandler struct {
-	traces          *obsServices.TraceService
-	scores          *obsServices.ScoreService
-	scoreAnalytics  *obsServices.ScoreAnalyticsService
-	filterPresets   *obsServices.FilterPresetService
-	logger          *slog.Logger
-}
-
-// RegisterRoutes wires the dashboard-plane observability operations onto
-// apiAdmin. All routes require RequireAuth. Routes scoped to a specific
-// project carry {projectId}; routes on /traces or /spans expect the
-// RequireProjectAccess middleware to pin the project via
-// httpctx.WithProjectID (access via query param + middleware).
-func RegisterRoutes(
-	api huma.API,
-	traces *obsServices.TraceService,
-	scores *obsServices.ScoreService,
-	scoreAnalytics *obsServices.ScoreAnalyticsService,
-	filterPresets *obsServices.FilterPresetService,
-	logger *slog.Logger,
-) {
-	h := &dashboardHandler{
-		traces:         traces,
-		scores:         scores,
-		scoreAnalytics: scoreAnalytics,
-		filterPresets:  filterPresets,
-		logger:         logger,
-	}
-
+// registerDashboardOps wires every dashboard-plane observability
+// operation onto apiAdmin. Called from RegisterRoutes in handlers.go.
+func registerDashboardOps(api huma.API, h *dashboardHandler) {
 	// ---- traces ---------------------------------------------------
 	huma.Register(api, huma.Operation{
 		OperationID: "list-traces",
@@ -245,7 +208,7 @@ func RegisterRoutes(
 
 	// ---- sessions -------------------------------------------------
 	huma.Register(api, huma.Operation{
-		OperationID: "list-sessions",
+		OperationID: "list-trace-sessions",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/projects/{projectId}/sessions",
 		Tags:        []string{"sessions"},
@@ -318,13 +281,6 @@ func paginationParams(page, limit int, sortBy, sortDir string) pagination.Params
 	return p
 }
 
-type paginationMeta struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int   `json:"total_pages"`
-}
-
 func newPaginationMeta(p pagination.Params, total int64) paginationMeta {
 	pages := 0
 	if p.Limit > 0 {
@@ -336,40 +292,6 @@ func newPaginationMeta(p pagination.Params, total int64) paginationMeta {
 // ==================================================================
 // TRACES
 // ==================================================================
-
-type ListTracesInput struct {
-	SessionID    string  `query:"session_id" required:"false"`
-	UserID       string  `query:"user_id" required:"false"`
-	ServiceName  string  `query:"service_name" required:"false"`
-	ModelName    string  `query:"model_name" required:"false"`
-	ProviderName string  `query:"provider_name" required:"false"`
-	MinCost      float64 `query:"min_cost" required:"false"`
-	MaxCost      float64 `query:"max_cost" required:"false"`
-	MinTokens    int64   `query:"min_tokens" required:"false"`
-	MaxTokens    int64   `query:"max_tokens" required:"false"`
-	MinDuration  int64   `query:"min_duration" required:"false"`
-	MaxDuration  int64   `query:"max_duration" required:"false"`
-	HasError     *bool   `query:"has_error" required:"false"`
-	Search       string  `query:"search" required:"false"`
-	SearchType   string  `query:"search_type" required:"false"`
-	Status       string  `query:"status" required:"false" doc:"Comma-separated status filter: ok,error,unset"`
-	StatusNot    string  `query:"status_not" required:"false" doc:"Comma-separated status exclusion"`
-	StartTime    int64   `query:"start_time" required:"false" doc:"Unix timestamp seconds"`
-	EndTime      int64   `query:"end_time" required:"false" doc:"Unix timestamp seconds"`
-	Page         int     `query:"page" required:"false" minimum:"1"`
-	Limit        int     `query:"limit" required:"false"`
-	SortBy       string  `query:"sort_by" required:"false"`
-	SortDir      string  `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
-
-type ListTracesOutput struct {
-	Body listTracesResponse
-}
-
-type listTracesResponse struct {
-	Data       []*observability.TraceSummary `json:"data"`
-	Pagination paginationMeta                `json:"pagination"`
-}
 
 func splitCSV(s string) []string {
 	if s == "" {
@@ -451,9 +373,7 @@ func (h *dashboardHandler) listTraces(ctx context.Context, in *ListTracesInput) 
 		v := in.MaxDuration
 		filter.MaxDuration = &v
 	}
-	if in.HasError != nil {
-		filter.HasError = in.HasError
-	}
+	filter.HasError = in.HasError.Ptr()
 	if in.Search != "" {
 		filter.Search = &in.Search
 	}
@@ -501,14 +421,6 @@ func (h *dashboardHandler) listTraces(ctx context.Context, in *ListTracesInput) 
 	}}, nil
 }
 
-type GetTraceInput struct {
-	ID string `path:"id" doc:"Trace ID (W3C hex)"`
-}
-
-type GetTraceOutput struct {
-	Body *observability.TraceSummary
-}
-
 func (h *dashboardHandler) getTrace(ctx context.Context, in *GetTraceInput) (*GetTraceOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
@@ -520,11 +432,6 @@ func (h *dashboardHandler) getTrace(ctx context.Context, in *GetTraceInput) (*Ge
 	return &GetTraceOutput{Body: summary}, nil
 }
 
-type DeleteTraceInput struct {
-	ID string `path:"id"`
-}
-type DeleteTraceOutput struct{}
-
 func (h *dashboardHandler) deleteTrace(ctx context.Context, in *DeleteTraceInput) (*DeleteTraceOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
@@ -533,13 +440,6 @@ func (h *dashboardHandler) deleteTrace(ctx context.Context, in *DeleteTraceInput
 		return nil, err
 	}
 	return &DeleteTraceOutput{}, nil
-}
-
-type GetTraceSpansInput struct {
-	ID string `path:"id"`
-}
-type GetTraceSpansOutput struct {
-	Body []*observability.Span
 }
 
 func (h *dashboardHandler) getTraceSpans(ctx context.Context, in *GetTraceSpansInput) (*GetTraceSpansOutput, error) {
@@ -551,14 +451,6 @@ func (h *dashboardHandler) getTraceSpans(ctx context.Context, in *GetTraceSpansI
 		return nil, err
 	}
 	return &GetTraceSpansOutput{Body: spans}, nil
-}
-
-type GetTraceScoresInput struct {
-	ID        string `path:"id"`
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-}
-type GetTraceScoresOutput struct {
-	Body []*AnnotationResponse
 }
 
 func (h *dashboardHandler) getTraceScores(ctx context.Context, in *GetTraceScoresInput) (*GetTraceScoresOutput, error) {
@@ -578,24 +470,6 @@ func (h *dashboardHandler) getTraceScores(ctx context.Context, in *GetTraceScore
 		out = append(out, toAnnotationResponse(s))
 	}
 	return &GetTraceScoresOutput{Body: out}, nil
-}
-
-type CreateAnnotationRequest struct {
-	Name        string   `json:"name" minLength:"1"`
-	Value       *float64 `json:"value,omitempty"`
-	StringValue *string  `json:"string_value,omitempty"`
-	DataType    string   `json:"type" enum:"NUMERIC,CATEGORICAL,BOOLEAN"`
-	Reason      *string  `json:"reason,omitempty"`
-}
-
-type CreateTraceScoreInput struct {
-	ID        string `path:"id"`
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-	Body      CreateAnnotationRequest
-}
-
-type CreateTraceScoreOutput struct {
-	Body *AnnotationResponse
 }
 
 func (h *dashboardHandler) createTraceScore(ctx context.Context, in *CreateTraceScoreInput) (*CreateTraceScoreOutput, error) {
@@ -644,13 +518,6 @@ func (h *dashboardHandler) createTraceScore(ctx context.Context, in *CreateTrace
 	return &CreateTraceScoreOutput{Body: toAnnotationResponse(score)}, nil
 }
 
-type DeleteTraceScoreInput struct {
-	ID        string `path:"id"`
-	ScoreID   string `path:"scoreId" format:"uuid"`
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-}
-type DeleteTraceScoreOutput struct{}
-
 func (h *dashboardHandler) deleteTraceScore(ctx context.Context, in *DeleteTraceScoreInput) (*DeleteTraceScoreOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
@@ -686,17 +553,6 @@ func (h *dashboardHandler) deleteTraceScore(ctx context.Context, in *DeleteTrace
 	return &DeleteTraceScoreOutput{}, nil
 }
 
-type UpdateTraceTagsInput struct {
-	ID        string                                `path:"id"`
-	ProjectID string                                `query:"project_id" required:"true" format:"uuid"`
-	Body      observability.UpdateTraceTagsRequest
-}
-type UpdateTraceTagsOutput struct {
-	Body struct {
-		Tags []string `json:"tags"`
-	}
-}
-
 func (h *dashboardHandler) updateTraceTags(ctx context.Context, in *UpdateTraceTagsInput) (*UpdateTraceTagsOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
@@ -717,19 +573,6 @@ func (h *dashboardHandler) updateTraceTags(ctx context.Context, in *UpdateTraceT
 	return out, nil
 }
 
-type UpdateTraceBookmarkInput struct {
-	ID        string `path:"id"`
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-	Body      struct {
-		Bookmarked bool `json:"bookmarked"`
-	}
-}
-type UpdateTraceBookmarkOutput struct {
-	Body struct {
-		Bookmarked bool `json:"bookmarked"`
-	}
-}
-
 func (h *dashboardHandler) updateTraceBookmark(ctx context.Context, in *UpdateTraceBookmarkInput) (*UpdateTraceBookmarkOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
@@ -746,13 +589,6 @@ func (h *dashboardHandler) updateTraceBookmark(ctx context.Context, in *UpdateTr
 	return out, nil
 }
 
-type GetTraceFilterOptionsInput struct {
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-}
-type GetTraceFilterOptionsOutput struct {
-	Body *observability.TraceFilterOptions
-}
-
 func (h *dashboardHandler) getTraceFilterOptions(ctx context.Context, in *GetTraceFilterOptionsInput) (*GetTraceFilterOptionsOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
 	if err != nil {
@@ -763,16 +599,6 @@ func (h *dashboardHandler) getTraceFilterOptions(ctx context.Context, in *GetTra
 		return nil, err
 	}
 	return &GetTraceFilterOptionsOutput{Body: opts}, nil
-}
-
-type DiscoverAttributesInput struct {
-	ProjectID string `query:"project_id" required:"true" format:"uuid"`
-	Prefix    string `query:"prefix" required:"false"`
-	Source    string `query:"source" required:"false" enum:"span_attributes,resource_attributes"`
-	Limit     int    `query:"limit" required:"false" minimum:"1" maximum:"500"`
-}
-type DiscoverAttributesOutput struct {
-	Body *observability.AttributeDiscoveryResponse
 }
 
 func (h *dashboardHandler) discoverAttributes(ctx context.Context, in *DiscoverAttributesInput) (*DiscoverAttributesOutput, error) {
@@ -804,24 +630,6 @@ func (h *dashboardHandler) discoverAttributes(ctx context.Context, in *DiscoverA
 // SPANS
 // ==================================================================
 
-type ListSpansInput struct {
-	TraceID string `query:"trace_id" required:"false"`
-	Type    string `query:"type" required:"false"`
-	Model   string `query:"model" required:"false"`
-	Level   string `query:"level" required:"false"`
-	Page    int    `query:"page" required:"false" minimum:"1"`
-	Limit   int    `query:"limit" required:"false"`
-	SortBy  string `query:"sort_by" required:"false"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
-type ListSpansOutput struct {
-	Body listSpansResponse
-}
-type listSpansResponse struct {
-	Data       []*observability.Span `json:"data"`
-	Pagination paginationMeta        `json:"pagination"`
-}
-
 func (h *dashboardHandler) listSpans(ctx context.Context, in *ListSpansInput) (*ListSpansOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx)
 	filter := &observability.SpanFilter{ProjectID: projectID}
@@ -851,13 +659,6 @@ func (h *dashboardHandler) listSpans(ctx context.Context, in *ListSpansInput) (*
 	return &ListSpansOutput{Body: listSpansResponse{Data: spans, Pagination: newPaginationMeta(params, total)}}, nil
 }
 
-type GetSpanInput struct {
-	ID string `path:"id" doc:"Span ID (OTEL 16-char hex)"`
-}
-type GetSpanOutput struct {
-	Body *observability.Span
-}
-
 func (h *dashboardHandler) getSpan(ctx context.Context, in *GetSpanInput) (*GetSpanOutput, error) {
 	if in.ID == "" {
 		return nil, appErrors.NewValidationError("Missing span ID", "id is required")
@@ -868,11 +669,6 @@ func (h *dashboardHandler) getSpan(ctx context.Context, in *GetSpanInput) (*GetS
 	}
 	return &GetSpanOutput{Body: span}, nil
 }
-
-type DeleteSpanInput struct {
-	ID string `path:"id"`
-}
-type DeleteSpanOutput struct{}
 
 func (h *dashboardHandler) deleteSpan(ctx context.Context, in *DeleteSpanInput) (*DeleteSpanOutput, error) {
 	if in.ID == "" {
@@ -887,18 +683,6 @@ func (h *dashboardHandler) deleteSpan(ctx context.Context, in *DeleteSpanInput) 
 // ==================================================================
 // SCORES (project-scoped + global)
 // ==================================================================
-
-type scoreFilterQuery struct {
-	TraceID string `query:"trace_id" required:"false"`
-	SpanID  string `query:"span_id" required:"false"`
-	Name    string `query:"name" required:"false"`
-	Source  string `query:"source" required:"false"`
-	Type    string `query:"type" required:"false"`
-	Page    int    `query:"page" required:"false" minimum:"1"`
-	Limit   int    `query:"limit" required:"false"`
-	SortBy  string `query:"sort_by" required:"false"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
 
 func (q *scoreFilterQuery) apply(f *observability.ScoreFilter) pagination.Params {
 	if q.TraceID != "" {
@@ -921,17 +705,6 @@ func (q *scoreFilterQuery) apply(f *observability.ScoreFilter) pagination.Params
 	return params
 }
 
-type ListScoresInput struct {
-	scoreFilterQuery
-}
-type ListScoresOutput struct {
-	Body listScoresResponse
-}
-type listScoresResponse struct {
-	Data       []*ScoreResponse `json:"data"`
-	Pagination paginationMeta   `json:"pagination"`
-}
-
 func (h *dashboardHandler) listScores(ctx context.Context, in *ListScoresInput) (*ListScoresOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx)
 	filter := &observability.ScoreFilter{ProjectID: projectID}
@@ -945,15 +718,7 @@ func (h *dashboardHandler) listScores(ctx context.Context, in *ListScoresInput) 
 	if err != nil {
 		return nil, err
 	}
-	return &ListScoresOutput{Body: listScoresResponse{Data: toScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
-}
-
-type ListProjectScoresInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	scoreFilterQuery
-}
-type ListProjectScoresOutput struct {
-	Body listScoresResponse
+	return &ListScoresOutput{Body: listScoresResponse{Data: toTraceScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
 }
 
 func (h *dashboardHandler) listProjectScores(ctx context.Context, in *ListProjectScoresInput) (*ListProjectScoresOutput, error) {
@@ -972,14 +737,7 @@ func (h *dashboardHandler) listProjectScores(ctx context.Context, in *ListProjec
 	if err != nil {
 		return nil, err
 	}
-	return &ListProjectScoresOutput{Body: listScoresResponse{Data: toScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
-}
-
-type GetScoreInput struct {
-	ID string `path:"id" format:"uuid"`
-}
-type GetScoreOutput struct {
-	Body *ScoreResponse
+	return &ListProjectScoresOutput{Body: listScoresResponse{Data: toTraceScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
 }
 
 func (h *dashboardHandler) getScore(ctx context.Context, in *GetScoreInput) (*GetScoreOutput, error) {
@@ -991,25 +749,7 @@ func (h *dashboardHandler) getScore(ctx context.Context, in *GetScoreInput) (*Ge
 	if err != nil {
 		return nil, err
 	}
-	return &GetScoreOutput{Body: toScoreResponse(score)}, nil
-}
-
-type UpdateScoreRequest struct {
-	Name        string          `json:"name,omitempty"`
-	Value       *float64        `json:"value,omitempty"`
-	StringValue *string         `json:"string_value,omitempty"`
-	Type        string          `json:"type,omitempty"`
-	Source      string          `json:"source,omitempty"`
-	Reason      *string         `json:"reason,omitempty"`
-	Metadata    json.RawMessage `json:"metadata,omitempty"`
-}
-
-type UpdateScoreInput struct {
-	ID   string `path:"id" format:"uuid"`
-	Body UpdateScoreRequest
-}
-type UpdateScoreOutput struct {
-	Body *ScoreResponse
+	return &GetScoreOutput{Body: toTraceScoreResponse(score)}, nil
 }
 
 func (h *dashboardHandler) updateScore(ctx context.Context, in *UpdateScoreInput) (*UpdateScoreOutput, error) {
@@ -1039,19 +779,7 @@ func (h *dashboardHandler) updateScore(ctx context.Context, in *UpdateScoreInput
 	if err != nil {
 		return nil, err
 	}
-	return &UpdateScoreOutput{Body: toScoreResponse(updated)}, nil
-}
-
-type GetScoreAnalyticsInput struct {
-	ProjectID        string `path:"projectId" format:"uuid"`
-	ScoreName        string `query:"score_name" required:"true"`
-	CompareScoreName string `query:"compare_score_name" required:"false"`
-	FromTimestamp    string `query:"from_timestamp" required:"false" doc:"RFC3339 timestamp"`
-	ToTimestamp      string `query:"to_timestamp" required:"false" doc:"RFC3339 timestamp"`
-	Interval         string `query:"interval" required:"false" enum:"hour,day,week"`
-}
-type GetScoreAnalyticsOutput struct {
-	Body *observability.ScoreAnalyticsResponse
+	return &UpdateScoreOutput{Body: toTraceScoreResponse(updated)}, nil
 }
 
 func (h *dashboardHandler) getScoreAnalytics(ctx context.Context, in *GetScoreAnalyticsInput) (*GetScoreAnalyticsOutput, error) {
@@ -1095,13 +823,6 @@ func (h *dashboardHandler) getScoreAnalytics(ctx context.Context, in *GetScoreAn
 	return &GetScoreAnalyticsOutput{Body: analytics}, nil
 }
 
-type GetScoreNamesInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-type GetScoreNamesOutput struct {
-	Body []string
-}
-
 func (h *dashboardHandler) getScoreNames(ctx context.Context, in *GetScoreNamesInput) (*GetScoreNamesOutput, error) {
 	if _, err := parseUUIDParam(in.ProjectID, "projectId", "project ID"); err != nil {
 		return nil, err
@@ -1117,26 +838,7 @@ func (h *dashboardHandler) getScoreNames(ctx context.Context, in *GetScoreNamesI
 // SESSIONS
 // ==================================================================
 
-type ListSessionsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Search    string `query:"search" required:"false"`
-	UserID    string `query:"user_id" required:"false"`
-	StartTime int64  `query:"start_time" required:"false" doc:"Unix timestamp seconds"`
-	EndTime   int64  `query:"end_time" required:"false" doc:"Unix timestamp seconds"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-	SortBy    string `query:"sort_by" required:"false"`
-	SortDir   string `query:"sort_dir" required:"false" enum:"asc,desc"`
-}
-type ListSessionsOutput struct {
-	Body listSessionsResponse
-}
-type listSessionsResponse struct {
-	Data       []*observability.SessionSummary `json:"data"`
-	Pagination paginationMeta                  `json:"pagination"`
-}
-
-func (h *dashboardHandler) listSessions(ctx context.Context, in *ListSessionsInput) (*ListSessionsOutput, error) {
+func (h *dashboardHandler) listSessions(ctx context.Context, in *ListTraceSessionsInput) (*ListTraceSessionsOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
 	if err != nil {
 		return nil, err
@@ -1169,20 +871,12 @@ func (h *dashboardHandler) listSessions(ctx context.Context, in *ListSessionsInp
 		h.logger.ErrorContext(ctx, "observability: count sessions failed", "error", err, "project_id", projectID)
 		return nil, err
 	}
-	return &ListSessionsOutput{Body: listSessionsResponse{Data: sessions, Pagination: newPaginationMeta(params, total)}}, nil
+	return &ListTraceSessionsOutput{Body: listTraceSessionsResponse{Data: sessions, Pagination: newPaginationMeta(params, total)}}, nil
 }
 
 // ==================================================================
 // FILTER PRESETS
 // ==================================================================
-
-type CreateFilterPresetInput struct {
-	ProjectID string                                    `path:"projectId" format:"uuid"`
-	Body      observability.CreateFilterPresetRequest
-}
-type CreateFilterPresetOutput struct {
-	Body *observability.FilterPreset
-}
 
 func (h *dashboardHandler) createFilterPreset(ctx context.Context, in *CreateFilterPresetInput) (*CreateFilterPresetOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
@@ -1197,15 +891,6 @@ func (h *dashboardHandler) createFilterPreset(ctx context.Context, in *CreateFil
 	return &CreateFilterPresetOutput{Body: preset}, nil
 }
 
-type ListFilterPresetsInput struct {
-	ProjectID     string `path:"projectId" format:"uuid"`
-	TableName     string `query:"table_name" required:"false" enum:"traces,spans"`
-	IncludePublic *bool  `query:"include_public" required:"false" doc:"Include public presets (default: true)"`
-}
-type ListFilterPresetsOutput struct {
-	Body []*observability.FilterPreset
-}
-
 func (h *dashboardHandler) listFilterPresets(ctx context.Context, in *ListFilterPresetsInput) (*ListFilterPresetsOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
 	if err != nil {
@@ -1217,22 +902,14 @@ func (h *dashboardHandler) listFilterPresets(ctx context.Context, in *ListFilter
 		tableName = &in.TableName
 	}
 	includePublic := true
-	if in.IncludePublic != nil {
-		includePublic = *in.IncludePublic
+	if in.IncludePublic.IsSet {
+		includePublic = in.IncludePublic.Value
 	}
 	presets, err := h.filterPresets.List(ctx, projectID, userID, tableName, includePublic)
 	if err != nil {
 		return nil, err
 	}
 	return &ListFilterPresetsOutput{Body: presets}, nil
-}
-
-type GetFilterPresetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	ID        string `path:"id" format:"uuid"`
-}
-type GetFilterPresetOutput struct {
-	Body *observability.FilterPreset
 }
 
 func (h *dashboardHandler) getFilterPreset(ctx context.Context, in *GetFilterPresetInput) (*GetFilterPresetOutput, error) {
@@ -1252,15 +929,6 @@ func (h *dashboardHandler) getFilterPreset(ctx context.Context, in *GetFilterPre
 	return &GetFilterPresetOutput{Body: preset}, nil
 }
 
-type UpdateFilterPresetInput struct {
-	ProjectID string                                    `path:"projectId" format:"uuid"`
-	ID        string                                    `path:"id" format:"uuid"`
-	Body      observability.UpdateFilterPresetRequest
-}
-type UpdateFilterPresetOutput struct {
-	Body *observability.FilterPreset
-}
-
 func (h *dashboardHandler) updateFilterPreset(ctx context.Context, in *UpdateFilterPresetInput) (*UpdateFilterPresetOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
 	if err != nil {
@@ -1277,12 +945,6 @@ func (h *dashboardHandler) updateFilterPreset(ctx context.Context, in *UpdateFil
 	}
 	return &UpdateFilterPresetOutput{Body: preset}, nil
 }
-
-type DeleteFilterPresetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	ID        string `path:"id" format:"uuid"`
-}
-type DeleteFilterPresetOutput struct{}
 
 func (h *dashboardHandler) deleteFilterPreset(ctx context.Context, in *DeleteFilterPresetInput) (*DeleteFilterPresetOutput, error) {
 	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")

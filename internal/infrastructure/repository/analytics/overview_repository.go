@@ -137,7 +137,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 }
 
 // GetTraceVolume retrieves trace counts for the time series chart
-func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.OverviewTimeSeriesPoint, error) {
 	bucketSeconds := getBucketSeconds(filter)
 
 	query := fmt.Sprintf(`
@@ -164,14 +164,14 @@ func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analyti
 	}
 	defer rows.Close()
 
-	var result []analytics.TimeSeriesPoint
+	var result []analytics.OverviewTimeSeriesPoint
 	for rows.Next() {
 		var ts time.Time
 		var count uint64
 		if err := rows.Scan(&ts, &count); err != nil {
 			return nil, fmt.Errorf("scan trace volume row: %w", err)
 		}
-		result = append(result, analytics.TimeSeriesPoint{
+		result = append(result, analytics.OverviewTimeSeriesPoint{
 			Timestamp: ts,
 			Value:     float64(count),
 		})
@@ -181,7 +181,7 @@ func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analyti
 }
 
 // GetCostTimeSeries retrieves cost over time for the time series chart
-func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.OverviewTimeSeriesPoint, error) {
 	bucketSeconds := getBucketSeconds(filter)
 
 	query := fmt.Sprintf(`
@@ -208,14 +208,14 @@ func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *anal
 	}
 	defer rows.Close()
 
-	var result []analytics.TimeSeriesPoint
+	var result []analytics.OverviewTimeSeriesPoint
 	for rows.Next() {
 		var ts time.Time
 		var cost float64
 		if err := rows.Scan(&ts, &cost); err != nil {
 			return nil, fmt.Errorf("scan cost time series row: %w", err)
 		}
-		result = append(result, analytics.TimeSeriesPoint{
+		result = append(result, analytics.OverviewTimeSeriesPoint{
 			Timestamp: ts,
 			Value:     cost,
 		})
@@ -225,7 +225,7 @@ func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *anal
 }
 
 // GetTokenTimeSeries retrieves token usage over time for the time series chart
-func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.OverviewTimeSeriesPoint, error) {
 	bucketSeconds := getBucketSeconds(filter)
 
 	query := fmt.Sprintf(`
@@ -252,14 +252,14 @@ func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *ana
 	}
 	defer rows.Close()
 
-	var result []analytics.TimeSeriesPoint
+	var result []analytics.OverviewTimeSeriesPoint
 	for rows.Next() {
 		var ts time.Time
 		var tokens uint64
 		if err := rows.Scan(&ts, &tokens); err != nil {
 			return nil, fmt.Errorf("scan token time series row: %w", err)
 		}
-		result = append(result, analytics.TimeSeriesPoint{
+		result = append(result, analytics.OverviewTimeSeriesPoint{
 			Timestamp: ts,
 			Value:     float64(tokens),
 		})
@@ -269,7 +269,7 @@ func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *ana
 }
 
 // GetErrorTimeSeries retrieves error count over time for the time series chart
-func (r *overviewRepository) GetErrorTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+func (r *overviewRepository) GetErrorTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.OverviewTimeSeriesPoint, error) {
 	bucketSeconds := getBucketSeconds(filter)
 
 	query := fmt.Sprintf(`
@@ -296,14 +296,14 @@ func (r *overviewRepository) GetErrorTimeSeries(ctx context.Context, filter *ana
 	}
 	defer rows.Close()
 
-	var result []analytics.TimeSeriesPoint
+	var result []analytics.OverviewTimeSeriesPoint
 	for rows.Next() {
 		var ts time.Time
 		var errCount uint64
 		if err := rows.Scan(&ts, &errCount); err != nil {
 			return nil, fmt.Errorf("scan error time series row: %w", err)
 		}
-		result = append(result, analytics.TimeSeriesPoint{
+		result = append(result, analytics.OverviewTimeSeriesPoint{
 			Timestamp: ts,
 			Value:     float64(errCount),
 		})
@@ -593,7 +593,7 @@ func (r *overviewRepository) GetScoresSummary(ctx context.Context, filter *analy
 			return nil, fmt.Errorf("query sparkline for %s: %w", score.name, err)
 		}
 
-		var sparkline []analytics.TimeSeriesPoint
+		var sparkline []analytics.OverviewTimeSeriesPoint
 		for sparklineRows.Next() {
 			var ts time.Time
 			var value float64
@@ -601,7 +601,7 @@ func (r *overviewRepository) GetScoresSummary(ctx context.Context, filter *analy
 				sparklineRows.Close()
 				return nil, fmt.Errorf("scan sparkline row: %w", err)
 			}
-			sparkline = append(sparkline, analytics.TimeSeriesPoint{
+			sparkline = append(sparkline, analytics.OverviewTimeSeriesPoint{
 				Timestamp: ts,
 				Value:     value,
 			})

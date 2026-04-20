@@ -24,8 +24,8 @@ type EvaluatorAnalyticsResponse struct {
 	SuccessRate        float64              `json:"success_rate"`            // Percentage of successful executions
 	AverageScore       float64              `json:"average_score"`           // Mean score value across all scored spans
 	ScoreDistribution  []DistributionBucket `json:"score_distribution"`      // Histogram of score values
-	ExecutionTrend     []TimeSeriesPoint    `json:"execution_trend"`         // Executions over time
-	ScoreTrend         []TimeSeriesPoint    `json:"score_trend"`             // Average score over time
+	ExecutionTrend     []EvaluatorTimeSeriesPoint    `json:"execution_trend"`         // Executions over time
+	ScoreTrend         []EvaluatorTimeSeriesPoint    `json:"score_trend"`             // Average score over time
 	LatencyPercentiles LatencyStats         `json:"latency_percentiles"`     // P50, P90, P99 latencies
 	TopErrors          []ErrorSummary       `json:"top_errors"`              // Most common error types
 	CostEstimate       *CostEstimate        `json:"cost_estimate,omitempty"` // Estimated cost for LLM evaluators
@@ -39,9 +39,9 @@ type DistributionBucket struct {
 	Percentage float64 `json:"percentage,omitempty"`
 }
 
-// TimeSeriesPoint represents a single data point in a time series.
+// EvaluatorTimeSeriesPoint represents a single data point in a time series.
 // Used for execution trends and score trends in evaluator analytics.
-type TimeSeriesPoint struct {
+type EvaluatorTimeSeriesPoint struct {
 	Timestamp   time.Time `json:"timestamp"`
 	Count       int64     `json:"count"`
 	SuccessRate float64   `json:"success_rate"` // 0.0-1.0
@@ -83,10 +83,10 @@ type EvaluatorAnalyticsRepository interface {
 	GetScoreDistribution(projectID, evaluatorID uuid.UUID, from, to time.Time, buckets int) ([]DistributionBucket, error)
 
 	// GetExecutionTrend returns executions over time.
-	GetExecutionTrend(projectID, evaluatorID uuid.UUID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
+	GetExecutionTrend(projectID, evaluatorID uuid.UUID, from, to time.Time, interval string) ([]EvaluatorTimeSeriesPoint, error)
 
 	// GetScoreTrend returns average scores over time.
-	GetScoreTrend(projectID, evaluatorID uuid.UUID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
+	GetScoreTrend(projectID, evaluatorID uuid.UUID, from, to time.Time, interval string) ([]EvaluatorTimeSeriesPoint, error)
 
 	// GetLatencyStats returns latency percentile statistics.
 	GetLatencyStats(projectID, evaluatorID uuid.UUID, from, to time.Time) (*LatencyStats, error)

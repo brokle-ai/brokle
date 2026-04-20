@@ -277,16 +277,6 @@ func parseUser(idStr string) (uuid.UUID, error) {
 
 // ----- response DTOs ---------------------------------------------------
 
-type organizationResponse struct {
-	ID                 uuid.UUID `json:"id"`
-	Name               string    `json:"name"`
-	Plan               string    `json:"plan"`
-	SubscriptionStatus string    `json:"subscription_status"`
-	BillingEmail       *string   `json:"billing_email,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-}
-
 func toOrganizationResponse(o *organization.Organization) organizationResponse {
 	return organizationResponse{
 		ID:                 o.ID,
@@ -299,16 +289,6 @@ func toOrganizationResponse(o *organization.Organization) organizationResponse {
 	}
 }
 
-type memberResponse struct {
-	UserID    uuid.UUID  `json:"user_id"`
-	RoleID    uuid.UUID  `json:"role_id"`
-	Status    string     `json:"status"`
-	InvitedBy *uuid.UUID `json:"invited_by,omitempty"`
-	JoinedAt  time.Time  `json:"joined_at"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-}
-
 func toMemberResponse(m *organization.Member) memberResponse {
 	return memberResponse{
 		UserID:    m.UserID,
@@ -319,24 +299,6 @@ func toMemberResponse(m *organization.Member) memberResponse {
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
-}
-
-type invitationResponse struct {
-	ID             uuid.UUID               `json:"id"`
-	OrganizationID uuid.UUID               `json:"organization_id"`
-	Email          string                  `json:"email"`
-	Status         string                  `json:"status"`
-	TokenPreview   *string                 `json:"token_preview,omitempty"`
-	RoleID         uuid.UUID               `json:"role_id"`
-	Role           *organization.RoleRef   `json:"role,omitempty"`
-	Inviter        *organization.InviterRef `json:"inviter,omitempty"`
-	InvitedByID    *uuid.UUID              `json:"invited_by_id,omitempty"`
-	Message        *string                 `json:"message,omitempty"`
-	ResentCount    int                     `json:"resent_count"`
-	ResentAt       *time.Time              `json:"resent_at,omitempty"`
-	ExpiresAt      time.Time               `json:"expires_at"`
-	CreatedAt      time.Time               `json:"created_at"`
-	UpdatedAt      time.Time               `json:"updated_at"`
 }
 
 func toInvitationResponse(inv *organization.Invitation) invitationResponse {
@@ -360,24 +322,6 @@ func toInvitationResponse(inv *organization.Invitation) invitationResponse {
 }
 
 // ----- list-organizations ----------------------------------------------
-
-type ListOrganizationsInput struct {
-	Search  string `query:"search" required:"false" doc:"Filter by name substring"`
-	Page    int    `query:"page" required:"false" minimum:"1" doc:"Page number (1-indexed); default 1"`
-	Limit   int    `query:"limit" required:"false" minimum:"1" maximum:"100" doc:"Items per page; default 20"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Created-at sort direction; default desc"`
-}
-
-type listOrganizationsBody struct {
-	Organizations []organizationResponse `json:"organizations"`
-	Total         int                    `json:"total"`
-	Page          int                    `json:"page"`
-	Limit         int                    `json:"limit"`
-}
-
-type ListOrganizationsOutput struct {
-	Body listOrganizationsBody
-}
 
 func (h *handler) listOrganizations(ctx context.Context, in *ListOrganizationsInput) (*ListOrganizationsOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
@@ -436,19 +380,6 @@ func (h *handler) listOrganizations(ctx context.Context, in *ListOrganizationsIn
 
 // ----- create-organization ---------------------------------------------
 
-type CreateOrganizationInput struct {
-	Body createOrganizationBody
-}
-
-type createOrganizationBody struct {
-	Name        string `json:"name" minLength:"2" maxLength:"100" doc:"Organization name"`
-	Description string `json:"description,omitempty" maxLength:"500"`
-}
-
-type CreateOrganizationOutput struct {
-	Body organizationResponse
-}
-
 func (h *handler) createOrganization(ctx context.Context, in *CreateOrganizationInput) (*CreateOrganizationOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
@@ -462,14 +393,6 @@ func (h *handler) createOrganization(ctx context.Context, in *CreateOrganization
 }
 
 // ----- get-organization ------------------------------------------------
-
-type GetOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type GetOrganizationOutput struct {
-	Body organizationResponse
-}
 
 func (h *handler) getOrganization(ctx context.Context, in *GetOrganizationInput) (*GetOrganizationOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -494,21 +417,6 @@ func (h *handler) getOrganization(ctx context.Context, in *GetOrganizationInput)
 }
 
 // ----- update-organization ---------------------------------------------
-
-type UpdateOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  updateOrganizationBody
-}
-
-type updateOrganizationBody struct {
-	Name         *string `json:"name,omitempty" minLength:"2" maxLength:"100"`
-	BillingEmail *string `json:"billing_email,omitempty" format:"email"`
-	Description  *string `json:"description,omitempty" maxLength:"500"`
-}
-
-type UpdateOrganizationOutput struct {
-	Body organizationResponse
-}
 
 func (h *handler) updateOrganization(ctx context.Context, in *UpdateOrganizationInput) (*UpdateOrganizationOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -541,12 +449,6 @@ func (h *handler) updateOrganization(ctx context.Context, in *UpdateOrganization
 
 // ----- delete-organization ---------------------------------------------
 
-type DeleteOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type DeleteOrganizationOutput struct{}
-
 func (h *handler) deleteOrganization(ctx context.Context, in *DeleteOrganizationInput) (*DeleteOrganizationOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -568,21 +470,6 @@ func (h *handler) deleteOrganization(ctx context.Context, in *DeleteOrganization
 }
 
 // ----- list-members ----------------------------------------------------
-
-type ListMembersInput struct {
-	OrgID  string `path:"orgId" format:"uuid"`
-	Status string `query:"status" required:"false" enum:"active,invited,suspended"`
-	Role   string `query:"role" required:"false"`
-}
-
-type listMembersBody struct {
-	Members []memberResponse `json:"members"`
-	Total   int              `json:"total"`
-}
-
-type ListMembersOutput struct {
-	Body listMembersBody
-}
 
 func (h *handler) listMembers(ctx context.Context, in *ListMembersInput) (*ListMembersOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -616,13 +503,6 @@ func (h *handler) listMembers(ctx context.Context, in *ListMembersInput) (*ListM
 
 // ----- remove-member ---------------------------------------------------
 
-type RemoveMemberInput struct {
-	OrgID  string `path:"orgId" format:"uuid"`
-	UserID string `path:"userId" format:"uuid"`
-}
-
-type RemoveMemberOutput struct{}
-
 func (h *handler) removeMember(ctx context.Context, in *RemoveMemberInput) (*RemoveMemberOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -649,21 +529,6 @@ func (h *handler) removeMember(ctx context.Context, in *RemoveMemberInput) (*Rem
 
 // ----- create-invitation -----------------------------------------------
 
-type CreateInvitationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  createInvitationBody
-}
-
-type createInvitationBody struct {
-	Email   string    `json:"email" format:"email" doc:"Email address of user to invite"`
-	RoleID  uuid.UUID `json:"role_id" doc:"Role ID to assign"`
-	Message *string   `json:"message,omitempty" maxLength:"500" doc:"Optional personal message"`
-}
-
-type CreateInvitationOutput struct {
-	Body invitationResponse
-}
-
 func (h *handler) createInvitation(ctx context.Context, in *CreateInvitationInput) (*CreateInvitationOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -683,19 +548,6 @@ func (h *handler) createInvitation(ctx context.Context, in *CreateInvitationInpu
 }
 
 // ----- list-pending-invitations ----------------------------------------
-
-type ListPendingInvitationsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type listPendingInvitationsBody struct {
-	Invitations []invitationResponse `json:"invitations"`
-	Total       int                  `json:"total"`
-}
-
-type ListPendingInvitationsOutput struct {
-	Body listPendingInvitationsBody
-}
 
 func (h *handler) listPendingInvitations(ctx context.Context, in *ListPendingInvitationsInput) (*ListPendingInvitationsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -730,15 +582,6 @@ func (h *handler) listPendingInvitations(ctx context.Context, in *ListPendingInv
 
 // ----- resend-invitation -----------------------------------------------
 
-type ResendInvitationInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	InvitationID string `path:"invitationId" format:"uuid"`
-}
-
-type ResendInvitationOutput struct {
-	Body invitationResponse
-}
-
 func (h *handler) resendInvitation(ctx context.Context, in *ResendInvitationInput) (*ResendInvitationOutput, error) {
 	if _, err := parseOrg(in.OrgID); err != nil {
 		return nil, err
@@ -758,13 +601,6 @@ func (h *handler) resendInvitation(ctx context.Context, in *ResendInvitationInpu
 
 // ----- revoke-invitation -----------------------------------------------
 
-type RevokeInvitationInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	InvitationID string `path:"invitationId" format:"uuid"`
-}
-
-type RevokeInvitationOutput struct{}
-
 func (h *handler) revokeInvitation(ctx context.Context, in *RevokeInvitationInput) (*RevokeInvitationOutput, error) {
 	if _, err := parseOrg(in.OrgID); err != nil {
 		return nil, err
@@ -782,30 +618,6 @@ func (h *handler) revokeInvitation(ctx context.Context, in *RevokeInvitationInpu
 }
 
 // ----- list-user-invitations -------------------------------------------
-
-type ListUserInvitationsInput struct{}
-
-type userInvitationResponse struct {
-	ID               uuid.UUID               `json:"id"`
-	Email            string                  `json:"email"`
-	Status           string                  `json:"status"`
-	OrganizationID   uuid.UUID               `json:"organization_id"`
-	OrganizationName string                  `json:"organization_name"`
-	Role             *organization.RoleRef   `json:"role,omitempty"`
-	Inviter          *organization.InviterRef `json:"inviter,omitempty"`
-	Message          *string                 `json:"message,omitempty"`
-	ExpiresAt        time.Time               `json:"expires_at"`
-	CreatedAt        time.Time               `json:"created_at"`
-}
-
-type listUserInvitationsBody struct {
-	Invitations []userInvitationResponse `json:"invitations"`
-	Total       int                      `json:"total"`
-}
-
-type ListUserInvitationsOutput struct {
-	Body listUserInvitationsBody
-}
 
 func (h *handler) listUserInvitations(ctx context.Context, in *ListUserInvitationsInput) (*ListUserInvitationsOutput, error) {
 	claims := httpctx.MustGetTokenClaims(ctx)
@@ -852,24 +664,6 @@ func (h *handler) listUserInvitations(ctx context.Context, in *ListUserInvitatio
 
 // ----- validate-invitation-token ---------------------------------------
 
-type ValidateInvitationTokenInput struct {
-	Token string `path:"token" doc:"Invitation token"`
-}
-
-type invitationDetailsBody struct {
-	OrganizationID   uuid.UUID `json:"organization_id"`
-	OrganizationName string    `json:"organization_name"`
-	Email            string    `json:"email"`
-	RoleName         string    `json:"role_name"`
-	InviterName      string    `json:"inviter_name"`
-	ExpiresAt        time.Time `json:"expires_at"`
-	IsExpired        bool      `json:"is_expired"`
-}
-
-type ValidateInvitationTokenOutput struct {
-	Body invitationDetailsBody
-}
-
 func (h *handler) validateInvitationToken(ctx context.Context, in *ValidateInvitationTokenInput) (*ValidateInvitationTokenOutput, error) {
 	invitation, err := h.invitationSvc.GetInvitationByToken(ctx, in.Token)
 	if err != nil {
@@ -913,16 +707,6 @@ func (h *handler) validateInvitationToken(ctx context.Context, in *ValidateInvit
 
 // ----- accept-invitation -----------------------------------------------
 
-type AcceptInvitationInput struct {
-	Body acceptInvitationBody
-}
-
-type acceptInvitationBody struct {
-	Token string `json:"token" minLength:"1" doc:"Invitation token"`
-}
-
-type AcceptInvitationOutput struct{}
-
 func (h *handler) acceptInvitation(ctx context.Context, in *AcceptInvitationInput) (*AcceptInvitationOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 	if _, err := h.invitationSvc.AcceptInvitation(ctx, in.Body.Token, userID); err != nil {
@@ -933,16 +717,6 @@ func (h *handler) acceptInvitation(ctx context.Context, in *AcceptInvitationInpu
 
 // ----- decline-invitation ----------------------------------------------
 
-type DeclineInvitationInput struct {
-	Body declineInvitationBody
-}
-
-type declineInvitationBody struct {
-	Token string `json:"token" minLength:"1" doc:"Invitation token"`
-}
-
-type DeclineInvitationOutput struct{}
-
 func (h *handler) declineInvitation(ctx context.Context, in *DeclineInvitationInput) (*DeclineInvitationOutput, error) {
 	if err := h.invitationSvc.DeclineInvitation(ctx, in.Body.Token); err != nil {
 		return nil, err
@@ -951,15 +725,6 @@ func (h *handler) declineInvitation(ctx context.Context, in *DeclineInvitationIn
 }
 
 // ----- settings --------------------------------------------------------
-
-type settingResponse struct {
-	ID             uuid.UUID `json:"id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Key            string    `json:"key"`
-	Value          any       `json:"value"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
 
 func toSettingResponse(s *organization.OrganizationSettings) settingResponse {
 	value, _ := s.GetValue()
@@ -975,18 +740,6 @@ func toSettingResponse(s *organization.OrganizationSettings) settingResponse {
 
 // ----- list-settings ---------------------------------------------------
 
-type ListSettingsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type listSettingsBody struct {
-	Settings map[string]any `json:"settings"`
-}
-
-type ListSettingsOutput struct {
-	Body listSettingsBody
-}
-
 func (h *handler) listSettings(ctx context.Context, in *ListSettingsInput) (*ListSettingsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -1000,20 +753,6 @@ func (h *handler) listSettings(ctx context.Context, in *ListSettingsInput) (*Lis
 }
 
 // ----- create-setting --------------------------------------------------
-
-type CreateSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  createSettingBody
-}
-
-type createSettingBody struct {
-	Key   string `json:"key" minLength:"1" maxLength:"255" doc:"Setting key"`
-	Value any    `json:"value" doc:"Setting value (any JSON type)"`
-}
-
-type CreateSettingOutput struct {
-	Body settingResponse
-}
 
 func (h *handler) createSetting(ctx context.Context, in *CreateSettingInput) (*CreateSettingOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -1034,15 +773,6 @@ func (h *handler) createSetting(ctx context.Context, in *CreateSettingInput) (*C
 
 // ----- get-setting -----------------------------------------------------
 
-type GetSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-}
-
-type GetSettingOutput struct {
-	Body settingResponse
-}
-
 func (h *handler) getSetting(ctx context.Context, in *GetSettingInput) (*GetSettingOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
@@ -1056,20 +786,6 @@ func (h *handler) getSetting(ctx context.Context, in *GetSettingInput) (*GetSett
 }
 
 // ----- update-setting --------------------------------------------------
-
-type UpdateSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-	Body  updateSettingBody
-}
-
-type updateSettingBody struct {
-	Value any `json:"value" doc:"New setting value (any JSON type)"`
-}
-
-type UpdateSettingOutput struct {
-	Body settingResponse
-}
 
 func (h *handler) updateSetting(ctx context.Context, in *UpdateSettingInput) (*UpdateSettingOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
@@ -1088,13 +804,6 @@ func (h *handler) updateSetting(ctx context.Context, in *UpdateSettingInput) (*U
 }
 
 // ----- delete-setting --------------------------------------------------
-
-type DeleteSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-}
-
-type DeleteSettingOutput struct{}
 
 func (h *handler) deleteSetting(ctx context.Context, in *DeleteSettingInput) (*DeleteSettingOutput, error) {
 	orgID, err := parseOrg(in.OrgID)

@@ -281,12 +281,12 @@ func (s *experimentService) CompareExperiments(
 		return nil, appErrors.NewInternalError("failed to get score aggregations", err)
 	}
 
-	// 4. Convert observability.ScoreAggregation to evaluation.ScoreAggregation
-	scores := make(map[string]map[string]*evaluation.ScoreAggregation)
+	// 4. Convert observability.TraceScoreAggregation to evaluation.EvaluatorScoreAggregation
+	scores := make(map[string]map[string]*evaluation.EvaluatorScoreAggregation)
 	for scoreName, expScores := range scoreAggregations {
-		scores[scoreName] = make(map[string]*evaluation.ScoreAggregation)
+		scores[scoreName] = make(map[string]*evaluation.EvaluatorScoreAggregation)
 		for expID, agg := range expScores {
-			scores[scoreName][expID] = &evaluation.ScoreAggregation{
+			scores[scoreName][expID] = &evaluation.EvaluatorScoreAggregation{
 				Mean:   agg.Mean,
 				StdDev: agg.StdDev,
 				Min:    agg.Min,
@@ -405,7 +405,7 @@ func (s *experimentService) GetMetrics(ctx context.Context, projectID, experimen
 	}
 
 	// 2. Get score aggregations from ClickHouse (non-fatal if fails - graceful degradation)
-	var scoreAggs map[string]map[string]*observability.ScoreAggregation
+	var scoreAggs map[string]map[string]*observability.TraceScoreAggregation
 	scoreAggs, err = s.scoreRepo.GetAggregationsByExperiments(ctx, projectID.String(), []string{experimentID.String()})
 	if err != nil {
 		s.logger.Warn("failed to get score aggregations",
@@ -423,7 +423,7 @@ func (s *experimentService) GetMetrics(ctx context.Context, projectID, experimen
 // buildMetricsResponse constructs the metrics response from experiment and score data.
 func (s *experimentService) buildMetricsResponse(
 	exp *evaluation.Experiment,
-	scoreAggs map[string]map[string]*observability.ScoreAggregation,
+	scoreAggs map[string]map[string]*observability.TraceScoreAggregation,
 ) *evaluation.ExperimentMetricsResponse {
 	// Progress metrics
 	pendingItems := exp.TotalItems - exp.CompletedItems - exp.FailedItems

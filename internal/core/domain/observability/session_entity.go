@@ -9,9 +9,9 @@ import (
 	"brokle/pkg/pagination"
 )
 
-// SessionSummary represents aggregated session-level metrics computed from traces.
+// TraceSessionSummary represents aggregated session-level metrics computed from traces.
 // Sessions are identified by session_id attribute on root spans.
-type SessionSummary struct {
+type TraceSessionSummary struct {
 	SessionID     string          `json:"session_id" db:"session_id"`
 	TraceCount    int64           `json:"trace_count" db:"trace_count"`
 	FirstTrace    time.Time       `json:"first_trace" db:"first_trace"`

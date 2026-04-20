@@ -17,7 +17,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -248,18 +247,7 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 
 // ---- list -----------------------------------------------------------
 
-type ListInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Name      string `query:"name" required:"false" doc:"Filter by name (partial match)"`
-	Limit     int    `query:"limit" required:"false" minimum:"0" doc:"Items per page (default 50)"`
-	Offset    int    `query:"offset" required:"false" minimum:"0" doc:"Pagination offset"`
-}
-
-type ListOutput struct {
-	Body *dashboardDomain.DashboardListResponse
-}
-
-func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) {
+func (h *handler) list(ctx context.Context, in *ListDashboardsInput) (*ListDashboardsOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -274,21 +262,12 @@ func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) 
 		h.logger.WarnContext(ctx, "dashboard: list failed", "project_id", projectID, "error", err)
 		return nil, err
 	}
-	return &ListOutput{Body: resp}, nil
+	return &ListDashboardsOutput{Body: resp}, nil
 }
 
 // ---- create ---------------------------------------------------------
 
-type CreateInput struct {
-	ProjectID string                                `path:"projectId" format:"uuid"`
-	Body      dashboardDomain.CreateDashboardRequest
-}
-
-type CreateOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, error) {
+func (h *handler) create(ctx context.Context, in *CreateDashboardInput) (*CreateDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -301,21 +280,12 @@ func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, e
 		h.logger.WarnContext(ctx, "dashboard: create failed", "project_id", projectID, "name", in.Body.Name, "error", err)
 		return nil, err
 	}
-	return &CreateOutput{Body: dash}, nil
+	return &CreateDashboardOutput{Body: dash}, nil
 }
 
 // ---- get ------------------------------------------------------------
 
-type GetInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	DashboardID string `path:"dashboardId" format:"uuid"`
-}
-
-type GetOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
+func (h *handler) get(ctx context.Context, in *GetDashboardInput) (*GetDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -328,22 +298,12 @@ func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GetOutput{Body: dash}, nil
+	return &GetDashboardOutput{Body: dash}, nil
 }
 
 // ---- update ---------------------------------------------------------
 
-type UpdateInput struct {
-	ProjectID   string                                `path:"projectId" format:"uuid"`
-	DashboardID string                                `path:"dashboardId" format:"uuid"`
-	Body        dashboardDomain.UpdateDashboardRequest
-}
-
-type UpdateOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, error) {
+func (h *handler) update(ctx context.Context, in *UpdateDashboardInput) (*UpdateDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -356,19 +316,12 @@ func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, e
 	if err != nil {
 		return nil, err
 	}
-	return &UpdateOutput{Body: dash}, nil
+	return &UpdateDashboardOutput{Body: dash}, nil
 }
 
 // ---- delete ---------------------------------------------------------
 
-type DeleteInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	DashboardID string `path:"dashboardId" format:"uuid"`
-}
-
-type DeleteOutput struct{}
-
-func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, error) {
+func (h *handler) delete(ctx context.Context, in *DeleteDashboardInput) (*DeleteDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -380,22 +333,12 @@ func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, e
 	if err := h.svc.DeleteDashboard(ctx, projectID, dashboardID); err != nil {
 		return nil, err
 	}
-	return &DeleteOutput{}, nil
+	return &DeleteDashboardOutput{}, nil
 }
 
 // ---- duplicate ------------------------------------------------------
 
-type DuplicateInput struct {
-	ProjectID   string                                     `path:"projectId" format:"uuid"`
-	DashboardID string                                     `path:"dashboardId" format:"uuid"`
-	Body        dashboardDomain.DuplicateDashboardRequest
-}
-
-type DuplicateOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) duplicate(ctx context.Context, in *DuplicateInput) (*DuplicateOutput, error) {
+func (h *handler) duplicate(ctx context.Context, in *DuplicateDashboardInput) (*DuplicateDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -411,21 +354,12 @@ func (h *handler) duplicate(ctx context.Context, in *DuplicateInput) (*Duplicate
 	if err != nil {
 		return nil, err
 	}
-	return &DuplicateOutput{Body: dash}, nil
+	return &DuplicateDashboardOutput{Body: dash}, nil
 }
 
 // ---- lock / unlock --------------------------------------------------
 
-type LockInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	DashboardID string `path:"dashboardId" format:"uuid"`
-}
-
-type LockOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) lock(ctx context.Context, in *LockInput) (*LockOutput, error) {
+func (h *handler) lock(ctx context.Context, in *LockDashboardInput) (*LockDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -438,13 +372,10 @@ func (h *handler) lock(ctx context.Context, in *LockInput) (*LockOutput, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &LockOutput{Body: dash}, nil
+	return &LockDashboardOutput{Body: dash}, nil
 }
 
-type UnlockInput = LockInput
-type UnlockOutput = LockOutput
-
-func (h *handler) unlock(ctx context.Context, in *UnlockInput) (*UnlockOutput, error) {
+func (h *handler) unlock(ctx context.Context, in *UnlockDashboardInput) (*UnlockDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -457,21 +388,12 @@ func (h *handler) unlock(ctx context.Context, in *UnlockInput) (*UnlockOutput, e
 	if err != nil {
 		return nil, err
 	}
-	return &UnlockOutput{Body: dash}, nil
+	return &UnlockDashboardOutput{Body: dash}, nil
 }
 
 // ---- export / import ------------------------------------------------
 
-type ExportInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	DashboardID string `path:"dashboardId" format:"uuid"`
-}
-
-type ExportOutput struct {
-	Body *dashboardDomain.DashboardExport
-}
-
-func (h *handler) export(ctx context.Context, in *ExportInput) (*ExportOutput, error) {
+func (h *handler) export(ctx context.Context, in *ExportDashboardInput) (*ExportDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -484,19 +406,10 @@ func (h *handler) export(ctx context.Context, in *ExportInput) (*ExportOutput, e
 	if err != nil {
 		return nil, err
 	}
-	return &ExportOutput{Body: exp}, nil
+	return &ExportDashboardOutput{Body: exp}, nil
 }
 
-type ImportInput struct {
-	ProjectID string                                  `path:"projectId" format:"uuid"`
-	Body      dashboardDomain.DashboardImportRequest
-}
-
-type ImportOutput struct {
-	Body *dashboardDomain.Dashboard
-}
-
-func (h *handler) importDashboard(ctx context.Context, in *ImportInput) (*ImportOutput, error) {
+func (h *handler) importDashboard(ctx context.Context, in *ImportDashboardInput) (*ImportDashboardOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -506,42 +419,20 @@ func (h *handler) importDashboard(ctx context.Context, in *ImportInput) (*Import
 		h.logger.WarnContext(ctx, "dashboard: import failed", "project_id", projectID, "error", err)
 		return nil, err
 	}
-	return &ImportOutput{Body: dash}, nil
+	return &ImportDashboardOutput{Body: dash}, nil
 }
 
 // ---- query execution ------------------------------------------------
 
-type timeRangeBody struct {
-	From     *time.Time `json:"from,omitempty"`
-	To       *time.Time `json:"to,omitempty"`
-	Relative string     `json:"relative,omitempty" doc:"Relative time preset (1h, 24h, 7d, 30d)"`
-}
-
-type executeBody struct {
-	TimeRange      *timeRangeBody `json:"time_range,omitempty"`
-	ForceRefresh   bool           `json:"force_refresh,omitempty"`
-	VariableValues map[string]any `json:"variable_values,omitempty"`
-}
-
-func (b *executeBody) toDomainTimeRange() *dashboardDomain.TimeRange {
-	if b == nil || b.TimeRange == nil {
+func (b *executeDashboardBody) toDomainTimeRange() *dashboardDomain.DashboardTimeRange {
+	if b == nil || b.DashboardTimeRange == nil {
 		return nil
 	}
-	return &dashboardDomain.TimeRange{
-		From:     b.TimeRange.From,
-		To:       b.TimeRange.To,
-		Relative: b.TimeRange.Relative,
+	return &dashboardDomain.DashboardTimeRange{
+		From:     b.DashboardTimeRange.From,
+		To:       b.DashboardTimeRange.To,
+		Relative: b.DashboardTimeRange.Relative,
 	}
-}
-
-type ExecuteDashboardInput struct {
-	ProjectID   string      `path:"projectId" format:"uuid"`
-	DashboardID string      `path:"dashboardId" format:"uuid"`
-	Body        executeBody
-}
-
-type ExecuteDashboardOutput struct {
-	Body *dashboardDomain.DashboardQueryResults
 }
 
 func (h *handler) executeDashboard(ctx context.Context, in *ExecuteDashboardInput) (*ExecuteDashboardOutput, error) {
@@ -554,28 +445,17 @@ func (h *handler) executeDashboard(ctx context.Context, in *ExecuteDashboardInpu
 		return nil, err
 	}
 	req := &dashboardDomain.QueryExecutionRequest{
-		ProjectID:      projectID,
-		DashboardID:    dashboardID,
-		TimeRange:      in.Body.toDomainTimeRange(),
-		ForceRefresh:   in.Body.ForceRefresh,
-		VariableValues: in.Body.VariableValues,
+		ProjectID:          projectID,
+		DashboardID:        dashboardID,
+		DashboardTimeRange: in.Body.toDomainTimeRange(),
+		ForceRefresh:       in.Body.ForceRefresh,
+		VariableValues:     in.Body.VariableValues,
 	}
 	results, err := h.query.ExecuteDashboardQueries(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	return &ExecuteDashboardOutput{Body: results}, nil
-}
-
-type ExecuteWidgetInput struct {
-	ProjectID   string      `path:"projectId" format:"uuid"`
-	DashboardID string      `path:"dashboardId" format:"uuid"`
-	WidgetID    string      `path:"widgetId" doc:"Widget ID within the dashboard"`
-	Body        executeBody
-}
-
-type ExecuteWidgetOutput struct {
-	Body *dashboardDomain.QueryResult
 }
 
 func (h *handler) executeWidget(ctx context.Context, in *ExecuteWidgetInput) (*ExecuteWidgetOutput, error) {
@@ -592,11 +472,11 @@ func (h *handler) executeWidget(ctx context.Context, in *ExecuteWidgetInput) (*E
 	}
 	widgetID := in.WidgetID
 	req := &dashboardDomain.QueryExecutionRequest{
-		ProjectID:    projectID,
-		DashboardID:  dashboardID,
-		WidgetID:     &widgetID,
-		TimeRange:    in.Body.toDomainTimeRange(),
-		ForceRefresh: in.Body.ForceRefresh,
+		ProjectID:          projectID,
+		DashboardID:        dashboardID,
+		WidgetID:           &widgetID,
+		DashboardTimeRange: in.Body.toDomainTimeRange(),
+		ForceRefresh:       in.Body.ForceRefresh,
 	}
 	results, err := h.query.ExecuteDashboardQueries(ctx, req)
 	if err != nil {
@@ -609,27 +489,12 @@ func (h *handler) executeWidget(ctx context.Context, in *ExecuteWidgetInput) (*E
 	return &ExecuteWidgetOutput{Body: result}, nil
 }
 
-type ViewDefinitionsOutput struct {
-	Body *dashboardDomain.ViewDefinitionResponse
-}
-
 func (h *handler) viewDefinitions(ctx context.Context, _ *struct{}) (*ViewDefinitionsOutput, error) {
 	resp, err := h.query.GetViewDefinitions(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return &ViewDefinitionsOutput{Body: resp}, nil
-}
-
-type VariableOptionsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	View      string `query:"view" doc:"View type (traces, spans, scores)"`
-	Dimension string `query:"dimension" doc:"Dimension field name"`
-	Limit     int    `query:"limit" required:"false" minimum:"1" doc:"Maximum options (default 100)"`
-}
-
-type VariableOptionsOutput struct {
-	Body *dashboardDomain.VariableOptionsResponse
 }
 
 func (h *handler) variableOptions(ctx context.Context, in *VariableOptionsInput) (*VariableOptionsOutput, error) {
@@ -662,24 +527,12 @@ func (h *handler) variableOptions(ctx context.Context, in *VariableOptionsInput)
 
 // ---- templates ------------------------------------------------------
 
-type ListTemplatesOutput struct {
-	Body []*dashboardDomain.Template
-}
-
 func (h *handler) listTemplates(ctx context.Context, _ *struct{}) (*ListTemplatesOutput, error) {
 	templates, err := h.template.ListTemplates(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return &ListTemplatesOutput{Body: templates}, nil
-}
-
-type GetTemplateInput struct {
-	TemplateID string `path:"templateId" format:"uuid"`
-}
-
-type GetTemplateOutput struct {
-	Body *dashboardDomain.Template
 }
 
 func (h *handler) getTemplate(ctx context.Context, in *GetTemplateInput) (*GetTemplateOutput, error) {
@@ -692,15 +545,6 @@ func (h *handler) getTemplate(ctx context.Context, in *GetTemplateInput) (*GetTe
 		return nil, err
 	}
 	return &GetTemplateOutput{Body: tmpl}, nil
-}
-
-type CreateFromTemplateInput struct {
-	ProjectID string                                   `path:"projectId" format:"uuid"`
-	Body      dashboardDomain.CreateFromTemplateRequest
-}
-
-type CreateFromTemplateOutput struct {
-	Body *dashboardDomain.Dashboard
 }
 
 func (h *handler) createFromTemplate(ctx context.Context, in *CreateFromTemplateInput) (*CreateFromTemplateOutput, error) {

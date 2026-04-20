@@ -77,8 +77,8 @@ type QueryFilter struct {
 	Value    any    `json:"value"`
 }
 
-// TimeRange defines a time range for widget queries.
-type TimeRange struct {
+// DashboardTimeRange defines a time range for widget queries.
+type DashboardTimeRange struct {
 	From     *time.Time `json:"from,omitempty"`
 	To       *time.Time `json:"to,omitempty"`
 	Relative string     `json:"relative,omitempty"` // "1h", "24h", "7d", "30d"
@@ -90,7 +90,7 @@ type WidgetQuery struct {
 	Measures   []string      `json:"measures"`             // ["count", "latency_p50", "total_cost"]
 	Dimensions []string      `json:"dimensions,omitempty"` // grouping fields
 	Filters    []QueryFilter `json:"filters,omitempty"`    // filter conditions
-	TimeRange  *TimeRange    `json:"time_range,omitempty"` // time range
+	DashboardTimeRange  *DashboardTimeRange    `json:"time_range,omitempty"` // time range
 	Limit      int           `json:"limit,omitempty"`      // result limit
 	OrderBy    string        `json:"order_by,omitempty"`   // order by field
 	OrderDir   string        `json:"order_dir,omitempty"`  // "asc" or "desc"
@@ -137,7 +137,7 @@ type Variable struct {
 type DashboardConfig struct {
 	Widgets     []Widget   `json:"widgets"`
 	RefreshRate int        `json:"refresh_rate,omitempty"` // seconds
-	TimeRange   *TimeRange `json:"time_range,omitempty"`   // dashboard-level time range
+	DashboardTimeRange   *DashboardTimeRange `json:"time_range,omitempty"`   // dashboard-level time range
 	Variables   []Variable `json:"variables,omitempty"`    // dashboard variables
 }
 

@@ -537,11 +537,11 @@ func (s *dashboardService) copyConfig(src dashboardDomain.DashboardConfig) dashb
 		}
 	}
 
-	if src.TimeRange != nil {
-		dst.TimeRange = &dashboardDomain.TimeRange{
-			From:     src.TimeRange.From,
-			To:       src.TimeRange.To,
-			Relative: src.TimeRange.Relative,
+	if src.DashboardTimeRange != nil {
+		dst.DashboardTimeRange = &dashboardDomain.DashboardTimeRange{
+			From:     src.DashboardTimeRange.From,
+			To:       src.DashboardTimeRange.To,
+			Relative: src.DashboardTimeRange.Relative,
 		}
 	}
 
@@ -592,11 +592,11 @@ func (s *dashboardService) copyQuery(src dashboardDomain.WidgetQuery) dashboardD
 		}
 	}
 
-	if src.TimeRange != nil {
-		dst.TimeRange = &dashboardDomain.TimeRange{
-			From:     src.TimeRange.From,
-			To:       src.TimeRange.To,
-			Relative: src.TimeRange.Relative,
+	if src.DashboardTimeRange != nil {
+		dst.DashboardTimeRange = &dashboardDomain.DashboardTimeRange{
+			From:     src.DashboardTimeRange.From,
+			To:       src.DashboardTimeRange.To,
+			Relative: src.DashboardTimeRange.Relative,
 		}
 	}
 

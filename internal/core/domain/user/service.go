@@ -50,7 +50,7 @@ type UserService interface {
 type ProfileService interface {
 	// Profile management
 	GetProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error)
-	UpdateProfile(ctx context.Context, userID uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req *UpdateUserProfileRequest) (*UserProfile, error)
 	UploadAvatar(ctx context.Context, userID uuid.UUID, imageData []byte, contentType string) (*UserProfile, error)
 	RemoveAvatar(ctx context.Context, userID uuid.UUID) error
 

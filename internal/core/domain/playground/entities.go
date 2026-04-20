@@ -43,19 +43,9 @@ type Session struct {
 // Template Types
 // ----------------------------
 
-// ChatMessage represents a single message in a chat template
-type ChatMessage struct {
+// PlaygroundMessage represents a single message in a chat template
+type PlaygroundMessage struct {
 	Role    string `json:"role"` // "system", "user", "assistant"
-	Content string `json:"content"`
-}
-
-// ChatTemplate represents the template structure for chat prompts
-type ChatTemplate struct {
-	Messages []ChatMessage `json:"messages"`
-}
-
-// TextTemplate represents the template structure for text prompts
-type TextTemplate struct {
 	Content string `json:"content"`
 }
 
@@ -129,8 +119,8 @@ type SessionResponse struct {
 	LastUsedAt  time.Time       `json:"last_used_at"`
 }
 
-// SessionSummary is a lightweight response for sidebar listing
-type SessionSummary struct {
+// PlaygroundSessionSummary is a lightweight response for sidebar listing
+type PlaygroundSessionSummary struct {
 	ID          uuid.UUID `json:"id"`
 	Name        *string   `json:"name,omitempty"`
 	Description *string   `json:"description,omitempty"`
@@ -163,15 +153,15 @@ func (s *Session) ToResponse() *SessionResponse {
 	}
 }
 
-// ToSummary converts a Session to SessionSummary
-func (s *Session) ToSummary() *SessionSummary {
+// ToSummary converts a Session to PlaygroundSessionSummary
+func (s *Session) ToSummary() *PlaygroundSessionSummary {
 	tags := make([]string, len(s.Tags))
 	copy(tags, s.Tags)
 	if tags == nil {
 		tags = []string{}
 	}
 
-	return &SessionSummary{
+	return &PlaygroundSessionSummary{
 		ID:          s.ID,
 		Name:        s.Name,
 		Description: s.Description,

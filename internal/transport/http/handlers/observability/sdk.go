@@ -2,36 +2,19 @@ package observability
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"brokle/internal/core/domain/observability"
-	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 )
 
-// sdkHandler exposes SDK-plane (apiPublic, RequireSDKAuth) observability
-// operations. The OTLP ingestion endpoints (/v1/traces, /v1/logs, /v1/metrics)
-// are NOT registered here — they are HUMA-EXEMPT and mounted as plain
-// chi handlers via RegisterOTLPChiRoutes (see otlp.go).
-type sdkHandler struct {
-	spanQuery *obsServices.SpanQueryService
-	logger    *slog.Logger
-}
-
-// RegisterSDKRoutes wires the SDK-plane span-query operations onto apiPublic.
-// Project ID is derived from the API key via the RequireSDKAuth middleware.
-func RegisterSDKRoutes(
-	api huma.API,
-	spanQuery *obsServices.SpanQueryService,
-	logger *slog.Logger,
-) {
-	h := &sdkHandler{spanQuery: spanQuery, logger: logger}
-
+// registerSDKOps wires the SDK-plane span-query operations onto apiPublic.
+// Called from RegisterSDKRoutes in handlers.go.
+func registerSDKOps(api huma.API, h *sdkHandler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "sdk-query-spans",
 		Method:      http.MethodPost,
@@ -55,28 +38,6 @@ func RegisterSDKRoutes(
 }
 
 // ---- query spans ---------------------------------------------------
-
-type SpanQueryRequest struct {
-	Filter    string `json:"filter" minLength:"1" maxLength:"2000" doc:"Filter expression, e.g. service.name=chatbot AND gen_ai.system=openai"`
-	StartTime string `json:"start_time,omitempty" doc:"RFC3339 timestamp"`
-	EndTime   string `json:"end_time,omitempty" doc:"RFC3339 timestamp"`
-	Limit     int    `json:"limit,omitempty" minimum:"0" maximum:"10000"`
-	Page      int    `json:"page,omitempty" minimum:"0"`
-}
-
-type QuerySpansInput struct {
-	Body SpanQueryRequest
-}
-
-type QuerySpansOutput struct {
-	Body SpanQueryResponse
-}
-
-type SpanQueryResponse struct {
-	Spans      []*observability.Span `json:"spans"`
-	TotalCount int64                 `json:"total_count"`
-	HasMore    bool                  `json:"has_more"`
-}
 
 func (h *sdkHandler) querySpans(ctx context.Context, in *QuerySpansInput) (*QuerySpansOutput, error) {
 	projectID := httpctx.MustGetProjectID(ctx).String()
@@ -122,21 +83,6 @@ func (h *sdkHandler) querySpans(ctx context.Context, in *QuerySpansInput) (*Quer
 }
 
 // ---- validate filter -----------------------------------------------
-
-type ValidateFilterRequest struct {
-	Filter string `json:"filter" minLength:"1" maxLength:"2000"`
-}
-
-type ValidateFilterInput struct {
-	Body ValidateFilterRequest
-}
-
-type ValidateFilterOutput struct {
-	Body struct {
-		Valid   bool   `json:"valid"`
-		Message string `json:"message"`
-	}
-}
 
 func (h *sdkHandler) validateFilter(ctx context.Context, in *ValidateFilterInput) (*ValidateFilterOutput, error) {
 	// RequireSDKAuth middleware guarantees a project is present; use the

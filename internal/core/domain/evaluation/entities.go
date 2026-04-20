@@ -46,33 +46,33 @@ func NewScoreConfig(projectID uuid.UUID, name string, scoreType ScoreType) *Scor
 	}
 }
 
-type ValidationError struct {
+type EvaluationValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
 
-func (sc *ScoreConfig) Validate() []ValidationError {
-	var errors []ValidationError
+func (sc *ScoreConfig) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if sc.Name == "" {
-		errors = append(errors, ValidationError{Field: "name", Message: "name is required"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name is required"})
 	}
 	if len(sc.Name) > 100 {
-		errors = append(errors, ValidationError{Field: "name", Message: "name must be 100 characters or less"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name must be 100 characters or less"})
 	}
 
 	switch sc.Type {
 	case ScoreTypeNumeric:
 		if sc.MinValue != nil && sc.MaxValue != nil && *sc.MinValue > *sc.MaxValue {
-			errors = append(errors, ValidationError{Field: "max_value", Message: "max_value must be greater than or equal to min_value"})
+			errors = append(errors, EvaluationValidationError{Field: "max_value", Message: "max_value must be greater than or equal to min_value"})
 		}
 	case ScoreTypeCategorical:
 		if len(sc.Categories) == 0 {
-			errors = append(errors, ValidationError{Field: "categories", Message: "categories are required for CATEGORICAL type"})
+			errors = append(errors, EvaluationValidationError{Field: "categories", Message: "categories are required for CATEGORICAL type"})
 		}
 	case ScoreTypeBoolean:
 	default:
-		errors = append(errors, ValidationError{Field: "type", Message: "invalid type, must be NUMERIC, CATEGORICAL, or BOOLEAN"})
+		errors = append(errors, EvaluationValidationError{Field: "type", Message: "invalid type, must be NUMERIC, CATEGORICAL, or BOOLEAN"})
 	}
 
 	return errors
@@ -152,14 +152,14 @@ func NewDataset(projectID uuid.UUID, name string) *Dataset {
 	}
 }
 
-func (d *Dataset) Validate() []ValidationError {
-	var errors []ValidationError
+func (d *Dataset) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if d.Name == "" {
-		errors = append(errors, ValidationError{Field: "name", Message: "name is required"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name is required"})
 	}
 	if len(d.Name) > 255 {
-		errors = append(errors, ValidationError{Field: "name", Message: "name must be 255 characters or less"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name must be 255 characters or less"})
 	}
 
 	return errors
@@ -261,11 +261,11 @@ func NewDatasetItemWithSource(datasetID uuid.UUID, input map[string]any, source 
 	}
 }
 
-func (di *DatasetItem) Validate() []ValidationError {
-	var errors []ValidationError
+func (di *DatasetItem) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if di.Input == nil || len(di.Input) == 0 {
-		errors = append(errors, ValidationError{Field: "input", Message: "input is required"})
+		errors = append(errors, EvaluationValidationError{Field: "input", Message: "input is required"})
 	}
 
 	return errors
@@ -441,20 +441,20 @@ func NewExperimentFromDashboard(projectID uuid.UUID, name string) *Experiment {
 	}
 }
 
-func (e *Experiment) Validate() []ValidationError {
-	var errors []ValidationError
+func (e *Experiment) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if e.Name == "" {
-		errors = append(errors, ValidationError{Field: "name", Message: "name is required"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name is required"})
 	}
 	if len(e.Name) > 255 {
-		errors = append(errors, ValidationError{Field: "name", Message: "name must be 255 characters or less"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name must be 255 characters or less"})
 	}
 
 	switch e.Status {
 	case ExperimentStatusPending, ExperimentStatusRunning, ExperimentStatusCompleted, ExperimentStatusFailed, ExperimentStatusPartial, ExperimentStatusCancelled:
 	default:
-		errors = append(errors, ValidationError{Field: "status", Message: "invalid status"})
+		errors = append(errors, EvaluationValidationError{Field: "status", Message: "invalid status"})
 	}
 
 	return errors
@@ -625,14 +625,14 @@ func NewExperimentItem(experimentID uuid.UUID, input map[string]any) *Experiment
 	}
 }
 
-func (ei *ExperimentItem) Validate() []ValidationError {
-	var errors []ValidationError
+func (ei *ExperimentItem) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if ei.Input == nil || len(ei.Input) == 0 {
-		errors = append(errors, ValidationError{Field: "input", Message: "input is required"})
+		errors = append(errors, EvaluationValidationError{Field: "input", Message: "input is required"})
 	}
 	if ei.TrialNumber < 1 {
-		errors = append(errors, ValidationError{Field: "trial_number", Message: "trial_number must be at least 1"})
+		errors = append(errors, EvaluationValidationError{Field: "trial_number", Message: "trial_number must be at least 1"})
 	}
 
 	return errors
@@ -702,8 +702,8 @@ func (ei *ExperimentItem) ToResponse() *ExperimentItemResponse {
 // Experiment Comparison Types
 // ============================================================================
 
-// ScoreAggregation holds statistical metrics for a score across experiment items.
-type ScoreAggregation struct {
+// EvaluatorScoreAggregation holds statistical metrics for a score across experiment items.
+type EvaluatorScoreAggregation struct {
 	Mean   float64 `json:"mean"`
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
@@ -743,12 +743,12 @@ type CompareExperimentsRequest struct {
 // CompareExperimentsResponse contains the comparison results.
 type CompareExperimentsResponse struct {
 	Experiments map[string]*ExperimentSummary           `json:"experiments"`
-	Scores      map[string]map[string]*ScoreAggregation `json:"scores"`          // scoreName -> experimentID -> aggregation
+	Scores      map[string]map[string]*EvaluatorScoreAggregation `json:"scores"`          // scoreName -> experimentID -> aggregation
 	Diffs       map[string]map[string]*ScoreDiff        `json:"diffs,omitempty"` // scoreName -> experimentID -> diff (vs baseline)
 }
 
 // CalculateDiff computes the difference between two score aggregations.
-func CalculateDiff(baseline, current *ScoreAggregation) *ScoreDiff {
+func CalculateDiff(baseline, current *EvaluatorScoreAggregation) *ScoreDiff {
 	if baseline == nil || current == nil {
 		return nil
 	}
@@ -802,14 +802,14 @@ func NewDatasetVersion(datasetID uuid.UUID, version int, itemCount int) *Dataset
 	}
 }
 
-func (dv *DatasetVersion) Validate() []ValidationError {
-	var errors []ValidationError
+func (dv *DatasetVersion) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if dv.Version < 1 {
-		errors = append(errors, ValidationError{Field: "version", Message: "version must be at least 1"})
+		errors = append(errors, EvaluationValidationError{Field: "version", Message: "version must be at least 1"})
 	}
 	if dv.ItemCount < 0 {
-		errors = append(errors, ValidationError{Field: "item_count", Message: "item_count cannot be negative"})
+		errors = append(errors, EvaluationValidationError{Field: "item_count", Message: "item_count cannot be negative"})
 	}
 
 	return errors

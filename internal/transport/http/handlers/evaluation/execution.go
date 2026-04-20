@@ -49,28 +49,6 @@ func registerExecutionRoutes(api huma.API, h *handler) {
 	}, h.getExecutionDetail)
 }
 
-// ExecutionListResponse mirrors the dashboard SPA's existing shape
-// (`executions`/`total`/`page`/`limit`) rather than the canonical
-// `data`/`total`/... envelope to avoid breaking the frontend.
-type ExecutionListResponse struct {
-	Executions []*evaluationDomain.EvaluatorExecutionResponse `json:"executions"`
-	Total      int64                                          `json:"total"`
-	Page       int                                            `json:"page"`
-	Limit      int                                            `json:"limit"`
-}
-
-type ListExecutionsInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	EvaluatorID string `path:"evaluatorId" format:"uuid"`
-	Page        int    `query:"page" required:"false" minimum:"1"`
-	Limit       int    `query:"limit" required:"false"`
-	Status      string `query:"status" required:"false"`
-	TriggerType string `query:"trigger_type" required:"false"`
-}
-type ListExecutionsOutput struct {
-	Body *ExecutionListResponse
-}
-
 func (h *handler) listExecutions(ctx context.Context, in *ListExecutionsInput) (*ListExecutionsOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -106,14 +84,6 @@ func (h *handler) listExecutions(ctx context.Context, in *ListExecutionsInput) (
 	}}, nil
 }
 
-type GetLatestExecutionInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	EvaluatorID string `path:"evaluatorId" format:"uuid"`
-}
-type ExecutionOutput struct {
-	Body *evaluationDomain.EvaluatorExecutionResponse
-}
-
 func (h *handler) getLatestExecution(ctx context.Context, in *GetLatestExecutionInput) (*ExecutionOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -131,12 +101,6 @@ func (h *handler) getLatestExecution(ctx context.Context, in *GetLatestExecution
 		return nil, appErrors.NewNotFoundError("no executions found for this evaluator")
 	}
 	return &ExecutionOutput{Body: exec.ToResponse()}, nil
-}
-
-type GetExecutionInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	EvaluatorID string `path:"evaluatorId" format:"uuid"`
-	ExecutionID string `path:"executionId" format:"uuid"`
 }
 
 func (h *handler) getExecution(ctx context.Context, in *GetExecutionInput) (*ExecutionOutput, error) {
@@ -158,10 +122,6 @@ func (h *handler) getExecution(ctx context.Context, in *GetExecutionInput) (*Exe
 		return nil, err
 	}
 	return &ExecutionOutput{Body: exec.ToResponse()}, nil
-}
-
-type ExecutionDetailOutput struct {
-	Body *evaluationDomain.EvaluatorExecutionDetailFlat
 }
 
 func (h *handler) getExecutionDetail(ctx context.Context, in *GetExecutionInput) (*ExecutionDetailOutput, error) {

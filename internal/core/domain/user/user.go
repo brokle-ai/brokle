@@ -81,8 +81,8 @@ type UpdateUserRequest struct {
 	Language  *string `json:"language,omitempty" validate:"omitempty,len=2"`
 }
 
-// UpdateProfileRequest represents the data that can be updated for a user profile.
-type UpdateProfileRequest struct {
+// UpdateUserProfileRequest represents the data that can be updated for a user profile.
+type UpdateUserProfileRequest struct {
 	// Profile information
 	Bio         *string `json:"bio,omitempty" validate:"omitempty,max=500"`
 	Location    *string `json:"location,omitempty" validate:"omitempty,max=100"`

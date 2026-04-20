@@ -115,8 +115,8 @@ func NewResourceLimitError(resource string, limit int) error {
 	return fmt.Errorf("%w: %s (limit %d)", ErrResourceLimitExceeded, resource, limit)
 }
 
-// ValidationError represents a field validation error (used as a DTO by ValidateSpanQueryRequest)
-type ValidationError struct {
+// ObservabilityValidationError represents a field validation error (used as a DTO by ValidateSpanQueryRequest)
+type ObservabilityValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }

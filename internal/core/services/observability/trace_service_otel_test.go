@@ -199,12 +199,12 @@ func (m *MockTraceRepository) DiscoverAttributes(ctx context.Context, req *obser
 	return args.Get(0).(*observability.AttributeDiscoveryResponse), args.Error(1)
 }
 
-func (m *MockTraceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+func (m *MockTraceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.TraceSessionSummary, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*observability.SessionSummary), args.Error(1)
+	return args.Get(0).([]*observability.TraceSessionSummary), args.Error(1)
 }
 
 func (m *MockTraceRepository) CountSessions(ctx context.Context, filter *observability.SessionFilter) (int64, error) {

@@ -12,7 +12,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
-	analyticsDomain "brokle/internal/core/domain/analytics"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	credentialsService "brokle/internal/core/services/credentials"
 	"brokle/internal/transport/http/httpctx"
@@ -123,26 +122,7 @@ func parseCred(credIDStr string) (uuid.UUID, error) {
 
 // ----- create ----------------------------------------------------------
 
-type CreateInput struct {
-	OrgID string `path:"orgId" format:"uuid" doc:"Organization the credential belongs to"`
-	Body  createBody
-}
-
-type createBody struct {
-	Name         string            `json:"name" minLength:"1" maxLength:"100" doc:"Human-readable credential name, unique within the organization"`
-	Adapter      string            `json:"adapter" enum:"openai,anthropic,azure,gemini,openrouter,custom" doc:"Provider adapter"`
-	APIKey       string            `json:"api_key" minLength:"10" doc:"Provider API key — encrypted at rest on storage"`
-	BaseURL      *string           `json:"base_url,omitempty" doc:"Override the provider base URL (required for azure / custom)"`
-	Config       map[string]any    `json:"config,omitempty" doc:"Adapter-specific config (e.g. azure deployment_id)"`
-	CustomModels []string          `json:"custom_models,omitempty" doc:"Custom model identifiers — required for custom adapter"`
-	Headers      map[string]string `json:"headers,omitempty" doc:"Extra HTTP headers sent on every provider request"`
-}
-
-type CreateOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, error) {
+func (h *handler) create(ctx context.Context, in *CreateCredentialInput) (*CreateCredentialOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
 		return nil, err
@@ -163,20 +143,12 @@ func (h *handler) create(ctx context.Context, in *CreateInput) (*CreateOutput, e
 	if err != nil {
 		return nil, err
 	}
-	return &CreateOutput{Body: cred}, nil
+	return &CreateCredentialOutput{Body: cred}, nil
 }
 
 // ----- list ------------------------------------------------------------
 
-type ListInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type ListOutput struct {
-	Body []*credentialsDomain.ProviderCredentialResponse
-}
-
-func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) {
+func (h *handler) list(ctx context.Context, in *ListCredentialsInput) (*ListCredentialsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
 		return nil, err
@@ -185,21 +157,12 @@ func (h *handler) list(ctx context.Context, in *ListInput) (*ListOutput, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &ListOutput{Body: creds}, nil
+	return &ListCredentialsOutput{Body: creds}, nil
 }
 
 // ----- get -------------------------------------------------------------
 
-type GetInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-}
-
-type GetOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
+func (h *handler) get(ctx context.Context, in *GetCredentialInput) (*GetCredentialOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
 		return nil, err
@@ -212,34 +175,12 @@ func (h *handler) get(ctx context.Context, in *GetInput) (*GetOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GetOutput{Body: cred}, nil
+	return &GetCredentialOutput{Body: cred}, nil
 }
 
 // ----- update ----------------------------------------------------------
 
-type UpdateInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-	Body         updateBody
-}
-
-type updateBody struct {
-	Name         *string            `json:"name,omitempty" minLength:"1" maxLength:"100"`
-	APIKey       *string            `json:"api_key,omitempty" minLength:"10"`
-	BaseURL      *string            `json:"base_url,omitempty"`
-	Config       map[string]any     `json:"config,omitempty"`
-	CustomModels []string           `json:"custom_models,omitempty"`
-	// Headers is a pointer-to-map so an explicit empty object clears
-	// all headers, while omitting the field leaves them untouched.
-	// Matches the domain UpdateCredentialRequest contract.
-	Headers *map[string]string `json:"headers,omitempty"`
-}
-
-type UpdateOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, error) {
+func (h *handler) update(ctx context.Context, in *UpdateCredentialInput) (*UpdateCredentialOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
 		return nil, err
@@ -260,19 +201,12 @@ func (h *handler) update(ctx context.Context, in *UpdateInput) (*UpdateOutput, e
 	if err != nil {
 		return nil, err
 	}
-	return &UpdateOutput{Body: cred}, nil
+	return &UpdateCredentialOutput{Body: cred}, nil
 }
 
 // ----- delete ----------------------------------------------------------
 
-type DeleteInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-}
-
-type DeleteOutput struct{}
-
-func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, error) {
+func (h *handler) delete(ctx context.Context, in *DeleteCredentialInput) (*DeleteCredentialOutput, error) {
 	orgID, err := parseOrg(in.OrgID)
 	if err != nil {
 		return nil, err
@@ -284,7 +218,7 @@ func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, e
 	if err := h.svc.Delete(ctx, credID, orgID); err != nil {
 		return nil, err
 	}
-	return &DeleteOutput{}, nil
+	return &DeleteCredentialOutput{}, nil
 }
 
 // ----- test-connection -------------------------------------------------
@@ -293,23 +227,6 @@ func (h *handler) delete(ctx context.Context, in *DeleteInput) (*DeleteOutput, e
 // failure — the caller wants field-level feedback on connection
 // problems, not an error envelope it has to decode differently from
 // every other API call.
-
-type TestConnectionInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  testConnectionBody
-}
-
-type testConnectionBody struct {
-	Adapter string            `json:"adapter" enum:"openai,anthropic,azure,gemini,openrouter,custom"`
-	APIKey  string            `json:"api_key" minLength:"1" doc:"API key to probe — not persisted"`
-	BaseURL *string           `json:"base_url,omitempty"`
-	Config  map[string]any    `json:"config,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-}
-
-type TestConnectionOutput struct {
-	Body *credentialsDomain.TestConnectionResponse
-}
 
 func (h *handler) testConnection(ctx context.Context, in *TestConnectionInput) (*TestConnectionOutput, error) {
 	if _, err := parseOrg(in.OrgID); err != nil {
@@ -326,14 +243,6 @@ func (h *handler) testConnection(ctx context.Context, in *TestConnectionInput) (
 }
 
 // ----- get-available-models --------------------------------------------
-
-type GetAvailableModelsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type GetAvailableModelsOutput struct {
-	Body []*analyticsDomain.AvailableModel
-}
 
 func (h *handler) getAvailableModels(ctx context.Context, in *GetAvailableModelsInput) (*GetAvailableModelsOutput, error) {
 	orgID, err := parseOrg(in.OrgID)

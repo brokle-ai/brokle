@@ -12,13 +12,13 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	"brokle/internal/transport/http/handlers/shared"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/utils"
@@ -72,64 +72,11 @@ func RegisterRoutes(
 	}, h.setDefaultOrganization)
 }
 
+// Operation Input/Output and body/response types live in types.go.
+
 // ----- get-user-profile ---------------------------------------------
 
-type GetProfileOutput struct {
-	Body getProfileResponse
-}
-
-type getProfileResponse struct {
-	ID                    uuid.UUID                  `json:"id"`
-	Email                 string                     `json:"email"`
-	Name                  string                     `json:"name"`
-	FirstName             string                     `json:"first_name"`
-	LastName              string                     `json:"last_name"`
-	AvatarURL             string                     `json:"avatar_url"`
-	IsEmailVerified       bool                       `json:"is_email_verified"`
-	IsActive              bool                       `json:"is_active"`
-	CreatedAt             time.Time                  `json:"created_at"`
-	LastLoginAt           *time.Time                 `json:"last_login_at,omitempty"`
-	DefaultOrganizationID *uuid.UUID                 `json:"default_organization_id,omitempty"`
-	Completeness          int                        `json:"completeness"`
-	Profile               *profileData               `json:"profile,omitempty"`
-	Organizations         []organizationWithProjects `json:"organizations"`
-}
-
-type profileData struct {
-	Bio         *string `json:"bio,omitempty"`
-	Location    *string `json:"location,omitempty"`
-	Website     *string `json:"website,omitempty"`
-	TwitterURL  *string `json:"twitter_url,omitempty"`
-	LinkedInURL *string `json:"linkedin_url,omitempty"`
-	GitHubURL   *string `json:"github_url,omitempty"`
-	Timezone    string  `json:"timezone"`
-	Language    string  `json:"language"`
-	Theme       string  `json:"theme"`
-}
-
-type organizationWithProjects struct {
-	ID            uuid.UUID        `json:"id"`
-	Name          string           `json:"name"`
-	CompositeSlug string           `json:"composite_slug"`
-	Plan          string           `json:"plan"`
-	Role          string           `json:"role"`
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
-	Projects      []projectSummary `json:"projects"`
-}
-
-type projectSummary struct {
-	ID             uuid.UUID `json:"id"`
-	Name           string    `json:"name"`
-	CompositeSlug  string    `json:"composite_slug"`
-	Description    *string   `json:"description,omitempty"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetProfileOutput, error) {
+func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetUserProfileOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
 	u, err := h.userSvc.GetUser(ctx, userID)
@@ -186,7 +133,7 @@ func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetProfileOutpu
 		resp.Completeness = completeness.OverallScore
 	}
 
-	return &GetProfileOutput{Body: resp}, nil
+	return &GetUserProfileOutput{Body: resp}, nil
 }
 
 func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []organizationWithProjects {
@@ -221,22 +168,7 @@ func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []org
 
 // ----- update-user-profile ------------------------------------------
 
-type UpdateProfileInput struct {
-	Body updateProfileBody
-}
-
-type updateProfileBody struct {
-	FirstName *string `json:"first_name,omitempty" minLength:"1" maxLength:"100"`
-	LastName  *string `json:"last_name,omitempty" minLength:"1" maxLength:"100"`
-	Timezone  *string `json:"timezone,omitempty"`
-	Language  *string `json:"language,omitempty" minLength:"2" maxLength:"2"`
-}
-
-type UpdateProfileOutput struct {
-	Body getProfileResponse
-}
-
-func (h *handler) updateProfile(ctx context.Context, in *UpdateProfileInput) (*UpdateProfileOutput, error) {
+func (h *handler) updateProfile(ctx context.Context, in *UpdateUserProfileInput) (*UpdateUserProfileOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
 	if in.Body.FirstName != nil || in.Body.LastName != nil {
@@ -250,7 +182,7 @@ func (h *handler) updateProfile(ctx context.Context, in *UpdateProfileInput) (*U
 	}
 
 	if in.Body.Timezone != nil || in.Body.Language != nil {
-		if _, err := h.profileSvc.UpdateProfile(ctx, userID, &user.UpdateProfileRequest{
+		if _, err := h.profileSvc.UpdateProfile(ctx, userID, &user.UpdateUserProfileRequest{
 			Timezone: in.Body.Timezone,
 			Language: in.Body.Language,
 		}); err != nil {
@@ -262,26 +194,10 @@ func (h *handler) updateProfile(ctx context.Context, in *UpdateProfileInput) (*U
 	if err != nil {
 		return nil, err
 	}
-	return &UpdateProfileOutput{Body: out.Body}, nil
+	return &UpdateUserProfileOutput{Body: out.Body}, nil
 }
 
 // ----- set-default-organization -------------------------------------
-
-type SetDefaultOrgInput struct {
-	Body setDefaultOrgBody
-}
-
-type setDefaultOrgBody struct {
-	OrganizationID string `json:"organization_id" format:"uuid" doc:"Organization to set as default"`
-}
-
-type SetDefaultOrgOutput struct {
-	Body messageResponse
-}
-
-type messageResponse struct {
-	Message string `json:"message"`
-}
 
 func (h *handler) setDefaultOrganization(ctx context.Context, in *SetDefaultOrgInput) (*SetDefaultOrgOutput, error) {
 	userID := httpctx.MustGetUserID(ctx)
@@ -307,5 +223,5 @@ func (h *handler) setDefaultOrganization(ctx context.Context, in *SetDefaultOrgI
 	}
 
 	h.logger.InfoContext(ctx, "user: default organization updated", "user_id", userID, "org_id", orgID)
-	return &SetDefaultOrgOutput{Body: messageResponse{Message: "Default organization updated successfully"}}, nil
+	return &SetDefaultOrgOutput{Body: shared.MessageResponse{Message: "Default organization updated successfully"}}, nil
 }

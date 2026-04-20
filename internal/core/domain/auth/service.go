@@ -257,19 +257,13 @@ type TokenClaims struct {
 }
 
 // Request/Response DTOs
-type UpdateProfileRequest struct {
+type UpdateAuthProfileRequest struct {
 	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100"`
 	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=100"`
 	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url"`
 	Phone     *string `json:"phone,omitempty" validate:"omitempty,max=50"`
 	Timezone  *string `json:"timezone,omitempty"`
 	Language  *string `json:"language,omitempty" validate:"omitempty,len=2"`
-}
-
-type CreateSessionRequest struct {
-	IPAddress *string `json:"ip_address,omitempty"`
-	UserAgent *string `json:"user_agent,omitempty"`
-	Remember  bool    `json:"remember"` // Extend session duration
 }
 
 // Filter types

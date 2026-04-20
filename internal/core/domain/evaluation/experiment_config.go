@@ -98,26 +98,26 @@ func NewExperimentConfig(
 }
 
 // Validate validates the experiment config.
-func (c *ExperimentConfig) Validate() []ValidationError {
-	var errors []ValidationError
+func (c *ExperimentConfig) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if c.PromptID == uuid.Nil {
-		errors = append(errors, ValidationError{Field: "prompt_id", Message: "prompt_id is required"})
+		errors = append(errors, EvaluationValidationError{Field: "prompt_id", Message: "prompt_id is required"})
 	}
 	if c.PromptVersionID == uuid.Nil {
-		errors = append(errors, ValidationError{Field: "prompt_version_id", Message: "prompt_version_id is required"})
+		errors = append(errors, EvaluationValidationError{Field: "prompt_version_id", Message: "prompt_version_id is required"})
 	}
 	if c.DatasetID == uuid.Nil {
-		errors = append(errors, ValidationError{Field: "dataset_id", Message: "dataset_id is required"})
+		errors = append(errors, EvaluationValidationError{Field: "dataset_id", Message: "dataset_id is required"})
 	}
 	if len(c.Evaluators) == 0 {
-		errors = append(errors, ValidationError{Field: "evaluators", Message: "at least one evaluator is required"})
+		errors = append(errors, EvaluationValidationError{Field: "evaluators", Message: "at least one evaluator is required"})
 	}
 
 	// Validate each evaluator
 	for i, eval := range c.Evaluators {
 		if eval.Name == "" {
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "evaluators",
 				Message: "evaluator name is required at index " + string(rune('0'+i)),
 			})
@@ -126,13 +126,13 @@ func (c *ExperimentConfig) Validate() []ValidationError {
 		case ScorerTypeLLM, ScorerTypeBuiltin, ScorerTypeRegex:
 			// Valid
 		default:
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "evaluators",
 				Message: "invalid scorer type at index " + string(rune('0'+i)),
 			})
 		}
 		if eval.ScorerConfig == nil {
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "evaluators",
 				Message: "scorer_config is required at index " + string(rune('0'+i)),
 			})
@@ -142,19 +142,19 @@ func (c *ExperimentConfig) Validate() []ValidationError {
 	// Validate variable mappings
 	for i, mapping := range c.VariableMapping {
 		if mapping.VariableName == "" {
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "variable_mapping",
 				Message: "variable_name is required at index " + string(rune('0'+i)),
 			})
 		}
 		if !mapping.Source.IsValid() {
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "variable_mapping",
 				Message: "invalid source at index " + string(rune('0'+i)),
 			})
 		}
 		if mapping.FieldPath == "" {
-			errors = append(errors, ValidationError{
+			errors = append(errors, EvaluationValidationError{
 				Field:   "variable_mapping",
 				Message: "field_path is required at index " + string(rune('0'+i)),
 			})
@@ -200,7 +200,7 @@ type ValidateStepRequest struct {
 // ValidateStepResponse is the response from step validation.
 type ValidateStepResponse struct {
 	IsValid  bool              `json:"is_valid"`
-	Errors   []ValidationError `json:"errors,omitempty"`
+	Errors   []EvaluationValidationError `json:"errors,omitempty"`
 	Warnings []string          `json:"warnings,omitempty"`
 }
 

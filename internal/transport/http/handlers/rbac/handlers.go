@@ -164,7 +164,7 @@ func RegisterRoutes(
 	}, h.assignOrganizationRole)
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "remove-organization-member",
+		OperationID:   "rbac-remove-user-from-organization",
 		Method:        http.MethodDelete,
 		Path:          "/api/v1/rbac/users/{userId}/organizations/{orgId}",
 		Tags:          []string{"rbac"},
@@ -263,17 +263,6 @@ func RegisterRoutes(
 // Role discovery (C)
 // ============================================================================
 
-type ListRolesInput struct {
-	ScopeType string `query:"scope_type" required:"true" enum:"system,organization,project,environment" doc:"Scope-type filter"`
-}
-type ListRolesOutput struct {
-	Body listRolesResponse
-}
-type listRolesResponse struct {
-	Roles      []*authDomain.Role `json:"roles"`
-	TotalCount int                `json:"total_count"`
-}
-
 func (h *handler) listRoles(ctx context.Context, in *ListRolesInput) (*ListRolesOutput, error) {
 	if in.ScopeType == "" {
 		return nil, appErrors.NewValidationError("Scope type is required", "scope_type parameter cannot be empty")
@@ -285,13 +274,6 @@ func (h *handler) listRoles(ctx context.Context, in *ListRolesInput) (*ListRoles
 		return nil, err
 	}
 	return &ListRolesOutput{Body: listRolesResponse{Roles: roles, TotalCount: len(roles)}}, nil
-}
-
-type GetRoleInput struct {
-	RoleID string `path:"roleId" format:"uuid" doc:"Role ID"`
-}
-type GetRoleOutput struct {
-	Body *authDomain.Role
 }
 
 func (h *handler) getRole(ctx context.Context, in *GetRoleInput) (*GetRoleOutput, error) {
@@ -307,11 +289,6 @@ func (h *handler) getRole(ctx context.Context, in *GetRoleInput) (*GetRoleOutput
 	return &GetRoleOutput{Body: role}, nil
 }
 
-type GetRoleStatisticsInput struct{}
-type GetRoleStatisticsOutput struct {
-	Body *authDomain.RoleStatistics
-}
-
 func (h *handler) getRoleStatistics(ctx context.Context, _ *GetRoleStatisticsInput) (*GetRoleStatisticsOutput, error) {
 	stats, err := h.roleSvc.GetRoleStatistics(ctx)
 	if err != nil {
@@ -324,19 +301,6 @@ func (h *handler) getRoleStatistics(ctx context.Context, _ *GetRoleStatisticsInp
 // ============================================================================
 // Custom-role lifecycle (B)
 // ============================================================================
-
-type createCustomRoleBody struct {
-	Name          string      `json:"name" minLength:"1" maxLength:"100"`
-	Description   string      `json:"description,omitempty"`
-	PermissionIDs []uuid.UUID `json:"permission_ids,omitempty"`
-}
-type CreateCustomRoleInput struct {
-	OrgID string `path:"orgId" format:"uuid" doc:"Organization that owns the custom role"`
-	Body  createCustomRoleBody
-}
-type CreateCustomRoleOutput struct {
-	Body *authDomain.Role
-}
 
 func (h *handler) createCustomRole(ctx context.Context, in *CreateCustomRoleInput) (*CreateCustomRoleOutput, error) {
 	orgID, err := uuid.Parse(in.OrgID)
@@ -360,17 +324,6 @@ func (h *handler) createCustomRole(ctx context.Context, in *CreateCustomRoleInpu
 	return &CreateCustomRoleOutput{Body: role}, nil
 }
 
-type ListCustomRolesInput struct {
-	OrgID string `path:"orgId" format:"uuid" doc:"Organization that owns the custom roles"`
-}
-type ListCustomRolesOutput struct {
-	Body listCustomRolesResponse
-}
-type listCustomRolesResponse struct {
-	Roles      []*authDomain.Role `json:"roles"`
-	TotalCount int                `json:"total_count"`
-}
-
 func (h *handler) listCustomRoles(ctx context.Context, in *ListCustomRolesInput) (*ListCustomRolesOutput, error) {
 	orgID, err := uuid.Parse(in.OrgID)
 	if err != nil {
@@ -382,14 +335,6 @@ func (h *handler) listCustomRoles(ctx context.Context, in *ListCustomRolesInput)
 		return nil, err
 	}
 	return &ListCustomRolesOutput{Body: listCustomRolesResponse{Roles: roles, TotalCount: len(roles)}}, nil
-}
-
-type GetCustomRoleInput struct {
-	OrgID  string `path:"orgId" format:"uuid" doc:"Organization that owns the custom role"`
-	RoleID string `path:"roleId" format:"uuid" doc:"Custom role ID"`
-}
-type GetCustomRoleOutput struct {
-	Body *authDomain.Role
 }
 
 func (h *handler) getCustomRole(ctx context.Context, in *GetCustomRoleInput) (*GetCustomRoleOutput, error) {
@@ -409,19 +354,6 @@ func (h *handler) getCustomRole(ctx context.Context, in *GetCustomRoleInput) (*G
 		return nil, appErrors.NewValidationError("Cannot access system role through custom-role endpoint", "use /api/v1/rbac/roles/{roleId} for system roles")
 	}
 	return &GetCustomRoleOutput{Body: role}, nil
-}
-
-type updateCustomRoleBody struct {
-	Description   *string     `json:"description,omitempty"`
-	PermissionIDs []uuid.UUID `json:"permission_ids,omitempty"`
-}
-type UpdateCustomRoleInput struct {
-	OrgID  string `path:"orgId" format:"uuid" doc:"Organization that owns the custom role"`
-	RoleID string `path:"roleId" format:"uuid" doc:"Custom role ID"`
-	Body   updateCustomRoleBody
-}
-type UpdateCustomRoleOutput struct {
-	Body *authDomain.Role
 }
 
 func (h *handler) updateCustomRole(ctx context.Context, in *UpdateCustomRoleInput) (*UpdateCustomRoleOutput, error) {
@@ -447,12 +379,6 @@ func (h *handler) updateCustomRole(ctx context.Context, in *UpdateCustomRoleInpu
 	return &UpdateCustomRoleOutput{Body: role}, nil
 }
 
-type DeleteCustomRoleInput struct {
-	OrgID  string `path:"orgId" format:"uuid" doc:"Organization that owns the custom role"`
-	RoleID string `path:"roleId" format:"uuid" doc:"Custom role ID"`
-}
-type DeleteCustomRoleOutput struct{}
-
 func (h *handler) deleteCustomRole(ctx context.Context, in *DeleteCustomRoleInput) (*DeleteCustomRoleOutput, error) {
 	if _, err := uuid.Parse(in.OrgID); err != nil {
 		return nil, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid UUID")
@@ -475,17 +401,6 @@ func (h *handler) deleteCustomRole(ctx context.Context, in *DeleteCustomRoleInpu
 // User memberships / role assignment (C)
 // ============================================================================
 
-type GetUserRolesInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User ID"`
-}
-type GetUserRolesOutput struct {
-	Body getUserRolesResponse
-}
-type getUserRolesResponse struct {
-	Memberships []*authDomain.OrganizationMember `json:"memberships"`
-	TotalCount  int                              `json:"total_count"`
-}
-
 func (h *handler) getUserRoles(ctx context.Context, in *GetUserRolesInput) (*GetUserRolesOutput, error) {
 	userID, err := uuid.Parse(in.UserID)
 	if err != nil {
@@ -499,17 +414,6 @@ func (h *handler) getUserRoles(ctx context.Context, in *GetUserRolesInput) (*Get
 	return &GetUserRolesOutput{Body: getUserRolesResponse{Memberships: memberships, TotalCount: len(memberships)}}, nil
 }
 
-type GetUserPermissionsInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User ID"`
-}
-type GetUserPermissionsOutput struct {
-	Body getUserPermissionsResponse
-}
-type getUserPermissionsResponse struct {
-	Permissions []string `json:"permissions"`
-	TotalCount  int      `json:"total_count"`
-}
-
 func (h *handler) getUserPermissions(ctx context.Context, in *GetUserPermissionsInput) (*GetUserPermissionsOutput, error) {
 	userID, err := uuid.Parse(in.UserID)
 	if err != nil {
@@ -521,18 +425,6 @@ func (h *handler) getUserPermissions(ctx context.Context, in *GetUserPermissions
 		return nil, err
 	}
 	return &GetUserPermissionsOutput{Body: getUserPermissionsResponse{Permissions: perms, TotalCount: len(perms)}}, nil
-}
-
-type assignOrgRoleBody struct {
-	RoleID uuid.UUID `json:"role_id"`
-}
-type AssignOrganizationRoleInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User receiving the role"`
-	OrgID  string `path:"orgId" format:"uuid" doc:"Organization the role applies within"`
-	Body   assignOrgRoleBody
-}
-type AssignOrganizationRoleOutput struct {
-	Body *authDomain.OrganizationMember
 }
 
 func (h *handler) assignOrganizationRole(ctx context.Context, in *AssignOrganizationRoleInput) (*AssignOrganizationRoleOutput, error) {
@@ -558,12 +450,6 @@ func (h *handler) assignOrganizationRole(ctx context.Context, in *AssignOrganiza
 	return &AssignOrganizationRoleOutput{Body: member}, nil
 }
 
-type RemoveOrganizationMemberInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User to remove"`
-	OrgID  string `path:"orgId" format:"uuid" doc:"Organization to remove from"`
-}
-type RemoveOrganizationMemberOutput struct{}
-
 func (h *handler) removeOrganizationMember(ctx context.Context, in *RemoveOrganizationMemberInput) (*RemoveOrganizationMemberOutput, error) {
 	userID, err := uuid.Parse(in.UserID)
 	if err != nil {
@@ -581,20 +467,6 @@ func (h *handler) removeOrganizationMember(ctx context.Context, in *RemoveOrgani
 	}
 	h.logger.InfoContext(ctx, "rbac: org member removed", "actor_id", actor, "user_id", userID, "org_id", orgID)
 	return &RemoveOrganizationMemberOutput{}, nil
-}
-
-type checkUserPermissionsBody struct {
-	ResourceActions []string `json:"resource_actions" minItems:"1" doc:"List of resource:action strings to check"`
-}
-type CheckUserPermissionsInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User ID"`
-	Body   checkUserPermissionsBody
-}
-type CheckUserPermissionsOutput struct {
-	Body checkUserPermissionsResponse
-}
-type checkUserPermissionsResponse struct {
-	Results map[string]bool `json:"results"`
 }
 
 func (h *handler) checkUserPermissions(ctx context.Context, in *CheckUserPermissionsInput) (*CheckUserPermissionsOutput, error) {
@@ -617,14 +489,6 @@ func (h *handler) checkUserPermissions(ctx context.Context, in *CheckUserPermiss
 // Permission discovery (C)
 // ============================================================================
 
-type ListPermissionsInput struct {
-	Limit  int `query:"limit" required:"false" minimum:"1" maximum:"100" doc:"Page size (default 50, max 100)"`
-	Offset int `query:"offset" required:"false" minimum:"0" doc:"Offset, 0-indexed"`
-}
-type ListPermissionsOutput struct {
-	Body *authDomain.PermissionListResponse
-}
-
 func (h *handler) listPermissions(ctx context.Context, in *ListPermissionsInput) (*ListPermissionsOutput, error) {
 	limit := in.Limit
 	if limit <= 0 {
@@ -645,13 +509,6 @@ func (h *handler) listPermissions(ctx context.Context, in *ListPermissionsInput)
 	return &ListPermissionsOutput{Body: resp}, nil
 }
 
-type GetPermissionInput struct {
-	PermissionID string `path:"permissionId" format:"uuid" doc:"Permission ID"`
-}
-type GetPermissionOutput struct {
-	Body *authDomain.Permission
-}
-
 func (h *handler) getPermission(ctx context.Context, in *GetPermissionInput) (*GetPermissionOutput, error) {
 	permissionID, err := uuid.Parse(in.PermissionID)
 	if err != nil {
@@ -665,15 +522,6 @@ func (h *handler) getPermission(ctx context.Context, in *GetPermissionInput) (*G
 	return &GetPermissionOutput{Body: perm}, nil
 }
 
-type GetAvailableResourcesInput struct{}
-type GetAvailableResourcesOutput struct {
-	Body getAvailableResourcesResponse
-}
-type getAvailableResourcesResponse struct {
-	Resources  []string `json:"resources"`
-	TotalCount int      `json:"total_count"`
-}
-
 func (h *handler) getAvailableResources(ctx context.Context, _ *GetAvailableResourcesInput) (*GetAvailableResourcesOutput, error) {
 	resources, err := h.permSvc.GetAvailableResources(ctx)
 	if err != nil {
@@ -681,18 +529,6 @@ func (h *handler) getAvailableResources(ctx context.Context, _ *GetAvailableReso
 		return nil, err
 	}
 	return &GetAvailableResourcesOutput{Body: getAvailableResourcesResponse{Resources: resources, TotalCount: len(resources)}}, nil
-}
-
-type GetActionsForResourceInput struct {
-	Resource string `path:"resource" minLength:"1" doc:"Resource name"`
-}
-type GetActionsForResourceOutput struct {
-	Body getActionsForResourceResponse
-}
-type getActionsForResourceResponse struct {
-	Resource   string   `json:"resource"`
-	Actions    []string `json:"actions"`
-	TotalCount int      `json:"total_count"`
 }
 
 func (h *handler) getActionsForResource(ctx context.Context, in *GetActionsForResourceInput) (*GetActionsForResourceOutput, error) {
@@ -710,22 +546,6 @@ func (h *handler) getActionsForResource(ctx context.Context, in *GetActionsForRe
 // ============================================================================
 // Scopes (C)
 // ============================================================================
-
-type checkUserScopesBody struct {
-	OrganizationID *string  `json:"organization_id,omitempty" format:"uuid"`
-	ProjectID      *string  `json:"project_id,omitempty" format:"uuid"`
-	Scopes         []string `json:"scopes" minItems:"1" doc:"Scope strings to check"`
-}
-type CheckUserScopesInput struct {
-	UserID string `path:"userId" format:"uuid" doc:"User ID"`
-	Body   checkUserScopesBody
-}
-type CheckUserScopesOutput struct {
-	Body checkUserScopesResponse
-}
-type checkUserScopesResponse struct {
-	Results map[string]bool `json:"results"`
-}
 
 func (h *handler) checkUserScopes(ctx context.Context, in *CheckUserScopesInput) (*CheckUserScopesOutput, error) {
 	userID, err := uuid.Parse(in.UserID)
@@ -766,15 +586,6 @@ func (h *handler) checkUserScopes(ctx context.Context, in *CheckUserScopesInput)
 	return &CheckUserScopesOutput{Body: checkUserScopesResponse{Results: results}}, nil
 }
 
-type GetUserScopesInput struct {
-	UserID         string `path:"userId" format:"uuid" doc:"User ID"`
-	OrganizationID string `query:"organization_id" required:"false" format:"uuid"`
-	ProjectID      string `query:"project_id" required:"false" format:"uuid"`
-}
-type GetUserScopesOutput struct {
-	Body *authDomain.ScopeResolution
-}
-
 func (h *handler) getUserScopes(ctx context.Context, in *GetUserScopesInput) (*GetUserScopesOutput, error) {
 	userID, err := uuid.Parse(in.UserID)
 	if err != nil {
@@ -804,15 +615,6 @@ func (h *handler) getUserScopes(ctx context.Context, in *GetUserScopesInput) (*G
 	return &GetUserScopesOutput{Body: resolution}, nil
 }
 
-type GetScopeCategoriesInput struct{}
-type GetScopeCategoriesOutput struct {
-	Body getScopeCategoriesResponse
-}
-type getScopeCategoriesResponse struct {
-	Categories []authDomain.ScopeCategory `json:"categories"`
-	TotalCount int                        `json:"total_count"`
-}
-
 func (h *handler) getScopeCategories(ctx context.Context, _ *GetScopeCategoriesInput) (*GetScopeCategoriesOutput, error) {
 	categories, err := h.scopeSvc.GetScopesByCategory(ctx)
 	if err != nil {
@@ -820,18 +622,6 @@ func (h *handler) getScopeCategories(ctx context.Context, _ *GetScopeCategoriesI
 		return nil, err
 	}
 	return &GetScopeCategoriesOutput{Body: getScopeCategoriesResponse{Categories: categories, TotalCount: len(categories)}}, nil
-}
-
-type GetAvailableScopesInput struct {
-	Level string `query:"level" required:"false" enum:"organization,project,global" doc:"Scope level filter"`
-}
-type GetAvailableScopesOutput struct {
-	Body getAvailableScopesResponse
-}
-type getAvailableScopesResponse struct {
-	Level      string   `json:"level,omitempty"`
-	Scopes     []string `json:"scopes"`
-	TotalCount int      `json:"total_count"`
 }
 
 func (h *handler) getAvailableScopes(ctx context.Context, in *GetAvailableScopesInput) (*GetAvailableScopesOutput, error) {

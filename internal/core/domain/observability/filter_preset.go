@@ -114,7 +114,7 @@ const (
 	FilterPresetSearchMaxLength = 500
 )
 
-// ValidationError represents a validation error for filter presets.
+// ObservabilityValidationError represents a validation error for filter presets.
 type FilterPresetValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`

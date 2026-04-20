@@ -1640,7 +1640,7 @@ func sortAndLimitAttributes(attrs []observability.AttributeKey, limit int) []obs
 
 // ListSessions returns paginated sessions aggregated from traces.
 // Uses ClickHouse GROUP BY for server-side aggregation of traces by session_id.
-func (r *traceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+func (r *traceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.TraceSessionSummary, error) {
 	if filter == nil {
 		return nil, fmt.Errorf("filter is required")
 	}
@@ -1725,9 +1725,9 @@ func (r *traceRepository) ListSessions(ctx context.Context, filter *observabilit
 	}
 	defer rows.Close()
 
-	var sessions []*observability.SessionSummary
+	var sessions []*observability.TraceSessionSummary
 	for rows.Next() {
-		var session observability.SessionSummary
+		var session observability.TraceSessionSummary
 		var totalCostFloat float64
 
 		err := rows.Scan(

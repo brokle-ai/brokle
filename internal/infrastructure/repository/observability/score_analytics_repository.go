@@ -99,7 +99,7 @@ func (r *scoreAnalyticsRepository) GetStatistics(ctx context.Context, filter *ob
 	return &stats, nil
 }
 
-func (r *scoreAnalyticsRepository) GetTimeSeries(ctx context.Context, filter *observability.ScoreAnalyticsFilter) ([]observability.TimeSeriesPoint, error) {
+func (r *scoreAnalyticsRepository) GetTimeSeries(ctx context.Context, filter *observability.ScoreAnalyticsFilter) ([]observability.TraceTimeSeriesPoint, error) {
 	var intervalFunc string
 	switch filter.Interval {
 	case "hour":
@@ -140,9 +140,9 @@ func (r *scoreAnalyticsRepository) GetTimeSeries(ctx context.Context, filter *ob
 	}
 	defer rows.Close()
 
-	var points []observability.TimeSeriesPoint
+	var points []observability.TraceTimeSeriesPoint
 	for rows.Next() {
-		var point observability.TimeSeriesPoint
+		var point observability.TraceTimeSeriesPoint
 		if err := rows.Scan(&point.Timestamp, &point.AvgValue, &point.Count); err != nil {
 			return nil, fmt.Errorf("scan time series point: %w", err)
 		}

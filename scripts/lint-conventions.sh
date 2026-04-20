@@ -46,6 +46,26 @@ check "no bare BOOL column type (use BOOLEAN)" \
   '^\s*[a-z_]+\s+BOOL(\s|,|$)' \
   'migrations/postgres/'
 
+header "Handler wire-type naming (must specify resource)"
+# Huma v2's DefaultSchemaNamer uses reflect.Type.Name() unqualified, so
+# two handler packages that declare the same bare Go type name
+# collide in the OpenAPI schema registry and panic at server boot
+# via registry.go:130. Force all handler wire types to be
+# resource-qualified: `CreateCredentialInput`, not `CreateInput`;
+# `updateUserProfileBody`, not `updateProfileBody`. See CLAUDE.md
+# gotcha and internal/server/probes_test.go for the enforcement.
+VERBS='Create|Update|List|Get|Delete|Archive|Unarchive|Duplicate|Import|Export|Lock|Unlock|Execute|Assign|Unassign|Revoke'
+SUFFIXES='Input|Output|Body|body'
+hits_wire="$(grep -rEn --color=always "^type (${VERBS})(${SUFFIXES}) " internal/transport/http/handlers/ --include='*.go' 2>/dev/null || true)"
+if [ -n "$hits_wire" ]; then
+  printf '\033[31m✗\033[0m bare <Verb><Suffix> handler types found — qualify with resource\n'
+  printf '  e.g. `type CreateInput` → `type CreateCredentialInput`\n'
+  printf '  this panics at boot via Huma'\''s registry duplicate-name check\n%s\n\n' "$hits_wire"
+  fail=1
+else
+  printf '\033[32m✓\033[0m handler wire-type naming (resource-qualified)\n'
+fi
+
 header "Go conventions (complementing forbidigo)"
 # Migrations must go through CLI — hand-written files get silently ignored.
 # This catches files named without the framework's timestamp prefix.

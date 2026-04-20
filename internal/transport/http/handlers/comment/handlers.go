@@ -95,18 +95,7 @@ func RegisterRoutes(api huma.API, svc commentDomain.Service, logger *slog.Logger
 	}, h.createReply)
 }
 
-// ----- shared input fields + helpers --------------------------------
-
-type traceScope struct {
-	TraceID   string `path:"id" doc:"Trace identifier the comment is attached to"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace (tenant scope)"`
-}
-
-type traceCommentScope struct {
-	TraceID   string `path:"id" doc:"Trace identifier"`
-	CommentID string `path:"comment_id" format:"uuid" doc:"Comment identifier"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace"`
-}
+// Operation Input/Output types and shared scope helpers live in types.go.
 
 func parseScope(traceID, projectIDStr string) (projectID uuid.UUID, err error) {
 	if traceID == "" {
@@ -120,16 +109,6 @@ func parseScope(traceID, projectIDStr string) (projectID uuid.UUID, err error) {
 }
 
 // ----- create-comment -----------------------------------------------
-
-type CreateCommentInput struct {
-	TraceID   string `path:"id" doc:"Trace identifier"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace"`
-	Body      commentDomain.CreateCommentRequest
-}
-
-type CreateCommentOutput struct {
-	Body *commentDomain.CommentResponse
-}
 
 func (h *handler) create(ctx context.Context, in *CreateCommentInput) (*CreateCommentOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
@@ -147,14 +126,6 @@ func (h *handler) create(ctx context.Context, in *CreateCommentInput) (*CreateCo
 }
 
 // ----- list-comments ------------------------------------------------
-
-type ListCommentsInput struct {
-	traceScope
-}
-
-type ListCommentsOutput struct {
-	Body *commentDomain.ListCommentsResponse
-}
 
 func (h *handler) list(ctx context.Context, in *ListCommentsInput) (*ListCommentsOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
@@ -177,14 +148,6 @@ func (h *handler) list(ctx context.Context, in *ListCommentsInput) (*ListComment
 
 // ----- get-comment-count --------------------------------------------
 
-type GetCommentCountInput struct {
-	traceScope
-}
-
-type GetCommentCountOutput struct {
-	Body *commentDomain.CommentCountResponse
-}
-
 func (h *handler) count(ctx context.Context, in *GetCommentCountInput) (*GetCommentCountOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
 	if err != nil {
@@ -198,17 +161,6 @@ func (h *handler) count(ctx context.Context, in *GetCommentCountInput) (*GetComm
 }
 
 // ----- update-comment -----------------------------------------------
-
-type UpdateCommentInput struct {
-	TraceID   string `path:"id" doc:"Trace identifier"`
-	CommentID string `path:"comment_id" format:"uuid" doc:"Comment identifier"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace"`
-	Body      commentDomain.UpdateCommentRequest
-}
-
-type UpdateCommentOutput struct {
-	Body *commentDomain.CommentResponse
-}
 
 func (h *handler) update(ctx context.Context, in *UpdateCommentInput) (*UpdateCommentOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
@@ -230,12 +182,6 @@ func (h *handler) update(ctx context.Context, in *UpdateCommentInput) (*UpdateCo
 
 // ----- delete-comment -----------------------------------------------
 
-type DeleteCommentInput struct {
-	traceCommentScope
-}
-
-type DeleteCommentOutput struct{}
-
 func (h *handler) delete(ctx context.Context, in *DeleteCommentInput) (*DeleteCommentOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
 	if err != nil {
@@ -254,17 +200,6 @@ func (h *handler) delete(ctx context.Context, in *DeleteCommentInput) (*DeleteCo
 }
 
 // ----- toggle-reaction ---------------------------------------------
-
-type ToggleReactionInput struct {
-	TraceID   string `path:"id" doc:"Trace identifier"`
-	CommentID string `path:"comment_id" format:"uuid" doc:"Comment identifier"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace"`
-	Body      commentDomain.ToggleReactionRequest
-}
-
-type ToggleReactionOutput struct {
-	Body []commentDomain.ReactionSummary
-}
 
 func (h *handler) toggleReaction(ctx context.Context, in *ToggleReactionInput) (*ToggleReactionOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)
@@ -285,17 +220,6 @@ func (h *handler) toggleReaction(ctx context.Context, in *ToggleReactionInput) (
 }
 
 // ----- create-reply ------------------------------------------------
-
-type CreateReplyInput struct {
-	TraceID   string `path:"id" doc:"Trace identifier"`
-	CommentID string `path:"comment_id" format:"uuid" doc:"Parent comment identifier"`
-	ProjectID string `query:"project_id" format:"uuid" doc:"Project that owns the trace"`
-	Body      commentDomain.CreateCommentRequest
-}
-
-type CreateReplyOutput struct {
-	Body *commentDomain.CommentResponse
-}
 
 func (h *handler) createReply(ctx context.Context, in *CreateReplyInput) (*CreateReplyOutput, error) {
 	projectID, err := parseScope(in.TraceID, in.ProjectID)

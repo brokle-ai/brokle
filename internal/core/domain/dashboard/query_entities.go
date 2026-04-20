@@ -12,7 +12,7 @@ type QueryExecutionRequest struct {
 	ProjectID      uuid.UUID              `json:"project_id"`
 	DashboardID    uuid.UUID              `json:"dashboard_id"`
 	WidgetID       *string                `json:"widget_id,omitempty"` // nil = all widgets
-	TimeRange      *TimeRange             `json:"time_range,omitempty"`
+	DashboardTimeRange      *DashboardTimeRange             `json:"time_range,omitempty"`
 	ForceRefresh   bool                   `json:"force_refresh,omitempty"`
 	VariableValues map[string]any `json:"variable_values,omitempty" swaggertype:"object"`
 }
@@ -30,8 +30,8 @@ type VariableOptionsResponse struct {
 	Values []string `json:"values"`
 }
 
-// QueryResult represents the result of a widget query
-type QueryResult struct {
+// DashboardQueryResult represents the result of a widget query
+type DashboardQueryResult struct {
 	WidgetID string                   `json:"widget_id"`
 	Data     []map[string]any `json:"data" swaggertype:"array,object"`
 	Metadata *QueryMetadata           `json:"metadata,omitempty"`
@@ -50,7 +50,7 @@ type QueryMetadata struct {
 // DashboardQueryResults contains results for all widgets in a dashboard
 type DashboardQueryResults struct {
 	DashboardID uuid.UUID               `json:"dashboard_id"`
-	Results     map[string]*QueryResult `json:"results"` // keyed by widget_id
+	Results     map[string]*DashboardQueryResult `json:"results"` // keyed by widget_id
 	ExecutedAt  time.Time               `json:"executed_at"`
 }
 
@@ -124,7 +124,7 @@ type DimensionPublic struct {
 // WidgetQueryService defines the interface for executing widget queries
 type WidgetQueryService interface {
 	// ExecuteWidgetQuery executes a single widget query
-	ExecuteWidgetQuery(ctx context.Context, projectID uuid.UUID, widget *Widget, timeRange *TimeRange) (*QueryResult, error)
+	ExecuteWidgetQuery(ctx context.Context, projectID uuid.UUID, widget *Widget, timeRange *DashboardTimeRange) (*DashboardQueryResult, error)
 
 	// ExecuteDashboardQueries executes all widget queries for a dashboard
 	ExecuteDashboardQueries(ctx context.Context, req *QueryExecutionRequest) (*DashboardQueryResults, error)

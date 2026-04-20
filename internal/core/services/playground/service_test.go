@@ -113,7 +113,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		request         *playgroundDomain.CreateSessionRequest
+		request         *playgroundDomain.CreatePlaygroundSessionRequest
 		mockSetup       func(*MockSessionRepository)
 		expectErr       bool
 		expectedErrType appErrors.ErrorType
@@ -121,7 +121,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 	}{
 		{
 			name: "success - creates session with name and windows",
-			request: &playgroundDomain.CreateSessionRequest{
+			request: &playgroundDomain.CreatePlaygroundSessionRequest{
 				ProjectID:   projectID,
 				Name:        "My Test Session",
 				Description: stringPtr("A test description"),
@@ -145,7 +145,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 		},
 		{
 			name: "error - empty name",
-			request: &playgroundDomain.CreateSessionRequest{
+			request: &playgroundDomain.CreatePlaygroundSessionRequest{
 				ProjectID: projectID,
 				Name:      "",
 				Windows:   json.RawMessage(`[{"template":{"messages":[]},"variables":{}}]`),
@@ -157,7 +157,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 		},
 		{
 			name: "error - name too long",
-			request: &playgroundDomain.CreateSessionRequest{
+			request: &playgroundDomain.CreatePlaygroundSessionRequest{
 				ProjectID: projectID,
 				Name:      string(make([]byte, 250)), // 250 chars > MaxNameLength (200)
 				Windows:   json.RawMessage(`[{"template":{"messages":[]},"variables":{}}]`),
@@ -169,7 +169,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 		},
 		{
 			name: "error - too many tags",
-			request: &playgroundDomain.CreateSessionRequest{
+			request: &playgroundDomain.CreatePlaygroundSessionRequest{
 				ProjectID: projectID,
 				Name:      "Valid Name",
 				Windows:   json.RawMessage(`[{"template":{"messages":[]},"variables":{}}]`),

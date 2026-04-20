@@ -153,11 +153,11 @@ type UpdateTraceTagsRequest struct {
 }
 
 // Validate validates the UpdateTraceTagsRequest
-func (r *UpdateTraceTagsRequest) Validate() []ValidationError {
-	var errors []ValidationError
+func (r *UpdateTraceTagsRequest) Validate() []ObservabilityValidationError {
+	var errors []ObservabilityValidationError
 
 	if len(r.Tags) > MaxTagsPerTrace {
-		errors = append(errors, ValidationError{
+		errors = append(errors, ObservabilityValidationError{
 			Field:   "tags",
 			Message: fmt.Sprintf("maximum %d tags allowed, got %d", MaxTagsPerTrace, len(r.Tags)),
 		})
@@ -166,14 +166,14 @@ func (r *UpdateTraceTagsRequest) Validate() []ValidationError {
 	for i, tag := range r.Tags {
 		trimmed := strings.TrimSpace(tag)
 		if len(trimmed) == 0 {
-			errors = append(errors, ValidationError{
+			errors = append(errors, ObservabilityValidationError{
 				Field:   fmt.Sprintf("tags[%d]", i),
 				Message: "empty tags not allowed",
 			})
 			continue
 		}
 		if len(tag) > MaxTagLength {
-			errors = append(errors, ValidationError{
+			errors = append(errors, ObservabilityValidationError{
 				Field:   fmt.Sprintf("tags[%d]", i),
 				Message: fmt.Sprintf("tag exceeds max length of %d characters", MaxTagLength),
 			})
@@ -470,16 +470,16 @@ type TelemetryEventDeduplication struct {
 func (d *TelemetryEventDeduplication) IsExpired() bool                { return time.Now().After(d.ExpiresAt) }
 func (d *TelemetryEventDeduplication) TimeUntilExpiry() time.Duration { return time.Until(d.ExpiresAt) }
 
-func (d *TelemetryEventDeduplication) Validate() []ValidationError {
-	var errors []ValidationError
+func (d *TelemetryEventDeduplication) Validate() []ObservabilityValidationError {
+	var errors []ObservabilityValidationError
 	if d.EventID == "" {
-		errors = append(errors, ValidationError{Field: "event_id", Message: "event_id is required"})
+		errors = append(errors, ObservabilityValidationError{Field: "event_id", Message: "event_id is required"})
 	}
 	if d.BatchID == uuid.Nil {
-		errors = append(errors, ValidationError{Field: "batch_id", Message: "batch_id is required"})
+		errors = append(errors, ObservabilityValidationError{Field: "batch_id", Message: "batch_id is required"})
 	}
 	if d.ProjectID == uuid.Nil {
-		errors = append(errors, ValidationError{Field: "project_id", Message: "project_id is required"})
+		errors = append(errors, ObservabilityValidationError{Field: "project_id", Message: "project_id is required"})
 	}
 	return errors
 }

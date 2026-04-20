@@ -36,7 +36,7 @@ func (s *profileService) GetProfile(ctx context.Context, userID uuid.UUID) (*use
 }
 
 // UpdateProfile updates user profile information
-func (s *profileService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *userDomain.UpdateProfileRequest) (*userDomain.UserProfile, error) {
+func (s *profileService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *userDomain.UpdateUserProfileRequest) (*userDomain.UserProfile, error) {
 	profile, err := s.userRepo.GetProfile(ctx, userID)
 	if err != nil {
 		return nil, appErrors.NewNotFoundError("Profile not found")

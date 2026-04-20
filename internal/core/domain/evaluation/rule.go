@@ -95,46 +95,46 @@ func NewEvaluator(projectID uuid.UUID, name string, scorerType ScorerType, score
 	}
 }
 
-func (e *Evaluator) Validate() []ValidationError {
-	var errors []ValidationError
+func (e *Evaluator) Validate() []EvaluationValidationError {
+	var errors []EvaluationValidationError
 
 	if e.Name == "" {
-		errors = append(errors, ValidationError{Field: "name", Message: "name is required"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name is required"})
 	}
 	if len(e.Name) > 100 {
-		errors = append(errors, ValidationError{Field: "name", Message: "name must be 100 characters or less"})
+		errors = append(errors, EvaluationValidationError{Field: "name", Message: "name must be 100 characters or less"})
 	}
 
 	switch e.Status {
 	case EvaluatorStatusActive, EvaluatorStatusInactive, EvaluatorStatusPaused:
 	default:
-		errors = append(errors, ValidationError{Field: "status", Message: "invalid status, must be active, inactive, or paused"})
+		errors = append(errors, EvaluationValidationError{Field: "status", Message: "invalid status, must be active, inactive, or paused"})
 	}
 
 	switch e.TriggerType {
 	case EvaluatorTriggerOnSpanComplete:
 	default:
-		errors = append(errors, ValidationError{Field: "trigger_type", Message: "invalid trigger type"})
+		errors = append(errors, EvaluationValidationError{Field: "trigger_type", Message: "invalid trigger type"})
 	}
 
 	switch e.TargetScope {
 	case TargetScopeSpan, TargetScopeTrace:
 	default:
-		errors = append(errors, ValidationError{Field: "target_scope", Message: "invalid target scope, must be span or trace"})
+		errors = append(errors, EvaluationValidationError{Field: "target_scope", Message: "invalid target scope, must be span or trace"})
 	}
 
 	if e.SamplingRate < 0.0 || e.SamplingRate > 1.0 {
-		errors = append(errors, ValidationError{Field: "sampling_rate", Message: "sampling rate must be between 0 and 1"})
+		errors = append(errors, EvaluationValidationError{Field: "sampling_rate", Message: "sampling rate must be between 0 and 1"})
 	}
 
 	switch e.ScorerType {
 	case ScorerTypeLLM, ScorerTypeBuiltin, ScorerTypeRegex:
 	default:
-		errors = append(errors, ValidationError{Field: "scorer_type", Message: "invalid scorer type, must be llm, builtin, or regex"})
+		errors = append(errors, EvaluationValidationError{Field: "scorer_type", Message: "invalid scorer type, must be llm, builtin, or regex"})
 	}
 
 	if e.ScorerConfig == nil {
-		errors = append(errors, ValidationError{Field: "scorer_config", Message: "scorer_config is required"})
+		errors = append(errors, EvaluationValidationError{Field: "scorer_config", Message: "scorer_config is required"})
 	}
 
 	return errors

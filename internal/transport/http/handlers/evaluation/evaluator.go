@@ -112,19 +112,7 @@ func registerEvaluatorRoutes(api huma.API, h *handler) {
 
 // ---- DTOs ------------------------------------------------------------
 
-type CreateEvaluatorRequest = evaluationDomain.CreateEvaluatorRequest
-type UpdateEvaluatorRequest = evaluationDomain.UpdateEvaluatorRequest
-
-type EvaluatorOutput struct {
-	Body *evaluationDomain.EvaluatorResponse
-}
-
 // ---- handlers --------------------------------------------------------
-
-type CreateEvaluatorInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      CreateEvaluatorRequest
-}
 
 func (h *handler) createEvaluator(ctx context.Context, in *CreateEvaluatorInput) (*EvaluatorOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
@@ -137,20 +125,6 @@ func (h *handler) createEvaluator(ctx context.Context, in *CreateEvaluatorInput)
 		return nil, err
 	}
 	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
-}
-
-type ListEvaluatorsInput struct {
-	ProjectID  string `path:"projectId" format:"uuid"`
-	Page       int    `query:"page" required:"false" minimum:"1"`
-	Limit      int    `query:"limit" required:"false"`
-	SortBy     string `query:"sort_by" required:"false"`
-	SortDir    string `query:"sort_dir" required:"false" enum:"asc,desc"`
-	Status     string `query:"status" required:"false"`
-	ScorerType string `query:"scorer_type" required:"false"`
-	Search     string `query:"search" required:"false"`
-}
-type EvaluatorListOutput struct {
-	Body pageList[*evaluationDomain.EvaluatorResponse]
 }
 
 func (h *handler) listEvaluators(ctx context.Context, in *ListEvaluatorsInput) (*EvaluatorListOutput, error) {
@@ -201,11 +175,6 @@ func (h *handler) listEvaluators(ctx context.Context, in *ListEvaluatorsInput) (
 	}}, nil
 }
 
-type GetEvaluatorInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	EvaluatorID string `path:"evaluatorId" format:"uuid"`
-}
-
 func (h *handler) getEvaluator(ctx context.Context, in *GetEvaluatorInput) (*EvaluatorOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -220,12 +189,6 @@ func (h *handler) getEvaluator(ctx context.Context, in *GetEvaluatorInput) (*Eva
 		return nil, err
 	}
 	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
-}
-
-type UpdateEvaluatorInput struct {
-	ProjectID   string `path:"projectId" format:"uuid"`
-	EvaluatorID string `path:"evaluatorId" format:"uuid"`
-	Body        UpdateEvaluatorRequest
 }
 
 func (h *handler) updateEvaluator(ctx context.Context, in *UpdateEvaluatorInput) (*EvaluatorOutput, error) {
@@ -245,8 +208,6 @@ func (h *handler) updateEvaluator(ctx context.Context, in *UpdateEvaluatorInput)
 	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
 }
 
-type DeleteEvaluatorInput = GetEvaluatorInput
-
 func (h *handler) deleteEvaluator(ctx context.Context, in *DeleteEvaluatorInput) (*EmptyOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -262,16 +223,6 @@ func (h *handler) deleteEvaluator(ctx context.Context, in *DeleteEvaluatorInput)
 	return &EmptyOutput{}, nil
 }
 
-// MessageResponse is the legacy status-message shape retained for the
-// activate/deactivate endpoints to avoid breaking the dashboard SPA.
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-type MessageOutput struct {
-	Body *MessageResponse
-}
-
 func (h *handler) activateEvaluator(ctx context.Context, in *GetEvaluatorInput) (*MessageOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -284,7 +235,7 @@ func (h *handler) activateEvaluator(ctx context.Context, in *GetEvaluatorInput) 
 	if err := h.evaluatorSvc.Activate(ctx, evaluatorID, projectID); err != nil {
 		return nil, err
 	}
-	return &MessageOutput{Body: &MessageResponse{Message: "evaluator activated"}}, nil
+	return &MessageOutput{Body: &shared.MessageResponse{Message: "evaluator activated"}}, nil
 }
 
 func (h *handler) deactivateEvaluator(ctx context.Context, in *GetEvaluatorInput) (*MessageOutput, error) {
@@ -299,16 +250,7 @@ func (h *handler) deactivateEvaluator(ctx context.Context, in *GetEvaluatorInput
 	if err := h.evaluatorSvc.Deactivate(ctx, evaluatorID, projectID); err != nil {
 		return nil, err
 	}
-	return &MessageOutput{Body: &MessageResponse{Message: "evaluator deactivated"}}, nil
-}
-
-type TriggerEvaluatorInput struct {
-	ProjectID   string                          `path:"projectId" format:"uuid"`
-	EvaluatorID string                          `path:"evaluatorId" format:"uuid"`
-	Body        evaluationDomain.TriggerOptions `doc:"All fields optional; empty object acceptable"`
-}
-type TriggerEvaluatorOutput struct {
-	Body *evaluationDomain.TriggerResponse
+	return &MessageOutput{Body: &shared.MessageResponse{Message: "evaluator deactivated"}}, nil
 }
 
 func (h *handler) triggerEvaluator(ctx context.Context, in *TriggerEvaluatorInput) (*TriggerEvaluatorOutput, error) {
@@ -328,15 +270,6 @@ func (h *handler) triggerEvaluator(ctx context.Context, in *TriggerEvaluatorInpu
 	return &TriggerEvaluatorOutput{Body: res}, nil
 }
 
-type TestEvaluatorInput struct {
-	ProjectID   string                                `path:"projectId" format:"uuid"`
-	EvaluatorID string                                `path:"evaluatorId" format:"uuid"`
-	Body        evaluationDomain.TestEvaluatorRequest `doc:"All fields optional; empty object acceptable"`
-}
-type TestEvaluatorOutput struct {
-	Body *evaluationDomain.TestEvaluatorResponse
-}
-
 func (h *handler) testEvaluator(ctx context.Context, in *TestEvaluatorInput) (*TestEvaluatorOutput, error) {
 	projectID, err := parseProjectID(in.ProjectID)
 	if err != nil {
@@ -352,17 +285,6 @@ func (h *handler) testEvaluator(ctx context.Context, in *TestEvaluatorInput) (*T
 		return nil, err
 	}
 	return &TestEvaluatorOutput{Body: res}, nil
-}
-
-type GetEvaluatorAnalyticsInput struct {
-	ProjectID     string `path:"projectId" format:"uuid"`
-	EvaluatorID   string `path:"evaluatorId" format:"uuid"`
-	Period        string `query:"period" required:"false" doc:"24h, 7d, 30d"`
-	FromTimestamp string `query:"from_timestamp" required:"false" doc:"RFC3339"`
-	ToTimestamp   string `query:"to_timestamp" required:"false" doc:"RFC3339"`
-}
-type EvaluatorAnalyticsOutput struct {
-	Body *evaluationDomain.EvaluatorAnalyticsResponse
 }
 
 func (h *handler) getEvaluatorAnalytics(ctx context.Context, in *GetEvaluatorAnalyticsInput) (*EvaluatorAnalyticsOutput, error) {

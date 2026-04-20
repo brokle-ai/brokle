@@ -13,9 +13,9 @@ import (
 // Request DTOs
 // ----------------------------
 
-// CreateSessionRequest represents a request to create a new session.
+// CreatePlaygroundSessionRequest represents a request to create a new session.
 // Name is required for all sessions (no ephemeral sessions).
-type CreateSessionRequest struct {
+type CreatePlaygroundSessionRequest struct {
 	// ProjectID is set from the URL path parameter
 	ProjectID uuid.UUID `json:"-"`
 
@@ -118,14 +118,14 @@ type StreamResponse struct {
 type PlaygroundService interface {
 	// CreateSession creates a new session.
 	// All sessions are saved (no ephemeral sessions).
-	CreateSession(ctx context.Context, req *CreateSessionRequest) (*SessionResponse, error)
+	CreateSession(ctx context.Context, req *CreatePlaygroundSessionRequest) (*SessionResponse, error)
 
 	// GetSession retrieves a session by ID.
 	// Returns ErrSessionNotFound if not found.
 	GetSession(ctx context.Context, sessionID uuid.UUID) (*SessionResponse, error)
 
 	// ListSessions retrieves sessions for a project (sidebar list).
-	ListSessions(ctx context.Context, req *ListSessionsRequest) ([]*SessionSummary, error)
+	ListSessions(ctx context.Context, req *ListSessionsRequest) ([]*PlaygroundSessionSummary, error)
 
 	// UpdateSession updates session content and metadata.
 	UpdateSession(ctx context.Context, req *UpdateSessionRequest) (*SessionResponse, error)

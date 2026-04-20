@@ -470,7 +470,7 @@ func (s *authService) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*us
 }
 
 // UpdateProfile updates user profile
-func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *authDomain.UpdateProfileRequest) error {
+func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *authDomain.UpdateAuthProfileRequest) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {

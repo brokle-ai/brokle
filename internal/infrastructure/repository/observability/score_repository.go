@@ -338,9 +338,9 @@ func (r *scoreRepository) GetAggregationsByExperiments(
 	ctx context.Context,
 	projectID string,
 	experimentIDs []string,
-) (map[string]map[string]*observability.ScoreAggregation, error) {
+) (map[string]map[string]*observability.TraceScoreAggregation, error) {
 	if len(experimentIDs) == 0 {
-		return make(map[string]map[string]*observability.ScoreAggregation), nil
+		return make(map[string]map[string]*observability.TraceScoreAggregation), nil
 	}
 
 	query := `
@@ -374,7 +374,7 @@ func (r *scoreRepository) GetAggregationsByExperiments(
 	defer rows.Close()
 
 	// Result: scoreName -> experimentID -> aggregation
-	result := make(map[string]map[string]*observability.ScoreAggregation)
+	result := make(map[string]map[string]*observability.TraceScoreAggregation)
 
 	for rows.Next() {
 		var (
@@ -392,10 +392,10 @@ func (r *scoreRepository) GetAggregationsByExperiments(
 		}
 
 		if result[name] == nil {
-			result[name] = make(map[string]*observability.ScoreAggregation)
+			result[name] = make(map[string]*observability.TraceScoreAggregation)
 		}
 
-		result[name][experimentID] = &observability.ScoreAggregation{
+		result[name][experimentID] = &observability.TraceScoreAggregation{
 			Mean:   avgValue,
 			StdDev: stddevValue,
 			Min:    minValue,

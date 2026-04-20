@@ -37,15 +37,6 @@ import (
 
 // ----- initiate-google-oauth ---------------------------------------
 
-type InitiateOAuthInput struct {
-	InvitationToken string `query:"invitation_token" required:"false" doc:"Optional invitation token. When present, the OAuth signup that follows joins an existing organization instead of creating one."`
-}
-
-type InitiateOAuthOutput struct {
-	Status   int    `json:"-"`
-	Location string `header:"Location"`
-}
-
 func (h *handler) initiateGoogleOAuth(ctx context.Context, in *InitiateOAuthInput) (*InitiateOAuthOutput, error) {
 	return h.initiateOAuth(ctx, "google", in.InvitationToken)
 }
@@ -83,20 +74,6 @@ func (h *handler) initiateOAuth(ctx context.Context, provider, invitationToken s
 
 // ----- oauth callback shared types --------------------------------
 
-type OAuthCallbackInput struct {
-	Code  string `query:"code" doc:"Authorization code returned by the OAuth provider"`
-	State string `query:"state" doc:"CSRF state token echoed back by the provider"`
-}
-
-// OAuthCallbackOutput is the redirect-only shape every callback exit
-// path emits. Huma's header:"Location" tag turns the Location field
-// into the Set-Location header; Status is wired via DefaultStatus in
-// the operation registration and the runtime override below.
-type OAuthCallbackOutput struct {
-	Status   int    `json:"-"`
-	Location string `header:"Location"`
-}
-
 // ----- google-oauth-callback -------------------------------------
 
 func (h *handler) googleOAuthCallback(ctx context.Context, in *OAuthCallbackInput) (*OAuthCallbackOutput, error) {
@@ -123,7 +100,7 @@ func (h *handler) oauthCallback(ctx context.Context, provider string, in *OAuthC
 
 	if in.Code == "" || in.State == "" {
 		h.logger.WarnContext(ctx, "oauth callback: missing code or state", "provider", provider)
-		return redirectFrontend(frontend+"/auth/signin?error=oauth_failed"), nil
+		return redirectFrontend(frontend + "/auth/signin?error=oauth_failed"), nil
 	}
 
 	// Validate state → returns any invitation token the initiator
@@ -132,21 +109,21 @@ func (h *handler) oauthCallback(ctx context.Context, provider string, in *OAuthC
 	invitationToken, err := h.oauthProvider.ValidateState(ctx, in.State)
 	if err != nil {
 		h.logger.WarnContext(ctx, "oauth callback: invalid state", "provider", provider, "error", err)
-		return redirectFrontend(frontend+"/auth/signin?error=invalid_state"), nil
+		return redirectFrontend(frontend + "/auth/signin?error=invalid_state"), nil
 	}
 
 	// Exchange the code for an OAuth access token.
 	token, err := h.oauthProvider.ExchangeCode(ctx, provider, in.Code)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "oauth callback: code exchange failed", "provider", provider, "error", err)
-		return redirectFrontend(frontend+"/auth/signin?error=token_exchange_failed"), nil
+		return redirectFrontend(frontend + "/auth/signin?error=token_exchange_failed"), nil
 	}
 
 	// Fetch provider user profile (email, provider ID, etc.).
 	userProfile, err := h.oauthProvider.GetUserProfile(ctx, provider, token)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "oauth callback: profile fetch failed", "provider", provider, "error", err)
-		return redirectFrontend(frontend+"/auth/signin?error=profile_fetch_failed"), nil
+		return redirectFrontend(frontend + "/auth/signin?error=profile_fetch_failed"), nil
 	}
 
 	// Does the email already have an account?
@@ -222,32 +199,6 @@ func redirectFrontend(url string) *OAuthCallbackOutput {
 }
 
 // ----- complete-oauth-signup ---------------------------------------
-
-type CompleteOAuthSignupInput struct {
-	Body completeOAuthSignupBody
-}
-
-type completeOAuthSignupBody struct {
-	SessionID        string  `json:"session_id" minLength:"1" doc:"OAuth session ID returned by the callback redirect"`
-	Role             string  `json:"role" enum:"engineer,product,designer,executive,other" doc:"Self-declared role"`
-	OrganizationName *string `json:"organization_name,omitempty" doc:"Organization name — required for fresh signup, omitted when the session's invitation_token is present"`
-	ReferralSource   *string `json:"referral_source,omitempty" doc:"Optional referral source for product analytics"`
-}
-
-type CompleteOAuthSignupOutput struct {
-	SetCookie []http.Cookie `header:"Set-Cookie"`
-	Body      completeOAuthSignupResponse
-}
-
-// completeOAuthSignupResponse is the login-with-org shape. Matches
-// the gin handler's responseData: user + organization + expiry in
-// milliseconds.
-type completeOAuthSignupResponse struct {
-	User         any   `json:"user" doc:"Authenticated user object"`
-	Organization any   `json:"organization" doc:"Organization created (fresh signup) or joined (invitation signup)"`
-	ExpiresAt    int64 `json:"expires_at" doc:"Access-token expiry as Unix milliseconds"`
-	ExpiresIn    int64 `json:"expires_in" doc:"Access-token TTL in milliseconds"`
-}
 
 func (h *handler) completeOAuthSignup(ctx context.Context, in *CompleteOAuthSignupInput) (*CompleteOAuthSignupOutput, error) {
 	session, err := h.authSvc.GetOAuthSession(ctx, in.Body.SessionID)
@@ -325,15 +276,6 @@ func (h *handler) completeOAuthSignup(ctx context.Context, in *CompleteOAuthSign
 // callback for an existing OAuth user) for the actual three
 // httpOnly cookies. Reads the session from Redis and the service
 // deletes it immediately (one-time use) to prevent replay.
-
-type ExchangeLoginSessionInput struct {
-	SessionID string `path:"session_id" doc:"One-time login session ID from the OAuth callback redirect"`
-}
-
-type ExchangeLoginSessionOutput struct {
-	SetCookie []http.Cookie `header:"Set-Cookie"`
-	Body      loginResponse
-}
 
 func (h *handler) exchangeLoginSession(ctx context.Context, in *ExchangeLoginSessionInput) (*ExchangeLoginSessionOutput, error) {
 	sessionData, err := h.authSvc.GetLoginTokenSession(ctx, in.SessionID)

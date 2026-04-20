@@ -125,7 +125,7 @@ const (
 
 type DiscountCondition struct {
 	MinUsage          *UsageThreshold `json:"min_usage,omitempty"`
-	TimeOfDay         *TimeRange      `json:"time_of_day,omitempty"`
+	TimeOfDay         *BillingTimeRange      `json:"time_of_day,omitempty"`
 	VolumeThreshold   *VolumeDiscount `json:"volume_threshold,omitempty"`
 	BillingTiers      []string        `json:"billing_tiers,omitempty"`
 	RequestTypes      []string        `json:"request_types,omitempty"`
@@ -141,7 +141,7 @@ type UsageThreshold struct {
 	Cost     decimal.Decimal `json:"cost"`
 }
 
-type TimeRange struct {
+type BillingTimeRange struct {
 	Start time.Time `json:"start"`
 	End   time.Time `json:"end"`
 }

@@ -1,46 +1,10 @@
 package auth
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-
-	"brokle/internal/config"
-	authDomain "brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/user"
-	authService "brokle/internal/core/services/auth"
-	"brokle/internal/core/services/registration"
 )
-
-// PublicDeps bundles every dependency the public dashboard auth
-// operations need. Grouping them in a struct keeps the
-// RegisterPublicRoutes signature stable as we add more operations
-// that need additional services — and keeps the call site in
-// server/routes.go readable.
-type PublicDeps struct {
-	Auth          authDomain.AuthService
-	User          user.UserService
-	Registration  registration.RegistrationService
-	Session       authDomain.SessionService
-	OAuthProvider *authService.OAuthProviderService
-	Config        *config.Config
-	Logger        *slog.Logger
-}
-
-// ProtectedDeps mirrors PublicDeps for the authenticated routes.
-// Carries the profile service in addition to the common set;
-// public operations never touch profile data.
-type ProtectedDeps struct {
-	Auth          authDomain.AuthService
-	User          user.UserService
-	Profile       user.ProfileService
-	Registration  registration.RegistrationService
-	Session       authDomain.SessionService
-	OAuthProvider *authService.OAuthProviderService
-	Config        *config.Config
-	Logger        *slog.Logger
-}
 
 // RegisterPublicRoutes registers every unauthenticated auth
 // operation on the supplied huma.API. Mount against apiAdmin (the

@@ -17,15 +17,6 @@ import (
 // endpoints the Brokle JavaScript / Python SDKs call, not the
 // dashboard frontend.
 
-// sdkHandler is a lightweight handler bundling only what SDK-plane
-// auth operations need (API key validation). Distinct from the
-// dashboard-plane `handler` so we don't pollute the SDK surface
-// with services it shouldn't be able to reach.
-type sdkHandler struct {
-	apiKeySvc authDomain.APIKeyService
-	logger    *slog.Logger
-}
-
 // RegisterSDKRoutes registers every SDK-plane auth operation on
 // apiPublic. Mount against apiPublic only — these endpoints use
 // X-API-Key authentication (or Authorization: Bearer <key>) and
@@ -44,24 +35,6 @@ func RegisterSDKRoutes(api huma.API, apiKeySvc authDomain.APIKeyService, logger 
 }
 
 // ----- validate-api-key ---------------------------------------------
-
-type ValidateAPIKeyInput struct {
-	XAPIKey       string `header:"X-API-Key" required:"false" doc:"Canonical API-key header"`
-	Authorization string `header:"Authorization" required:"false" doc:"Fallback for clients that cannot set custom headers; value must be 'Bearer <key>'"`
-}
-
-type ValidateAPIKeyOutput struct {
-	Body validateAPIKeyResponse
-}
-
-// validateAPIKeyResponse mirrors authDomain.ValidateAPIKeyResponse
-// so SDK consumers parse a stable shape independent of any future
-// internal renames.
-type validateAPIKeyResponse struct {
-	AuthContext    *authDomain.AuthContext `json:"auth_context" doc:"Resolved user + API-key identifiers"`
-	ProjectID      string                  `json:"project_id" doc:"Project the API key belongs to"`
-	OrganizationID string                  `json:"organization_id" doc:"Organization that owns the project"`
-}
 
 func (h *sdkHandler) validateAPIKey(ctx context.Context, in *ValidateAPIKeyInput) (*ValidateAPIKeyOutput, error) {
 	apiKey := in.XAPIKey

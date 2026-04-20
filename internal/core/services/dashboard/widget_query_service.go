@@ -39,13 +39,13 @@ func (s *widgetQueryService) ExecuteWidgetQuery(
 	ctx context.Context,
 	projectID uuid.UUID,
 	widget *dashboardDomain.Widget,
-	timeRange *dashboardDomain.TimeRange,
-) (*dashboardDomain.QueryResult, error) {
+	timeRange *dashboardDomain.DashboardTimeRange,
+) (*dashboardDomain.DashboardQueryResult, error) {
 	startTime := time.Now()
 
 	start, end := s.resolveTimeRange(timeRange)
 
-	result := &dashboardDomain.QueryResult{
+	result := &dashboardDomain.DashboardQueryResult{
 		WidgetID: widget.ID,
 		Metadata: &dashboardDomain.QueryMetadata{
 			ExecutedAt: startTime,
@@ -80,8 +80,8 @@ func (s *widgetQueryService) executeStandardQuery(
 	widget *dashboardDomain.Widget,
 	startTime, endTime *time.Time,
 	executionStart time.Time,
-) (*dashboardDomain.QueryResult, error) {
-	result := &dashboardDomain.QueryResult{
+) (*dashboardDomain.DashboardQueryResult, error) {
+	result := &dashboardDomain.DashboardQueryResult{
 		WidgetID: widget.ID,
 		Metadata: &dashboardDomain.QueryMetadata{
 			ExecutedAt: executionStart,
@@ -135,8 +135,8 @@ func (s *widgetQueryService) executeTraceListQuery(
 	widget *dashboardDomain.Widget,
 	startTime, endTime *time.Time,
 	executionStart time.Time,
-) (*dashboardDomain.QueryResult, error) {
-	result := &dashboardDomain.QueryResult{
+) (*dashboardDomain.DashboardQueryResult, error) {
+	result := &dashboardDomain.DashboardQueryResult{
 		WidgetID: widget.ID,
 		Metadata: &dashboardDomain.QueryMetadata{
 			ExecutedAt: executionStart,
@@ -206,8 +206,8 @@ func (s *widgetQueryService) executeHistogramQuery(
 	widget *dashboardDomain.Widget,
 	startTime, endTime *time.Time,
 	executionStart time.Time,
-) (*dashboardDomain.QueryResult, error) {
-	result := &dashboardDomain.QueryResult{
+) (*dashboardDomain.DashboardQueryResult, error) {
+	result := &dashboardDomain.DashboardQueryResult{
 		WidgetID: widget.ID,
 		Metadata: &dashboardDomain.QueryMetadata{
 			ExecutedAt: executionStart,
@@ -292,7 +292,7 @@ func (s *widgetQueryService) ExecuteDashboardQueries(
 
 	results := &dashboardDomain.DashboardQueryResults{
 		DashboardID: req.DashboardID,
-		Results:     make(map[string]*dashboardDomain.QueryResult),
+		Results:     make(map[string]*dashboardDomain.DashboardQueryResult),
 		ExecutedAt:  time.Now(),
 	}
 
@@ -310,9 +310,9 @@ func (s *widgetQueryService) ExecuteDashboardQueries(
 		}
 	}
 
-	timeRange := req.TimeRange
-	if timeRange == nil && dashboard.Config.TimeRange != nil {
-		timeRange = dashboard.Config.TimeRange
+	timeRange := req.DashboardTimeRange
+	if timeRange == nil && dashboard.Config.DashboardTimeRange != nil {
+		timeRange = dashboard.Config.DashboardTimeRange
 	}
 
 	var wg sync.WaitGroup
@@ -344,7 +344,7 @@ func (s *widgetQueryService) ExecuteDashboardQueries(
 					"widget_id", w.ID,
 					"error", err,
 				)
-				result = &dashboardDomain.QueryResult{
+				result = &dashboardDomain.DashboardQueryResult{
 					WidgetID: w.ID,
 					Error:    "Failed to execute query",
 				}
@@ -492,7 +492,7 @@ func (s *widgetQueryService) GetVariableOptions(
 	}, nil
 }
 
-func (s *widgetQueryService) resolveTimeRange(tr *dashboardDomain.TimeRange) (*time.Time, *time.Time) {
+func (s *widgetQueryService) resolveTimeRange(tr *dashboardDomain.DashboardTimeRange) (*time.Time, *time.Time) {
 	if tr == nil {
 		// Default to last 24 hours
 		end := time.Now()

@@ -776,8 +776,8 @@ func (s *evaluatorService) GetAnalytics(ctx context.Context, evaluatorID uuid.UU
 		SuccessRate:        0,
 		AverageScore:       0,
 		ScoreDistribution:  []evaluation.DistributionBucket{},
-		ExecutionTrend:     []evaluation.TimeSeriesPoint{},
-		ScoreTrend:         []evaluation.TimeSeriesPoint{},
+		ExecutionTrend:     []evaluation.EvaluatorTimeSeriesPoint{},
+		ScoreTrend:         []evaluation.EvaluatorTimeSeriesPoint{},
 		LatencyPercentiles: evaluation.LatencyStats{},
 		TopErrors:          []evaluation.ErrorSummary{},
 	}

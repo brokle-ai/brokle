@@ -54,7 +54,7 @@ type TraceRepository interface {
 
 	// ListSessions returns paginated sessions aggregated from traces.
 	// Sessions are identified by session_id attribute on root spans (parent_span_id IS NULL).
-	ListSessions(ctx context.Context, filter *SessionFilter) ([]*SessionSummary, error)
+	ListSessions(ctx context.Context, filter *SessionFilter) ([]*TraceSessionSummary, error)
 
 	// CountSessions returns the total number of sessions matching the filter.
 	CountSessions(ctx context.Context, filter *SessionFilter) (int64, error)
@@ -79,10 +79,10 @@ type ScoreRepository interface {
 	ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error)
 
 	// Returns: scoreName -> experimentID -> aggregation
-	GetAggregationsByExperiments(ctx context.Context, projectID string, experimentIDs []string) (map[string]map[string]*ScoreAggregation, error)
+	GetAggregationsByExperiments(ctx context.Context, projectID string, experimentIDs []string) (map[string]map[string]*TraceScoreAggregation, error)
 }
 
-type ScoreAggregation struct {
+type TraceScoreAggregation struct {
 	Mean   float64 `json:"mean"`
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
@@ -110,7 +110,7 @@ type ScoreStatistics struct {
 	ModePercent *float64 `json:"mode_percent,omitempty"` // For categorical
 }
 
-type TimeSeriesPoint struct {
+type TraceTimeSeriesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	AvgValue  float64   `json:"avg_value"`
 	Count     uint64    `json:"count"`
@@ -142,7 +142,7 @@ type ComparisonMetrics struct {
 
 type ScoreAnalyticsResponse struct {
 	Statistics   *ScoreStatistics   `json:"statistics"`
-	TimeSeries   []TimeSeriesPoint  `json:"time_series"`
+	TimeSeries   []TraceTimeSeriesPoint  `json:"time_series"`
 	Distribution []DistributionBin  `json:"distribution"`
 	Heatmap      []HeatmapCell      `json:"heatmap,omitempty"`
 	Comparison   *ComparisonMetrics `json:"comparison,omitempty"`
@@ -150,7 +150,7 @@ type ScoreAnalyticsResponse struct {
 
 type ScoreAnalyticsRepository interface {
 	GetStatistics(ctx context.Context, filter *ScoreAnalyticsFilter) (*ScoreStatistics, error)
-	GetTimeSeries(ctx context.Context, filter *ScoreAnalyticsFilter) ([]TimeSeriesPoint, error)
+	GetTimeSeries(ctx context.Context, filter *ScoreAnalyticsFilter) ([]TraceTimeSeriesPoint, error)
 	GetDistribution(ctx context.Context, filter *ScoreAnalyticsFilter, bins int) ([]DistributionBin, error)
 	GetHeatmap(ctx context.Context, filter *ScoreAnalyticsFilter, bins int) ([]HeatmapCell, error)
 	GetComparisonMetrics(ctx context.Context, filter *ScoreAnalyticsFilter) (*ComparisonMetrics, error)

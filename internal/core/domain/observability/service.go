@@ -370,9 +370,9 @@ type QualityEvaluatorInfo struct {
 type DashboardOverview struct {
 	TopProviders   []*ProviderSummary `json:"top_providers"`
 	RecentActivity []*ActivityItem    `json:"recent_activity"`
-	CostTrend      []*TimeSeriesPoint `json:"cost_trend"`
-	LatencyTrend   []*TimeSeriesPoint `json:"latency_trend"`
-	QualityTrend   []*TimeSeriesPoint `json:"quality_trend"`
+	CostTrend      []*TraceTimeSeriesPoint `json:"cost_trend"`
+	LatencyTrend   []*TraceTimeSeriesPoint `json:"latency_trend"`
+	QualityTrend   []*TraceTimeSeriesPoint `json:"quality_trend"`
 	TotalTraces    int64              `json:"total_traces"`
 	TotalCost      float64            `json:"total_cost"`
 	AverageLatency float64            `json:"average_latency"`
@@ -394,11 +394,6 @@ type ActivityItem struct {
 	Description string         `json:"description"`
 }
 
-type TimeRange struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
-}
-
 type OptimizationSuggestion struct {
 	Metadata         map[string]any `json:"metadata,omitempty"`
 	Type             string         `json:"type"`
@@ -418,7 +413,7 @@ type LatencyHeatmap struct {
 }
 
 type ThroughputMetrics struct {
-	TimeSeries        []*TimeSeriesPoint `json:"time_series"`
+	TimeSeries        []*TraceTimeSeriesPoint `json:"time_series"`
 	RequestsPerSecond float64            `json:"requests_per_second"`
 	RequestsPerMinute float64            `json:"requests_per_minute"`
 	RequestsPerHour   float64            `json:"requests_per_hour"`
@@ -506,4 +501,4 @@ type Report struct {
 	ID          uuid.UUID      `json:"id"`
 }
 
-// Note: Analytics types (TimeSeriesPoint, ScoreStatistics, etc.) are defined in repository.go
+// Note: Analytics types (TraceTimeSeriesPoint, ScoreStatistics, etc.) are defined in repository.go

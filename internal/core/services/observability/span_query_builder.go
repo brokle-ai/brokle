@@ -48,8 +48,8 @@ func NewSpanQueryBuilder() *SpanQueryBuilder {
 	return &SpanQueryBuilder{}
 }
 
-// QueryResult contains the built query and its arguments.
-type QueryResult struct {
+// spanQueryResult contains the built query and its arguments.
+type spanQueryResult struct {
 	Query string
 	Args  []any
 	Count int // number of conditions
@@ -62,7 +62,7 @@ func (b *SpanQueryBuilder) BuildQuery(
 	projectID string,
 	startTime, endTime *time.Time,
 	limit, offset int,
-) (*QueryResult, error) {
+) (*spanQueryResult, error) {
 	b.paramCount = 0
 
 	whereClause, args, err := b.buildNode(node)
@@ -112,7 +112,7 @@ func (b *SpanQueryBuilder) BuildQuery(
 		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "))
 	}
 
-	return &QueryResult{
+	return &spanQueryResult{
 		Query: query,
 		Args:  allArgs,
 		Count: b.paramCount,
@@ -125,7 +125,7 @@ func (b *SpanQueryBuilder) BuildCountQuery(
 	node obsDomain.FilterNode,
 	projectID string,
 	startTime, endTime *time.Time,
-) (*QueryResult, error) {
+) (*spanQueryResult, error) {
 	b.paramCount = 0
 
 	whereClause, args, err := b.buildNode(node)
@@ -170,7 +170,7 @@ func (b *SpanQueryBuilder) BuildCountQuery(
 		`, strings.Join(prewhereConditions, " AND "))
 	}
 
-	return &QueryResult{
+	return &spanQueryResult{
 		Query: query,
 		Args:  allArgs,
 		Count: b.paramCount,
@@ -528,7 +528,7 @@ func (b *SpanQueryBuilder) BuildQueryWithSearch(
 	projectID string,
 	startTime, endTime *time.Time,
 	limit, offset int,
-) (*QueryResult, error) {
+) (*spanQueryResult, error) {
 	b.paramCount = 0
 
 	// PREWHERE conditions: indexed columns that benefit from early filtering
@@ -593,7 +593,7 @@ func (b *SpanQueryBuilder) BuildQueryWithSearch(
 		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "))
 	}
 
-	return &QueryResult{
+	return &spanQueryResult{
 		Query: query,
 		Args:  allArgs,
 		Count: b.paramCount,
@@ -608,7 +608,7 @@ func (b *SpanQueryBuilder) BuildCountQueryWithSearch(
 	searchTypes []obsDomain.SearchType,
 	projectID string,
 	startTime, endTime *time.Time,
-) (*QueryResult, error) {
+) (*spanQueryResult, error) {
 	b.paramCount = 0
 
 	// PREWHERE conditions: indexed columns that benefit from early filtering
@@ -668,7 +668,7 @@ func (b *SpanQueryBuilder) BuildCountQueryWithSearch(
 		`, strings.Join(prewhereConditions, " AND "))
 	}
 
-	return &QueryResult{
+	return &spanQueryResult{
 		Query: query,
 		Args:  allArgs,
 		Count: b.paramCount,

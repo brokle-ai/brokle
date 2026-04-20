@@ -156,29 +156,29 @@ func NewAnnotationQueue(projectID uuid.UUID, name string) *AnnotationQueue {
 	}
 }
 
-// ValidationError represents a validation error for an entity.
-type ValidationError struct {
+// AnnotationValidationError represents a validation error for an entity.
+type AnnotationValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
 
 // Validate validates the annotation queue entity.
-func (q *AnnotationQueue) Validate() []ValidationError {
-	var errors []ValidationError
+func (q *AnnotationQueue) Validate() []AnnotationValidationError {
+	var errors []AnnotationValidationError
 
 	if q.Name == "" {
-		errors = append(errors, ValidationError{Field: "name", Message: "name is required"})
+		errors = append(errors, AnnotationValidationError{Field: "name", Message: "name is required"})
 	}
 	if len(q.Name) > 255 {
-		errors = append(errors, ValidationError{Field: "name", Message: "name must be 255 characters or less"})
+		errors = append(errors, AnnotationValidationError{Field: "name", Message: "name must be 255 characters or less"})
 	}
 
 	if !q.Status.IsValid() {
-		errors = append(errors, ValidationError{Field: "status", Message: "invalid status, must be active, paused, or archived"})
+		errors = append(errors, AnnotationValidationError{Field: "status", Message: "invalid status, must be active, paused, or archived"})
 	}
 
 	if q.Settings.LockTimeoutSeconds < 0 {
-		errors = append(errors, ValidationError{Field: "settings.lock_timeout_seconds", Message: "lock_timeout_seconds cannot be negative"})
+		errors = append(errors, AnnotationValidationError{Field: "settings.lock_timeout_seconds", Message: "lock_timeout_seconds cannot be negative"})
 	}
 
 	return errors
@@ -228,22 +228,22 @@ func NewQueueItem(queueID uuid.UUID, objectID string, objectType ObjectType) *Qu
 }
 
 // Validate validates the queue item entity.
-func (i *QueueItem) Validate() []ValidationError {
-	var errors []ValidationError
+func (i *QueueItem) Validate() []AnnotationValidationError {
+	var errors []AnnotationValidationError
 
 	if i.ObjectID == "" {
-		errors = append(errors, ValidationError{Field: "object_id", Message: "object_id is required"})
+		errors = append(errors, AnnotationValidationError{Field: "object_id", Message: "object_id is required"})
 	}
 	if len(i.ObjectID) > 32 {
-		errors = append(errors, ValidationError{Field: "object_id", Message: "object_id must be 32 characters or less"})
+		errors = append(errors, AnnotationValidationError{Field: "object_id", Message: "object_id must be 32 characters or less"})
 	}
 
 	if !i.ObjectType.IsValid() {
-		errors = append(errors, ValidationError{Field: "object_type", Message: "invalid object_type, must be trace or span"})
+		errors = append(errors, AnnotationValidationError{Field: "object_type", Message: "invalid object_type, must be trace or span"})
 	}
 
 	if !i.Status.IsValid() {
-		errors = append(errors, ValidationError{Field: "status", Message: "invalid status, must be pending, completed, or skipped"})
+		errors = append(errors, AnnotationValidationError{Field: "status", Message: "invalid status, must be pending, completed, or skipped"})
 	}
 
 	return errors
@@ -349,11 +349,11 @@ func NewQueueAssignment(queueID, userID uuid.UUID, role AssignmentRole) *QueueAs
 }
 
 // Validate validates the queue assignment entity.
-func (a *QueueAssignment) Validate() []ValidationError {
-	var errors []ValidationError
+func (a *QueueAssignment) Validate() []AnnotationValidationError {
+	var errors []AnnotationValidationError
 
 	if !a.Role.IsValid() {
-		errors = append(errors, ValidationError{Field: "role", Message: "invalid role, must be annotator, reviewer, or admin"})
+		errors = append(errors, AnnotationValidationError{Field: "role", Message: "invalid role, must be annotator, reviewer, or admin"})
 	}
 
 	return errors

@@ -758,17 +758,17 @@ func (h *handler) deleteItem(ctx context.Context, in *DeleteItemInput) (*DeleteI
 
 // ---- assignments ---------------------------------------------------
 
-type AssignInput struct {
+type AssignQueueUserInput struct {
 	ProjectID string            `path:"projectId" format:"uuid"`
 	QueueID   string            `path:"queueId" format:"uuid"`
 	Body      AssignUserRequest
 }
 
-type AssignOutput struct {
+type AssignQueueUserOutput struct {
 	Body *AssignmentResponse
 }
 
-func (h *handler) assignUser(ctx context.Context, in *AssignInput) (*AssignOutput, error) {
+func (h *handler) assignUser(ctx context.Context, in *AssignQueueUserInput) (*AssignQueueUserOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -789,7 +789,7 @@ func (h *handler) assignUser(ctx context.Context, in *AssignInput) (*AssignOutpu
 		return nil, err
 	}
 	h.logger.InfoContext(ctx, "annotation: user assigned", "queue_id", queueID, "user_id", in.Body.UserID, "role", in.Body.Role)
-	return &AssignOutput{Body: toAssignmentResponse(assignment)}, nil
+	return &AssignQueueUserOutput{Body: toAssignmentResponse(assignment)}, nil
 }
 
 type ListAssignmentsInput = GetQueueInput
@@ -817,15 +817,15 @@ func (h *handler) listAssignments(ctx context.Context, in *ListAssignmentsInput)
 	return &ListAssignmentsOutput{Body: out}, nil
 }
 
-type UnassignInput struct {
+type UnassignQueueUserInput struct {
 	ProjectID string `path:"projectId" format:"uuid"`
 	QueueID   string `path:"queueId" format:"uuid"`
 	UserID    string `path:"userId" format:"uuid"`
 }
 
-type UnassignOutput struct{}
+type UnassignQueueUserOutput struct{}
 
-func (h *handler) unassignUser(ctx context.Context, in *UnassignInput) (*UnassignOutput, error) {
+func (h *handler) unassignUser(ctx context.Context, in *UnassignQueueUserInput) (*UnassignQueueUserOutput, error) {
 	projectID, err := parseProject(in.ProjectID)
 	if err != nil {
 		return nil, err
@@ -841,7 +841,7 @@ func (h *handler) unassignUser(ctx context.Context, in *UnassignInput) (*Unassig
 	if err := h.assignmentSvc.Unassign(ctx, queueID, projectID, userID); err != nil {
 		return nil, err
 	}
-	return &UnassignOutput{}, nil
+	return &UnassignQueueUserOutput{}, nil
 }
 
 type MyAssignmentsOutput struct {

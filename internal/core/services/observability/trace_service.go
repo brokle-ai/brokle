@@ -499,7 +499,7 @@ func (s *TraceService) DiscoverAttributes(ctx context.Context, req *observabilit
 
 // ListSessions returns paginated sessions aggregated from traces.
 // Sessions are identified by session_id attribute on root spans.
-func (s *TraceService) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+func (s *TraceService) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.TraceSessionSummary, error) {
 	if filter == nil {
 		return nil, appErrors.NewValidationError("filter is required", "session filter cannot be nil")
 	}

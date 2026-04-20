@@ -88,7 +88,7 @@ func keyStatus(k authDomain.APIKey) string {
 
 // ----- list-api-keys --------------------------------------------------
 
-type ListAPIKeysInput struct {
+type listAPIKeysInput struct {
 	ProjectID string `path:"projectId" format:"uuid" doc:"Project that owns the API keys"`
 	Status    string `query:"status" required:"false" enum:"active,expired" doc:"Optional status filter"`
 	Page      int    `query:"page" required:"false" minimum:"1" doc:"Page number, 1-indexed"`
@@ -97,7 +97,7 @@ type ListAPIKeysInput struct {
 	SortDir   string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Sort direction"`
 }
 
-type ListAPIKeysOutput struct {
+type listAPIKeysOutput struct {
 	Body listAPIKeysResponse
 }
 
@@ -111,7 +111,7 @@ type listAPIKeysMeta struct {
 	Total      int64              `json:"total"`
 }
 
-func (h *handler) list(ctx context.Context, in *ListAPIKeysInput) (*ListAPIKeysOutput, error) {
+func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -158,7 +158,7 @@ func (h *handler) list(ctx context.Context, in *ListAPIKeysInput) (*ListAPIKeysO
 		}
 	}
 
-	return &ListAPIKeysOutput{
+	return &listAPIKeysOutput{
 		Body: listAPIKeysResponse{
 			Data: out,
 			Meta: listAPIKeysMeta{
@@ -201,7 +201,7 @@ func parsePagination(page, limit int, sortBy, sortDir string) pagination.Params 
 
 // ----- create-api-key -------------------------------------------------
 
-type CreateAPIKeyInput struct {
+type createAPIKeyInput struct {
 	ProjectID string `path:"projectId" format:"uuid" doc:"Project the new key belongs to"`
 	Body      createAPIKeyBody
 }
@@ -211,11 +211,11 @@ type createAPIKeyBody struct {
 	ExpiryOption string `json:"expiry_option" enum:"30days,90days,never" doc:"Expiry bucket"`
 }
 
-type CreateAPIKeyOutput struct {
+type createAPIKeyOutput struct {
 	Body apiKey
 }
 
-func (h *handler) create(ctx context.Context, in *CreateAPIKeyInput) (*CreateAPIKeyOutput, error) {
+func (h *handler) create(ctx context.Context, in *createAPIKeyInput) (*createAPIKeyOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -246,7 +246,7 @@ func (h *handler) create(ctx context.Context, in *CreateAPIKeyInput) (*CreateAPI
 
 	h.logger.InfoContext(ctx, "apikey: created", "user_id", userID, "project_id", projectID, "api_key_id", resp.ID)
 
-	return &CreateAPIKeyOutput{
+	return &createAPIKeyOutput{
 		Body: apiKey{
 			ID:         resp.ID,
 			Name:       resp.Name,
@@ -263,14 +263,14 @@ func (h *handler) create(ctx context.Context, in *CreateAPIKeyInput) (*CreateAPI
 
 // ----- delete-api-key -------------------------------------------------
 
-type DeleteAPIKeyInput struct {
+type deleteAPIKeyInput struct {
 	ProjectID string `path:"projectId" format:"uuid" doc:"Project that owns the key"`
 	KeyID     string `path:"keyId" format:"uuid" doc:"API key to delete"`
 }
 
-type DeleteAPIKeyOutput struct{}
+type deleteAPIKeyOutput struct{}
 
-func (h *handler) delete(ctx context.Context, in *DeleteAPIKeyInput) (*DeleteAPIKeyOutput, error) {
+func (h *handler) delete(ctx context.Context, in *deleteAPIKeyInput) (*deleteAPIKeyOutput, error) {
 	projectID, err := uuid.Parse(in.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
@@ -287,5 +287,5 @@ func (h *handler) delete(ctx context.Context, in *DeleteAPIKeyInput) (*DeleteAPI
 	}
 
 	h.logger.InfoContext(ctx, "apikey: deleted", "user_id", userID, "project_id", projectID, "api_key_id", keyID)
-	return &DeleteAPIKeyOutput{}, nil
+	return &deleteAPIKeyOutput{}, nil
 }

@@ -42,7 +42,7 @@ func NewPlaygroundService(
 }
 
 // All sessions are saved (no ephemeral sessions).
-func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreateSessionRequest) (*playgroundDomain.SessionResponse, error) {
+func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreatePlaygroundSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	if req.Name == "" {
 		return nil, appErrors.NewValidationError("Name required", "name is required")
 	}
@@ -117,7 +117,7 @@ func (s *playgroundService) GetSession(ctx context.Context, sessionID uuid.UUID)
 	return session.ToResponse(), nil
 }
 
-func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDomain.ListSessionsRequest) ([]*playgroundDomain.SessionSummary, error) {
+func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDomain.ListSessionsRequest) ([]*playgroundDomain.PlaygroundSessionSummary, error) {
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
@@ -139,7 +139,7 @@ func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDom
 		return nil, appErrors.NewInternalError("Failed to list sessions", err)
 	}
 
-	summaries := make([]*playgroundDomain.SessionSummary, len(sessions))
+	summaries := make([]*playgroundDomain.PlaygroundSessionSummary, len(sessions))
 	for i, session := range sessions {
 		summaries[i] = session.ToSummary()
 	}

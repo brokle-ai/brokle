@@ -237,32 +237,32 @@ func NewUnsupportedOperatorError(operator string) error {
 }
 
 // ValidateSpanQueryRequest validates the span query request parameters.
-func ValidateSpanQueryRequest(req *SpanQueryRequest) []ValidationError {
-	var errs []ValidationError
+func ValidateSpanQueryRequest(req *SpanQueryRequest) []ObservabilityValidationError {
+	var errs []ObservabilityValidationError
 
 	// Filter validation
 	if req.Filter == "" {
-		errs = append(errs, ValidationError{Field: "filter", Message: "filter is required"})
+		errs = append(errs, ObservabilityValidationError{Field: "filter", Message: "filter is required"})
 	} else if len(req.Filter) > SpanQueryMaxFilterLen {
-		errs = append(errs, ValidationError{Field: "filter", Message: "filter expression too long"})
+		errs = append(errs, ObservabilityValidationError{Field: "filter", Message: "filter expression too long"})
 	}
 
 	// Limit validation
 	if req.Limit < 0 {
-		errs = append(errs, ValidationError{Field: "limit", Message: "limit must be non-negative"})
+		errs = append(errs, ObservabilityValidationError{Field: "limit", Message: "limit must be non-negative"})
 	} else if req.Limit > SpanQueryMaxLimit {
-		errs = append(errs, ValidationError{Field: "limit", Message: "limit exceeds maximum allowed"})
+		errs = append(errs, ObservabilityValidationError{Field: "limit", Message: "limit exceeds maximum allowed"})
 	}
 
 	// Page validation
 	if req.Page < 1 {
-		errs = append(errs, ValidationError{Field: "page", Message: "page must be >= 1"})
+		errs = append(errs, ObservabilityValidationError{Field: "page", Message: "page must be >= 1"})
 	}
 
 	// Time range validation
 	if req.StartTime != nil && req.EndTime != nil {
 		if req.EndTime.Before(*req.StartTime) {
-			errs = append(errs, ValidationError{Field: "end_time", Message: "end_time must be after start_time"})
+			errs = append(errs, ObservabilityValidationError{Field: "end_time", Message: "end_time must be after start_time"})
 		}
 	}
 
