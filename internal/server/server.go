@@ -37,10 +37,10 @@ type Server struct {
 	errCh   chan error
 }
 
-// New constructs a Server. Building the chi mux, the two huma.API
-// instances, and wiring the route table happens here so any
-// misconfiguration (jub0bs/cors panics, duplicate route registration)
-// fails at boot rather than first request.
+// New constructs a Server. Building the chi mux and wiring the route
+// table happens here so any misconfiguration (jub0bs/cors panics,
+// duplicate route registration) fails at boot rather than first
+// request.
 //
 // Caller is responsible for invoking Start to bind the listener and
 // Shutdown to drain. Returns an error only when the listener bind

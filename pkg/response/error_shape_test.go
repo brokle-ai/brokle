@@ -91,10 +91,7 @@ func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 		t.Fatalf("json.Marshal(AppError): %v", err)
 	}
 
-	// Install the factory so NewError goes through our wrapper.
-	response.InstallHumaErrorFactory()
-
-	// Pipeline path — same shape as Huma's internal wrapAppError. We
+	// Pipeline path — wire shape when handler returns *AppError. We
 	// go through the public NewError factory installer: it matches
 	// the factory's output which is what the wire sees.
 	// Build the wrapped *statusError: we marshal ErrorResponse with

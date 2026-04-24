@@ -234,11 +234,6 @@ type inner struct {
 	Errors  []ErrorDetail `json:"errors,omitempty"`
 }
 
-// GetStatus satisfies huma.StatusError so AppError values returned from
-// Huma operation handlers map to the right HTTP status without an
-// explicit conversion.
-func (e *AppError) GetStatus() int { return e.HTTPStatus() }
-
 // CodeOrType returns the explicit Code, falling back to the Type's
 // string form when Code is empty. Used by the wire renderer to ensure
 // the on-the-wire `code` field is never empty.

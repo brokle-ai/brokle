@@ -13,11 +13,10 @@ import (
 )
 
 // installGlobalMiddleware applies the process-wide middleware stack
-// on mux. Called from server.New EXACTLY ONCE, before any route is
-// registered on mux — and critically, before humachi.New constructs
-// the Huma APIs (humachi's constructor registers /openapi, /docs,
-// and /schemas routes immediately, sealing the mux for further
-// chi.Mux.Use calls at go-chi/chi/v5/mux.go:100-104).
+// on mux. Called from server.New EXACTLY ONCE, before addRoutes
+// registers any route. chi panics once the mux has any route
+// (go-chi/chi/v5/mux.go:100-104), so mux-level middleware MUST
+// precede all route registration.
 //
 // Two layers of middleware are installed here:
 //
