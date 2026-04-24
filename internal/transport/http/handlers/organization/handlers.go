@@ -1,26 +1,25 @@
 // Package organization exposes /api/v1/organizations/* and
-// /api/v1/invitations/* operations on the dashboard plane (apiAdmin).
-// Covers organization CRUD, member listing/removal, invitation
-// lifecycle (create / list pending / resend / revoke / accept /
-// decline / user's own), and organization-settings CRUD.
+// /api/v1/invitations/* operations on the dashboard plane. Covers
+// organization CRUD, member listing/removal, invitation lifecycle
+// (create / list pending / resend / revoke / accept / decline /
+// user's own), and organization-settings CRUD.
 //
-// Every route requires RequireAuth — httpctx.MustGetUserID is safe.
+// Every route requires RequireAuth.
 package organization
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
@@ -32,10 +31,10 @@ type handler struct {
 	logger        *slog.Logger
 }
 
-// RegisterRoutes registers every organization / invitation / settings
-// operation on apiAdmin.
+// RegisterRoutes mounts the organization / invitation / settings
+// routes on r. Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
-	api huma.API,
+	r chi.Router,
 	orgSvc organization.OrganizationService,
 	memberSvc organization.MemberService,
 	invitationSvc organization.InvitationService,
@@ -50,233 +49,38 @@ func RegisterRoutes(
 		logger:        logger,
 	}
 
-	// ----- organizations -----
+	r.Route("/api/v1/organizations", func(r chi.Router) {
+		r.Get("/", h.listOrganizations)
+		r.Post("/", h.createOrganization)
+		r.Route("/{orgId}", func(r chi.Router) {
+			r.Get("/", h.getOrganization)
+			r.Patch("/", h.updateOrganization)
+			r.Delete("/", h.deleteOrganization)
+			r.Get("/members", h.listMembers)
+			r.Delete("/members/{userId}", h.removeMember)
+			r.Post("/invitations", h.createInvitation)
+			r.Get("/invitations", h.listPendingInvitations)
+			r.Post("/invitations/{invitationId}/resend", h.resendInvitation)
+			r.Delete("/invitations/{invitationId}", h.revokeInvitation)
+			r.Route("/settings", func(r chi.Router) {
+				r.Get("/", h.listSettings)
+				r.Post("/", h.createSetting)
+				r.Get("/{key}", h.getSetting)
+				r.Put("/{key}", h.updateSetting)
+				r.Delete("/{key}", h.deleteSetting)
+			})
+		})
+	})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-organizations",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations",
-		Tags:        []string{"organizations"},
-		Summary:     "List organizations the authenticated user belongs to",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listOrganizations)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-organization",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/organizations",
-		Tags:          []string{"organizations"},
-		Summary:       "Create an organization; caller becomes owner",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createOrganization)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-organization",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}",
-		Tags:        []string{"organizations"},
-		Summary:     "Get organization details",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getOrganization)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-organization",
-		Method:      http.MethodPatch,
-		Path:        "/api/v1/organizations/{orgId}",
-		Tags:        []string{"organizations"},
-		Summary:     "Partially update organization",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateOrganization)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-organization",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/organizations/{orgId}",
-		Tags:          []string{"organizations"},
-		Summary:       "Delete an organization",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteOrganization)
-
-	// ----- members -----
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-organization-members",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/members",
-		Tags:        []string{"organizations"},
-		Summary:     "List members of an organization",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listMembers)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "remove-organization-member",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/organizations/{orgId}/members/{userId}",
-		Tags:          []string{"organizations"},
-		Summary:       "Remove a member from an organization",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.removeMember)
-
-	// ----- invitations (org-scoped) -----
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-invitation",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/organizations/{orgId}/invitations",
-		Tags:          []string{"invitations"},
-		Summary:       "Invite a user to join the organization",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createInvitation)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-pending-invitations",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/invitations",
-		Tags:        []string{"invitations"},
-		Summary:     "List pending invitations for an organization",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listPendingInvitations)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "resend-invitation",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/organizations/{orgId}/invitations/{invitationId}/resend",
-		Tags:        []string{"invitations"},
-		Summary:     "Resend an invitation with a new token",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.resendInvitation)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "revoke-invitation",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/organizations/{orgId}/invitations/{invitationId}",
-		Tags:          []string{"invitations"},
-		Summary:       "Revoke a pending invitation",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.revokeInvitation)
-
-	// ----- invitations (user-scoped) -----
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-user-invitations",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/invitations",
-		Tags:        []string{"invitations"},
-		Summary:     "List the authenticated user's pending invitations",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listUserInvitations)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "validate-invitation-token",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/invitations/validate/{token}",
-		Tags:        []string{"invitations"},
-		Summary:     "Validate an invitation token and return display details",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.validateInvitationToken)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "accept-invitation",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/invitations/accept",
-		Tags:          []string{"invitations"},
-		Summary:       "Accept an invitation",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.acceptInvitation)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "decline-invitation",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/invitations/decline",
-		Tags:          []string{"invitations"},
-		Summary:       "Decline an invitation",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.declineInvitation)
-
-	// ----- settings -----
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-organization-settings",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/settings",
-		Tags:        []string{"organization-settings"},
-		Summary:     "Get all organization settings as key-value pairs",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listSettings)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-organization-setting",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/organizations/{orgId}/settings",
-		Tags:          []string{"organization-settings"},
-		Summary:       "Create an organization setting",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createSetting)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-organization-setting",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/settings/{key}",
-		Tags:        []string{"organization-settings"},
-		Summary:     "Get a single organization setting by key",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getSetting)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-organization-setting",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/organizations/{orgId}/settings/{key}",
-		Tags:        []string{"organization-settings"},
-		Summary:     "Update an organization setting",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateSetting)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-organization-setting",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/organizations/{orgId}/settings/{key}",
-		Tags:          []string{"organization-settings"},
-		Summary:       "Delete an organization setting",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteSetting)
+	r.Route("/api/v1/invitations", func(r chi.Router) {
+		r.Get("/", h.listUserInvitations)
+		r.Get("/validate/{token}", h.validateInvitationToken)
+		r.Post("/accept", h.acceptInvitation)
+		r.Post("/decline", h.declineInvitation)
+	})
 }
 
-// ----- shared helpers --------------------------------------------------
-
-func parseOrg(orgIDStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(orgIDStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseInvitation(idStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid invitation ID", "invitationId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseUser(idStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid user ID", "userId must be a valid UUID")
-	}
-	return id, nil
-}
-
-// ----- response DTOs ---------------------------------------------------
+// ----- response helpers -----------------------------------------------
 
 func toOrganizationResponse(o *organization.Organization) organizationResponse {
 	return organizationResponse{
@@ -322,32 +126,54 @@ func toInvitationResponse(inv *organization.Invitation) invitationResponse {
 	}
 }
 
-// ----- list-organizations ----------------------------------------------
+func toSettingResponse(s *organization.OrganizationSettings) settingResponse {
+	value, _ := s.GetValue()
+	return settingResponse{
+		ID:             s.ID,
+		OrganizationID: s.OrganizationID,
+		Key:            s.Key,
+		Value:          value,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+	}
+}
 
-func (h *handler) listOrganizations(ctx context.Context, in *ListOrganizationsInput) (*ListOrganizationsOutput, error) {
-	userID := httpctx.MustGetUserID(ctx)
+// ----- list-organizations ---------------------------------------------
 
-	orgs, err := h.orgSvc.GetUserOrganizations(ctx, userID)
+func (h *handler) listOrganizations(w http.ResponseWriter, r *http.Request) {
+	userID := httpctx.MustGetUserID(r.Context())
+
+	orgs, err := h.orgSvc.GetUserOrganizations(r.Context(), userID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	page := in.Page
+	page, err := request.QueryInt(r, "page", 1)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
 	if page < 1 {
 		page = 1
 	}
-	limit := in.Limit
+	limit, err := request.QueryInt(r, "limit", 20)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
 	if limit < 1 {
 		limit = 20
 	}
-	sortDir := in.SortDir
+	sortDir := r.URL.Query().Get("sort_dir")
 	if sortDir == "" {
 		sortDir = "desc"
 	}
+	search := r.URL.Query().Get("search")
 
 	filtered := make([]organizationResponse, 0, len(orgs))
 	for _, o := range orgs {
-		if in.Search != "" && !strings.Contains(strings.ToLower(o.Name), strings.ToLower(in.Search)) {
+		if search != "" && !strings.Contains(strings.ToLower(o.Name), strings.ToLower(search)) {
 			continue
 		}
 		filtered = append(filtered, toOrganizationResponse(o))
@@ -371,260 +197,312 @@ func (h *handler) listOrganizations(ctx context.Context, in *ListOrganizationsIn
 	}
 	filtered = filtered[offset:end]
 
-	return &ListOrganizationsOutput{Body: listOrganizationsBody{
+	response.Success(w, listOrganizationsBody{
 		Data:       filtered,
 		Pagination: response.BuildPagination(page, limit, int64(total)),
-	}}, nil
+	})
 }
 
-// ----- create-organization ---------------------------------------------
+// ----- create-organization --------------------------------------------
 
-func (h *handler) createOrganization(ctx context.Context, in *CreateOrganizationInput) (*CreateOrganizationOutput, error) {
-	userID := httpctx.MustGetUserID(ctx)
+func (h *handler) createOrganization(w http.ResponseWriter, r *http.Request) {
+	userID := httpctx.MustGetUserID(r.Context())
 
-	org, err := h.orgSvc.CreateOrganization(ctx, userID, &organization.CreateOrganizationRequest{
-		Name: in.Body.Name,
+	var body createOrganizationBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	org, err := h.orgSvc.CreateOrganization(r.Context(), userID, &organization.CreateOrganizationRequest{
+		Name: body.Name,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateOrganizationOutput{Body: toOrganizationResponse(org)}, nil
+	response.Created(w, toOrganizationResponse(org))
 }
 
-// ----- get-organization ------------------------------------------------
+// ----- get-organization -----------------------------------------------
 
-func (h *handler) getOrganization(ctx context.Context, in *GetOrganizationInput) (*GetOrganizationOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) getOrganization(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	canAccess, err := h.memberSvc.CanUserAccessOrganization(ctx, userID, orgID)
+	canAccess, err := h.memberSvc.CanUserAccessOrganization(r.Context(), userID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !canAccess {
-		return nil, appErrors.NewForbiddenError("Insufficient permissions to access this organization")
+		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to access this organization"))
+		return
 	}
 
-	org, err := h.orgSvc.GetOrganization(ctx, orgID)
+	org, err := h.orgSvc.GetOrganization(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetOrganizationOutput{Body: toOrganizationResponse(org)}, nil
+	response.Success(w, toOrganizationResponse(org))
 }
 
-// ----- update-organization ---------------------------------------------
+// ----- update-organization --------------------------------------------
 
-func (h *handler) updateOrganization(ctx context.Context, in *UpdateOrganizationInput) (*UpdateOrganizationOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) updateOrganization(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	canAccess, err := h.memberSvc.CanUserAccessOrganization(ctx, userID, orgID)
+	canAccess, err := h.memberSvc.CanUserAccessOrganization(r.Context(), userID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !canAccess {
-		return nil, appErrors.NewForbiddenError("Insufficient permissions to update this organization")
+		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to update this organization"))
+		return
 	}
 
-	if err := h.orgSvc.UpdateOrganization(ctx, orgID, &organization.UpdateOrganizationRequest{
-		Name:         in.Body.Name,
-		BillingEmail: in.Body.BillingEmail,
+	var body updateOrganizationBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	if err := h.orgSvc.UpdateOrganization(r.Context(), orgID, &organization.UpdateOrganizationRequest{
+		Name:         body.Name,
+		BillingEmail: body.BillingEmail,
 	}); err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	org, err := h.orgSvc.GetOrganization(ctx, orgID)
+	org, err := h.orgSvc.GetOrganization(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateOrganizationOutput{Body: toOrganizationResponse(org)}, nil
+	response.Success(w, toOrganizationResponse(org))
 }
 
-// ----- delete-organization ---------------------------------------------
+// ----- delete-organization --------------------------------------------
 
-func (h *handler) deleteOrganization(ctx context.Context, in *DeleteOrganizationInput) (*DeleteOrganizationOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) deleteOrganization(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	canAccess, err := h.memberSvc.CanUserAccessOrganization(ctx, userID, orgID)
+	canAccess, err := h.memberSvc.CanUserAccessOrganization(r.Context(), userID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !canAccess {
-		return nil, appErrors.NewForbiddenError("Insufficient permissions to delete this organization")
+		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to delete this organization"))
+		return
 	}
-	if err := h.orgSvc.DeleteOrganization(ctx, orgID); err != nil {
-		return nil, err
+	if err := h.orgSvc.DeleteOrganization(r.Context(), orgID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteOrganizationOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- list-members ----------------------------------------------------
+// ----- list-members ---------------------------------------------------
 
-func (h *handler) listMembers(ctx context.Context, in *ListMembersInput) (*ListMembersOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) listMembers(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	canAccess, err := h.memberSvc.CanUserAccessOrganization(ctx, userID, orgID)
+	canAccess, err := h.memberSvc.CanUserAccessOrganization(r.Context(), userID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !canAccess {
-		return nil, appErrors.NewForbiddenError("Insufficient permissions to view organization members")
+		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to view organization members"))
+		return
 	}
 
-	members, err := h.memberSvc.GetMembers(ctx, orgID)
+	members, err := h.memberSvc.GetMembers(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
+	status := r.URL.Query().Get("status")
 	out := make([]memberResponse, 0, len(members))
 	for _, m := range members {
-		if in.Status != "" && m.Status != in.Status {
+		if status != "" && m.Status != status {
 			continue
 		}
 		out = append(out, toMemberResponse(m))
 	}
-	return &ListMembersOutput{Body: listMembersBody{Members: out, Total: len(out)}}, nil
+	response.Success(w, listMembersBody{Members: out, Total: len(out)})
 }
 
-// ----- remove-member ---------------------------------------------------
+// ----- remove-member --------------------------------------------------
 
-func (h *handler) removeMember(ctx context.Context, in *RemoveMemberInput) (*RemoveMemberOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) removeMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	targetUserID, err := parseUser(in.UserID)
+	targetUserID, err := request.URLParamUUID(r, "userId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	callerID := httpctx.MustGetUserID(ctx)
+	callerID := httpctx.MustGetUserID(r.Context())
 
-	canAccess, err := h.memberSvc.CanUserAccessOrganization(ctx, callerID, orgID)
+	canAccess, err := h.memberSvc.CanUserAccessOrganization(r.Context(), callerID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !canAccess {
-		return nil, appErrors.NewForbiddenError("Insufficient permissions to remove members from this organization")
+		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to remove members from this organization"))
+		return
 	}
-	if err := h.memberSvc.RemoveMember(ctx, orgID, targetUserID, callerID); err != nil {
-		return nil, err
+	if err := h.memberSvc.RemoveMember(r.Context(), orgID, targetUserID, callerID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &RemoveMemberOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- create-invitation -----------------------------------------------
+// ----- create-invitation ----------------------------------------------
 
-func (h *handler) createInvitation(ctx context.Context, in *CreateInvitationInput) (*CreateInvitationOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) createInvitation(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	invitation, err := h.invitationSvc.InviteUser(ctx, orgID, userID, &organization.InviteUserRequest{
-		Email:   strings.ToLower(strings.TrimSpace(in.Body.Email)),
-		RoleID:  in.Body.RoleID,
-		Message: in.Body.Message,
+	var body createInvitationBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	invitation, err := h.invitationSvc.InviteUser(r.Context(), orgID, userID, &organization.InviteUserRequest{
+		Email:   strings.ToLower(strings.TrimSpace(body.Email)),
+		RoleID:  body.RoleID,
+		Message: body.Message,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateInvitationOutput{Body: toInvitationResponse(invitation)}, nil
+	response.Created(w, toInvitationResponse(invitation))
 }
 
-// ----- list-pending-invitations ----------------------------------------
+// ----- list-pending-invitations ---------------------------------------
 
-func (h *handler) listPendingInvitations(ctx context.Context, in *ListPendingInvitationsInput) (*ListPendingInvitationsOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) listPendingInvitations(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	isMember, err := h.memberSvc.IsMember(ctx, userID, orgID)
+	isMember, err := h.memberSvc.IsMember(r.Context(), userID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if !isMember {
-		return nil, appErrors.NewForbiddenError("You are not authorized to view this organization's invitations")
+		response.WriteError(w, appErrors.NewForbiddenError("You are not authorized to view this organization's invitations"))
+		return
 	}
 
-	// inv.Inviter and inv.Role are pre-loaded via LEFT JOIN in the
-	// repository — no per-row user/role lookups here.
-	invitations, err := h.invitationSvc.GetPendingInvitations(ctx, orgID)
+	invitations, err := h.invitationSvc.GetPendingInvitations(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	resp := make([]invitationResponse, 0, len(invitations))
 	for _, inv := range invitations {
 		resp = append(resp, toInvitationResponse(inv))
 	}
-	return &ListPendingInvitationsOutput{Body: listPendingInvitationsBody{
+	response.Success(w, listPendingInvitationsBody{
 		Invitations: resp,
 		Total:       len(resp),
-	}}, nil
+	})
 }
 
-// ----- resend-invitation -----------------------------------------------
+// ----- resend-invitation ----------------------------------------------
 
-func (h *handler) resendInvitation(ctx context.Context, in *ResendInvitationInput) (*ResendInvitationOutput, error) {
-	if _, err := parseOrg(in.OrgID); err != nil {
-		return nil, err
+func (h *handler) resendInvitation(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	invitationID, err := parseInvitation(in.InvitationID)
+	invitationID, err := request.URLParamUUID(r, "invitationId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	invitation, err := h.invitationSvc.ResendInvitation(ctx, invitationID, userID)
+	invitation, err := h.invitationSvc.ResendInvitation(r.Context(), invitationID, userID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ResendInvitationOutput{Body: toInvitationResponse(invitation)}, nil
+	response.Success(w, toInvitationResponse(invitation))
 }
 
-// ----- revoke-invitation -----------------------------------------------
+// ----- revoke-invitation ----------------------------------------------
 
-func (h *handler) revokeInvitation(ctx context.Context, in *RevokeInvitationInput) (*RevokeInvitationOutput, error) {
-	if _, err := parseOrg(in.OrgID); err != nil {
-		return nil, err
+func (h *handler) revokeInvitation(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	invitationID, err := parseInvitation(in.InvitationID)
+	invitationID, err := request.URLParamUUID(r, "invitationId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	if err := h.invitationSvc.RevokeInvitation(ctx, invitationID, userID); err != nil {
-		return nil, err
+	if err := h.invitationSvc.RevokeInvitation(r.Context(), invitationID, userID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &RevokeInvitationOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- list-user-invitations -------------------------------------------
+// ----- list-user-invitations ------------------------------------------
 
-func (h *handler) listUserInvitations(ctx context.Context, in *ListUserInvitationsInput) (*ListUserInvitationsOutput, error) {
-	claims := httpctx.MustGetTokenClaims(ctx)
+func (h *handler) listUserInvitations(w http.ResponseWriter, r *http.Request) {
+	claims := httpctx.MustGetTokenClaims(r.Context())
 
-	// inv.Role and inv.Inviter are pre-loaded via LEFT JOIN.
-	invitations, err := h.invitationSvc.GetUserInvitations(ctx, claims.Email)
+	invitations, err := h.invitationSvc.GetUserInvitations(r.Context(), claims.Email)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
 	now := time.Now()
@@ -638,7 +516,7 @@ func (h *handler) listUserInvitations(ctx context.Context, in *ListUserInvitatio
 		}
 
 		orgName := ""
-		if org, err := h.orgSvc.GetOrganization(ctx, inv.OrganizationID); err == nil {
+		if org, err := h.orgSvc.GetOrganization(r.Context(), inv.OrganizationID); err == nil {
 			orgName = org.Name
 		}
 
@@ -655,35 +533,38 @@ func (h *handler) listUserInvitations(ctx context.Context, in *ListUserInvitatio
 			CreatedAt:        inv.CreatedAt,
 		})
 	}
-	return &ListUserInvitationsOutput{Body: listUserInvitationsBody{
+	response.Success(w, listUserInvitationsBody{
 		Invitations: out,
 		Total:       len(out),
-	}}, nil
+	})
 }
 
-// ----- validate-invitation-token ---------------------------------------
+// ----- validate-invitation-token --------------------------------------
 
-func (h *handler) validateInvitationToken(ctx context.Context, in *ValidateInvitationTokenInput) (*ValidateInvitationTokenOutput, error) {
-	invitation, err := h.invitationSvc.GetInvitationByToken(ctx, in.Token)
+func (h *handler) validateInvitationToken(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	invitation, err := h.invitationSvc.GetInvitationByToken(r.Context(), token)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
 	isExpired := time.Now().After(invitation.ExpiresAt) ||
 		invitation.Status != organization.InvitationStatusPending
 	if isExpired {
-		// Closest AppError type for 410 Gone semantics; surfaces as 409.
-		return nil, appErrors.NewConflictError("Invitation has expired or is no longer valid", appErrors.WithCode("invitation_expired"))
+		response.WriteError(w, appErrors.NewConflictError(
+			"Invitation has expired or is no longer valid",
+			appErrors.WithCode("invitation_expired"),
+		))
+		return
 	}
 
-	org, err := h.orgSvc.GetOrganization(ctx, invitation.OrganizationID)
+	org, err := h.orgSvc.GetOrganization(r.Context(), invitation.OrganizationID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	// Inviter and Role are hydration-only fields: single-row reads
-	// (GetInvitationByToken) leave them nil. Fall through to sentinels
-	// when absent — no per-request user/role service lookups.
 	roleName := "Member"
 	if invitation.Role != nil {
 		roleName = invitation.Role.Name
@@ -693,7 +574,7 @@ func (h *handler) validateInvitationToken(ctx context.Context, in *ValidateInvit
 		inviterName = invitation.Inviter.FirstName
 	}
 
-	return &ValidateInvitationTokenOutput{Body: invitationDetailsBody{
+	response.Success(w, invitationDetailsBody{
 		OrganizationID:   org.ID,
 		OrganizationName: org.Name,
 		Email:            invitation.Email,
@@ -701,118 +582,141 @@ func (h *handler) validateInvitationToken(ctx context.Context, in *ValidateInvit
 		InviterName:      inviterName,
 		ExpiresAt:        invitation.ExpiresAt,
 		IsExpired:        isExpired,
-	}}, nil
+	})
 }
 
-// ----- accept-invitation -----------------------------------------------
+// ----- accept-invitation ----------------------------------------------
 
-func (h *handler) acceptInvitation(ctx context.Context, in *AcceptInvitationInput) (*AcceptInvitationOutput, error) {
-	userID := httpctx.MustGetUserID(ctx)
-	if _, err := h.invitationSvc.AcceptInvitation(ctx, in.Body.Token, userID); err != nil {
-		return nil, err
+func (h *handler) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+	userID := httpctx.MustGetUserID(r.Context())
+	var body acceptInvitationBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &AcceptInvitationOutput{}, nil
-}
-
-// ----- decline-invitation ----------------------------------------------
-
-func (h *handler) declineInvitation(ctx context.Context, in *DeclineInvitationInput) (*DeclineInvitationOutput, error) {
-	if err := h.invitationSvc.DeclineInvitation(ctx, in.Body.Token); err != nil {
-		return nil, err
+	if _, err := h.invitationSvc.AcceptInvitation(r.Context(), body.Token, userID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeclineInvitationOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- settings --------------------------------------------------------
+// ----- decline-invitation ---------------------------------------------
 
-func toSettingResponse(s *organization.OrganizationSettings) settingResponse {
-	value, _ := s.GetValue()
-	return settingResponse{
-		ID:             s.ID,
-		OrganizationID: s.OrganizationID,
-		Key:            s.Key,
-		Value:          value,
-		CreatedAt:      s.CreatedAt,
-		UpdatedAt:      s.UpdatedAt,
+func (h *handler) declineInvitation(w http.ResponseWriter, r *http.Request) {
+	var body declineInvitationBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
+	if err := h.invitationSvc.DeclineInvitation(r.Context(), body.Token); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.NoContent(w)
 }
 
-// ----- list-settings ---------------------------------------------------
+// ----- list-settings --------------------------------------------------
 
-func (h *handler) listSettings(ctx context.Context, in *ListSettingsInput) (*ListSettingsOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) listSettings(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	settings, err := h.settingsSvc.GetAllSettings(ctx, orgID)
+	settings, err := h.settingsSvc.GetAllSettings(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListSettingsOutput{Body: listSettingsBody{Settings: settings}}, nil
+	response.Success(w, listSettingsBody{Settings: settings})
 }
 
-// ----- create-setting --------------------------------------------------
+// ----- create-setting -------------------------------------------------
 
-func (h *handler) createSetting(ctx context.Context, in *CreateSettingInput) (*CreateSettingOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) createSetting(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	setting, err := h.settingsSvc.CreateSetting(ctx, orgID, userID, &organization.CreateOrganizationSettingRequest{
-		Key:   in.Body.Key,
-		Value: in.Body.Value,
+	var body createSettingBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	setting, err := h.settingsSvc.CreateSetting(r.Context(), orgID, userID, &organization.CreateOrganizationSettingRequest{
+		Key:   body.Key,
+		Value: body.Value,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateSettingOutput{Body: toSettingResponse(setting)}, nil
+	response.Created(w, toSettingResponse(setting))
 }
 
-// ----- get-setting -----------------------------------------------------
+// ----- get-setting ----------------------------------------------------
 
-func (h *handler) getSetting(ctx context.Context, in *GetSettingInput) (*GetSettingOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) getSetting(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	setting, err := h.settingsSvc.GetSetting(ctx, orgID, in.Key)
+	key := chi.URLParam(r, "key")
+	setting, err := h.settingsSvc.GetSetting(r.Context(), orgID, key)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetSettingOutput{Body: toSettingResponse(setting)}, nil
+	response.Success(w, toSettingResponse(setting))
 }
 
-// ----- update-setting --------------------------------------------------
+// ----- update-setting -------------------------------------------------
 
-func (h *handler) updateSetting(ctx context.Context, in *UpdateSettingInput) (*UpdateSettingOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) updateSetting(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	key := chi.URLParam(r, "key")
+	userID := httpctx.MustGetUserID(r.Context())
 
-	setting, err := h.settingsSvc.UpdateSetting(ctx, orgID, in.Key, userID, &organization.UpdateOrganizationSettingRequest{
-		Value: in.Body.Value,
+	var body updateSettingBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	setting, err := h.settingsSvc.UpdateSetting(r.Context(), orgID, key, userID, &organization.UpdateOrganizationSettingRequest{
+		Value: body.Value,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateSettingOutput{Body: toSettingResponse(setting)}, nil
+	response.Success(w, toSettingResponse(setting))
 }
 
-// ----- delete-setting --------------------------------------------------
+// ----- delete-setting -------------------------------------------------
 
-func (h *handler) deleteSetting(ctx context.Context, in *DeleteSettingInput) (*DeleteSettingOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) deleteSetting(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	key := chi.URLParam(r, "key")
+	userID := httpctx.MustGetUserID(r.Context())
 
-	if err := h.settingsSvc.DeleteSetting(ctx, orgID, in.Key, userID); err != nil {
-		return nil, err
+	if err := h.settingsSvc.DeleteSetting(r.Context(), orgID, key, userID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteSettingOutput{}, nil
+	response.NoContent(w)
 }

@@ -38,7 +38,6 @@ import (
 	"brokle/internal/testing/humax"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
-	organizationHandler "brokle/internal/transport/http/handlers/organization"
 )
 
 // ---- interface stubs -------------------------------------------------
@@ -83,7 +82,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// credentialsHandler is chi-native (off Huma); it no longer
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
-	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)
 
 	// Observability takes concrete *TraceService / *ScoreService /
 	// *ScoreAnalyticsService / *FilterPresetService pointers (not
