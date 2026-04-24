@@ -1,0 +1,80 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useSuspenseQuery } from '@tanstack/react-query'
+import { z } from 'zod'
+import { BrokleError } from '@/lib/api/errors'
+import { MembersTable } from '@/features/members/components'
+import { memberListQueryOptions } from '@/features/members/api/queries'
+
+// Search params exist for forward-compat (future pagination / search).
+// The current list-members endpoint returns all members in a single
+// response, so these values are stored in the URL but not yet sent
+// to the backend — see members/api/queries.ts.
+const searchSchema = z.object({
+  page: z.number().int().min(1).catch(1),
+  limit: z.number().int().min(1).max(100).catch(50),
+  q: z.string().optional().catch(undefined),
+})
+
+export const Route = createFileRoute(
+  '/_authenticated/o/$orgId/p/$projectId/settings/members',
+)({
+  validateSearch: searchSchema,
+  loaderDeps: ({ search }) => ({
+    page: search.page,
+    limit: search.limit,
+    q: search.q,
+  }),
+  loader: ({ params, context, deps }) =>
+    context.queryClient.ensureQueryData(
+      memberListQueryOptions(params.orgId, {
+        page: deps.page,
+        limit: deps.limit,
+        q: deps.q,
+      }),
+    ),
+  errorComponent: MembersErrorBoundary,
+  component: MembersPage,
+})
+
+function MembersErrorBoundary({ error }: { error: Error }) {
+  if (
+    error instanceof BrokleError &&
+    error.status >= 400 &&
+    error.status < 500
+  ) {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-6">
+        <p className="text-sm font-medium text-destructive">
+          Unable to load members
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    )
+  }
+  throw error
+}
+
+function MembersPage() {
+  const { orgId } = Route.useParams()
+  const search = Route.useSearch()
+  const { data } = useSuspenseQuery(
+    memberListQueryOptions(orgId, {
+      page: search.page,
+      limit: search.limit,
+      q: search.q,
+    }),
+  )
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Members</h2>
+        <p className="text-sm text-muted-foreground">
+          {data.total.toLocaleString()} total
+        </p>
+      </div>
+
+      <MembersTable rows={data.members} />
+    </section>
+  )
+}
