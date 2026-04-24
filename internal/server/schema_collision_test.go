@@ -35,7 +35,6 @@ import (
 	annotationDomain "brokle/internal/core/domain/annotation"
 	authDomain "brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
-	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
 	promptDomain "brokle/internal/core/domain/prompt"
@@ -43,7 +42,6 @@ import (
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	billingHandler "brokle/internal/transport/http/handlers/billing"
-	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
@@ -62,9 +60,6 @@ import (
 
 type dummyOrg struct{ orgDomain.OrganizationService }
 type dummyMember struct{ orgDomain.MemberService }
-type dummyDashboard struct{ dashboardDomain.DashboardService }
-type dummyWidgetQuery struct{ dashboardDomain.WidgetQueryService }
-type dummyTemplate struct{ dashboardDomain.TemplateService }
 type dummyAnnotationQueue struct{ annotationDomain.QueueService }
 type dummyAnnotationItem struct{ annotationDomain.ItemService }
 type dummyAnnotationAssignment struct{ annotationDomain.AssignmentService }
@@ -109,7 +104,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// credentialsHandler is chi-native (off Huma); it no longer
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
-	dashboardHandler.RegisterRoutes(api, dummyDashboard{}, dummyWidgetQuery{}, dummyTemplate{}, logger)
 	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
 	billingHandler.RegisterRoutes(api, dummyBillingUsage{}, dummyBillingBudget{}, dummyBillingContract{}, dummyBillingPricing{}, logger)
 	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)

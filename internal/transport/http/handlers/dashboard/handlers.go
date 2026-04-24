@@ -9,8 +9,7 @@
 //
 // Every op requires RequireAuth. The dashboard service enforces
 // project-scoped checks on its own queries; the handler does no
-// additional membership validation (matches the pre-migration
-// gin behaviour).
+// additional membership validation.
 package dashboard
 
 import (
@@ -18,12 +17,14 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 type handler struct {
@@ -33,9 +34,10 @@ type handler struct {
 	logger   *slog.Logger
 }
 
-// RegisterRoutes registers every dashboard operation on apiAdmin.
+// RegisterRoutes mounts the dashboard routes on r. Expected mount
+// context: the authed dashboard chi group.
 func RegisterRoutes(
-	api huma.API,
+	r chi.Router,
 	svc dashboardDomain.DashboardService,
 	query dashboardDomain.WidgetQueryService,
 	template dashboardDomain.TemplateService,
@@ -43,199 +45,33 @@ func RegisterRoutes(
 ) {
 	h := &handler{svc: svc, query: query, template: template, logger: logger}
 
-	// ---- core CRUD ---------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-dashboards",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/dashboards",
-		Tags:        []string{"dashboards"},
-		Summary:     "List dashboards for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.list)
+	r.Route("/api/v1/projects/{projectId}/dashboards", func(r chi.Router) {
+		r.Get("/", h.list)
+		r.Post("/", h.create)
+		r.Post("/import", h.importDashboard)
+		r.Post("/from-template", h.createFromTemplate)
+		r.Get("/variable-options", h.variableOptions)
+		r.Route("/{dashboardId}", func(r chi.Router) {
+			r.Get("/", h.get)
+			r.Put("/", h.update)
+			r.Delete("/", h.delete)
+			r.Post("/duplicate", h.duplicate)
+			r.Post("/lock", h.lock)
+			r.Post("/unlock", h.unlock)
+			r.Get("/export", h.export)
+			r.Post("/execute", h.executeDashboard)
+			r.Post("/widgets/{widgetId}/execute", h.executeWidget)
+		})
+	})
 
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-dashboard",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/dashboards",
-		Tags:          []string{"dashboards"},
-		Summary:       "Create a dashboard",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.create)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dashboard",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}",
-		Tags:        []string{"dashboards"},
-		Summary:     "Get a dashboard",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.get)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-dashboard",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}",
-		Tags:        []string{"dashboards"},
-		Summary:     "Update a dashboard",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.update)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-dashboard",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/dashboards/{dashboardId}",
-		Tags:          []string{"dashboards"},
-		Summary:       "Delete a dashboard",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.delete)
-
-	// ---- lifecycle ---------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID:   "duplicate-dashboard",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/dashboards/{dashboardId}/duplicate",
-		Tags:          []string{"dashboards"},
-		Summary:       "Duplicate a dashboard",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.duplicate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "lock-dashboard",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}/lock",
-		Tags:        []string{"dashboards"},
-		Summary:     "Lock a dashboard (read-only)",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.lock)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "unlock-dashboard",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}/unlock",
-		Tags:        []string{"dashboards"},
-		Summary:     "Unlock a dashboard",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.unlock)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "export-dashboard",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}/export",
-		Tags:        []string{"dashboards"},
-		Summary:     "Export a dashboard as JSON",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.export)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "import-dashboard",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/dashboards/import",
-		Tags:          []string{"dashboards"},
-		Summary:       "Import a dashboard from an exported JSON",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.importDashboard)
-
-	// ---- query execution --------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "execute-dashboard-queries",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}/execute",
-		Tags:        []string{"dashboards"},
-		Summary:     "Execute every widget query on a dashboard",
-		Description: "Returns a map keyed by widget ID. Supports explicit or relative time ranges plus variable substitution.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.executeDashboard)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "execute-widget-query",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/dashboards/{dashboardId}/widgets/{widgetId}/execute",
-		Tags:        []string{"dashboards"},
-		Summary:     "Execute the query for a single widget",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.executeWidget)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-view-definitions",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/dashboards/view-definitions",
-		Tags:        []string{"dashboards"},
-		Summary:     "Get available query-builder view / measure / dimension definitions",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.viewDefinitions)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-variable-options",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/dashboards/variable-options",
-		Tags:        []string{"dashboards"},
-		Summary:     "Get distinct values for a dimension (variable dropdowns)",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.variableOptions)
-
-	// ---- templates ---------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-dashboard-templates",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/dashboard-templates",
-		Tags:        []string{"dashboard-templates"},
-		Summary:     "List active dashboard templates",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listTemplates)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dashboard-template",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/dashboard-templates/{templateId}",
-		Tags:        []string{"dashboard-templates"},
-		Summary:     "Get a dashboard template",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-dashboard-from-template",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/dashboards/from-template",
-		Tags:          []string{"dashboard-templates"},
-		Summary:       "Create a dashboard from a template",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createFromTemplate)
+	r.Get("/api/v1/dashboards/view-definitions", h.viewDefinitions)
+	r.Get("/api/v1/dashboard-templates", h.listTemplates)
+	r.Get("/api/v1/dashboard-templates/{templateId}", h.getTemplate)
 }
 
-// ---- shared parsers -------------------------------------------------
-
-func parseProject(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseDashboard(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid dashboard ID", "dashboardId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseTemplate(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid template ID", "templateId must be a valid UUID")
-	}
-	return id, nil
-}
-
-// userIDPtr returns a *uuid.UUID when an authenticated user is
-// present in context, nil otherwise. Matches the pre-migration
-// "optional creator" semantics of CreateDashboard / ImportDashboard /
+// userIDPtr returns a *uuid.UUID when an authenticated user is present
+// in context, nil otherwise. Matches the pre-migration "optional
+// creator" semantics of CreateDashboard / ImportDashboard /
 // CreateFromTemplate.
 func userIDPtr(ctx context.Context) *uuid.UUID {
 	uid, ok := httpctx.UserID(ctx)
@@ -245,184 +81,252 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 	return &uid
 }
 
-// ---- list -----------------------------------------------------------
+// ---- list -------------------------------------------------------------
 
-func (h *handler) list(ctx context.Context, in *ListDashboardsInput) (*ListDashboardsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) list(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	limit, err := request.QueryInt(r, "limit", 0)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	offset, err := request.QueryInt(r, "offset", 0)
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	filter := &dashboardDomain.DashboardFilter{
-		Name:   in.Name,
-		Limit:  in.Limit,
-		Offset: in.Offset,
+		Name:   r.URL.Query().Get("name"),
+		Limit:  limit,
+		Offset: offset,
 	}
-	resp, err := h.svc.ListDashboards(ctx, projectID, filter)
+	resp, err := h.svc.ListDashboards(r.Context(), projectID, filter)
 	if err != nil {
-		h.logger.WarnContext(ctx, "dashboard: list failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "dashboard: list failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &ListDashboardsOutput{Body: resp}, nil
+	response.Success(w, resp)
 }
 
-// ---- create ---------------------------------------------------------
+// ---- create -----------------------------------------------------------
 
-func (h *handler) create(ctx context.Context, in *CreateDashboardInput) (*CreateDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Name == "" {
-		return nil, appErrors.NewValidationError("Name is required", "dashboard name is required")
+	var body dashboardDomain.CreateDashboardRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.CreateDashboard(ctx, projectID, userIDPtr(ctx), &in.Body)
+	if body.Name == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Name is required", "dashboard name is required",
+			appErrors.WithParam("name"),
+		))
+		return
+	}
+	dash, err := h.svc.CreateDashboard(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		h.logger.WarnContext(ctx, "dashboard: create failed", "project_id", projectID, "name", in.Body.Name, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "dashboard: create failed",
+			"project_id", projectID, "name", body.Name, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateDashboardOutput{Body: dash}, nil
+	response.Created(w, dash)
 }
 
-// ---- get ------------------------------------------------------------
+// ---- get --------------------------------------------------------------
 
-func (h *handler) get(ctx context.Context, in *GetDashboardInput) (*GetDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) get(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.GetDashboardByProject(ctx, projectID, dashboardID)
+	dash, err := h.svc.GetDashboardByProject(r.Context(), projectID, dashboardID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetDashboardOutput{Body: dash}, nil
+	response.Success(w, dash)
 }
 
-// ---- update ---------------------------------------------------------
+// ---- update -----------------------------------------------------------
 
-func (h *handler) update(ctx context.Context, in *UpdateDashboardInput) (*UpdateDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.UpdateDashboard(ctx, projectID, dashboardID, &in.Body)
+	var body dashboardDomain.UpdateDashboardRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	dash, err := h.svc.UpdateDashboard(r.Context(), projectID, dashboardID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateDashboardOutput{Body: dash}, nil
+	response.Success(w, dash)
 }
 
-// ---- delete ---------------------------------------------------------
+// ---- delete -----------------------------------------------------------
 
-func (h *handler) delete(ctx context.Context, in *DeleteDashboardInput) (*DeleteDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.svc.DeleteDashboard(ctx, projectID, dashboardID); err != nil {
-		return nil, err
+	if err := h.svc.DeleteDashboard(r.Context(), projectID, dashboardID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteDashboardOutput{}, nil
+	response.NoContent(w)
 }
 
-// ---- duplicate ------------------------------------------------------
+// ---- duplicate --------------------------------------------------------
 
-func (h *handler) duplicate(ctx context.Context, in *DuplicateDashboardInput) (*DuplicateDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) duplicate(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Name == "" {
-		return nil, appErrors.NewValidationError("Name is required", "dashboard name is required")
+	var body dashboardDomain.DuplicateDashboardRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.DuplicateDashboard(ctx, projectID, dashboardID, &in.Body)
+	if body.Name == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Name is required", "dashboard name is required",
+			appErrors.WithParam("name"),
+		))
+		return
+	}
+	dash, err := h.svc.DuplicateDashboard(r.Context(), projectID, dashboardID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DuplicateDashboardOutput{Body: dash}, nil
+	response.Created(w, dash)
 }
 
-// ---- lock / unlock --------------------------------------------------
+// ---- lock / unlock ----------------------------------------------------
 
-func (h *handler) lock(ctx context.Context, in *LockDashboardInput) (*LockDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) lock(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.LockDashboard(ctx, projectID, dashboardID)
+	dash, err := h.svc.LockDashboard(r.Context(), projectID, dashboardID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &LockDashboardOutput{Body: dash}, nil
+	response.Success(w, dash)
 }
 
-func (h *handler) unlock(ctx context.Context, in *UnlockDashboardInput) (*UnlockDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) unlock(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.UnlockDashboard(ctx, projectID, dashboardID)
+	dash, err := h.svc.UnlockDashboard(r.Context(), projectID, dashboardID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UnlockDashboardOutput{Body: dash}, nil
+	response.Success(w, dash)
 }
 
-// ---- export / import ------------------------------------------------
+// ---- export / import --------------------------------------------------
 
-func (h *handler) export(ctx context.Context, in *ExportDashboardInput) (*ExportDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) export(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	exp, err := h.svc.ExportDashboard(ctx, projectID, dashboardID)
+	exp, err := h.svc.ExportDashboard(r.Context(), projectID, dashboardID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ExportDashboardOutput{Body: exp}, nil
+	response.Success(w, exp)
 }
 
-func (h *handler) importDashboard(ctx context.Context, in *ImportDashboardInput) (*ImportDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) importDashboard(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.svc.ImportDashboard(ctx, projectID, userIDPtr(ctx), &in.Body)
+	var body dashboardDomain.DashboardImportRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	dash, err := h.svc.ImportDashboard(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		h.logger.WarnContext(ctx, "dashboard: import failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "dashboard: import failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &ImportDashboardOutput{Body: dash}, nil
+	response.Created(w, dash)
 }
 
-// ---- query execution ------------------------------------------------
+// ---- query execution --------------------------------------------------
 
 func (b *executeDashboardBody) toDomainTimeRange() *dashboardDomain.DashboardTimeRange {
 	if b == nil || b.DashboardTimeRange == nil {
@@ -435,127 +339,176 @@ func (b *executeDashboardBody) toDomainTimeRange() *dashboardDomain.DashboardTim
 	}
 }
 
-func (h *handler) executeDashboard(ctx context.Context, in *ExecuteDashboardInput) (*ExecuteDashboardOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) executeDashboard(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	var body executeDashboardBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	req := &dashboardDomain.QueryExecutionRequest{
 		ProjectID:          projectID,
 		DashboardID:        dashboardID,
-		DashboardTimeRange: in.Body.toDomainTimeRange(),
-		ForceRefresh:       in.Body.ForceRefresh,
-		VariableValues:     in.Body.VariableValues,
+		DashboardTimeRange: body.toDomainTimeRange(),
+		ForceRefresh:       body.ForceRefresh,
+		VariableValues:     body.VariableValues,
 	}
-	results, err := h.query.ExecuteDashboardQueries(ctx, req)
+	results, err := h.query.ExecuteDashboardQueries(r.Context(), req)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ExecuteDashboardOutput{Body: results}, nil
+	response.Success(w, results)
 }
 
-func (h *handler) executeWidget(ctx context.Context, in *ExecuteWidgetInput) (*ExecuteWidgetOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) executeWidget(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dashboardID, err := parseDashboard(in.DashboardID)
+	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.WidgetID == "" {
-		return nil, appErrors.NewValidationError("Invalid widget ID", "widgetId is required")
+	widgetID := chi.URLParam(r, "widgetId")
+	if widgetID == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid widget ID", "widgetId is required",
+			appErrors.WithParam("widgetId"),
+		))
+		return
 	}
-	widgetID := in.WidgetID
+	var body executeDashboardBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
 	req := &dashboardDomain.QueryExecutionRequest{
 		ProjectID:          projectID,
 		DashboardID:        dashboardID,
 		WidgetID:           &widgetID,
-		DashboardTimeRange: in.Body.toDomainTimeRange(),
-		ForceRefresh:       in.Body.ForceRefresh,
+		DashboardTimeRange: body.toDomainTimeRange(),
+		ForceRefresh:       body.ForceRefresh,
 	}
-	results, err := h.query.ExecuteDashboardQueries(ctx, req)
+	results, err := h.query.ExecuteDashboardQueries(r.Context(), req)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	result, ok := results.Results[widgetID]
 	if !ok {
-		return nil, appErrors.NewNotFoundError("widget")
+		response.WriteError(w, appErrors.NewNotFoundError("widget"))
+		return
 	}
-	return &ExecuteWidgetOutput{Body: result}, nil
+	response.Success(w, result)
 }
 
-func (h *handler) viewDefinitions(ctx context.Context, _ *struct{}) (*ViewDefinitionsOutput, error) {
-	resp, err := h.query.GetViewDefinitions(ctx)
+func (h *handler) viewDefinitions(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.query.GetViewDefinitions(r.Context())
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ViewDefinitionsOutput{Body: resp}, nil
+	response.Success(w, resp)
 }
 
-func (h *handler) variableOptions(ctx context.Context, in *VariableOptionsInput) (*VariableOptionsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) variableOptions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.View == "" {
-		return nil, appErrors.NewValidationError("View required", "view query parameter is required")
+	view := r.URL.Query().Get("view")
+	dimension := r.URL.Query().Get("dimension")
+	if view == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"View required", "view query parameter is required",
+			appErrors.WithParam("view"),
+		))
+		return
 	}
-	if in.Dimension == "" {
-		return nil, appErrors.NewValidationError("Dimension required", "dimension query parameter is required")
+	if dimension == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Dimension required", "dimension query parameter is required",
+			appErrors.WithParam("dimension"),
+		))
+		return
 	}
-	limit := in.Limit
+	limit, err := request.QueryInt(r, "limit", 100)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
 	if limit <= 0 {
 		limit = 100
 	}
 	req := &dashboardDomain.VariableOptionsRequest{
 		ProjectID: projectID,
-		View:      dashboardDomain.ViewType(in.View),
-		Dimension: in.Dimension,
+		View:      dashboardDomain.ViewType(view),
+		Dimension: dimension,
 		Limit:     limit,
 	}
-	result, err := h.query.GetVariableOptions(ctx, req)
+	result, err := h.query.GetVariableOptions(r.Context(), req)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &VariableOptionsOutput{Body: result}, nil
+	response.Success(w, result)
 }
 
-// ---- templates ------------------------------------------------------
+// ---- templates --------------------------------------------------------
 
-func (h *handler) listTemplates(ctx context.Context, _ *struct{}) (*ListTemplatesOutput, error) {
-	templates, err := h.template.ListTemplates(ctx)
+func (h *handler) listTemplates(w http.ResponseWriter, r *http.Request) {
+	templates, err := h.template.ListTemplates(r.Context())
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListTemplatesOutput{Body: templates}, nil
+	response.Success(w, templates)
 }
 
-func (h *handler) getTemplate(ctx context.Context, in *GetTemplateInput) (*GetTemplateOutput, error) {
-	templateID, err := parseTemplate(in.TemplateID)
+func (h *handler) getTemplate(w http.ResponseWriter, r *http.Request) {
+	templateID, err := request.URLParamUUID(r, "templateId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	tmpl, err := h.template.GetTemplate(ctx, templateID)
+	tmpl, err := h.template.GetTemplate(r.Context(), templateID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetTemplateOutput{Body: tmpl}, nil
+	response.Success(w, tmpl)
 }
 
-func (h *handler) createFromTemplate(ctx context.Context, in *CreateFromTemplateInput) (*CreateFromTemplateOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) createFromTemplate(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	dash, err := h.template.CreateFromTemplate(ctx, projectID, userIDPtr(ctx), &in.Body)
+	var body dashboardDomain.CreateFromTemplateRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	dash, err := h.template.CreateFromTemplate(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		h.logger.WarnContext(ctx, "dashboard: create-from-template failed", "project_id", projectID, "template_id", in.Body.TemplateID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "dashboard: create-from-template failed",
+			"project_id", projectID, "template_id", body.TemplateID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateFromTemplateOutput{Body: dash}, nil
+	response.Created(w, dash)
 }
