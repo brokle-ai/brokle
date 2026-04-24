@@ -1,8 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
-import { MembersTable } from '@/features/members/components'
+import { Button } from '@/components/ui/button'
+import {
+  InviteMemberDialog,
+  MembersTable,
+} from '@/features/members/components'
 import { memberListQueryOptions } from '@/features/members/api/queries'
 
 // Search params exist for forward-compat (future pagination / search).
@@ -57,6 +62,7 @@ function MembersErrorBoundary({ error }: { error: Error }) {
 function MembersPage() {
   const { orgId } = Route.useParams()
   const search = Route.useSearch()
+  const [inviteOpen, setInviteOpen] = useState(false)
   const { data } = useSuspenseQuery(
     memberListQueryOptions(orgId, {
       page: search.page,
@@ -67,14 +73,23 @@ function MembersPage() {
 
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Members</h2>
-        <p className="text-sm text-muted-foreground">
-          {data.total.toLocaleString()} total
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Members</h2>
+          <p className="text-sm text-muted-foreground">
+            {data.total.toLocaleString()} total
+          </p>
+        </div>
+        <Button onClick={() => setInviteOpen(true)}>Invite member</Button>
       </div>
 
-      <MembersTable rows={data.members} />
+      <MembersTable orgId={orgId} rows={data.members} />
+
+      <InviteMemberDialog
+        orgId={orgId}
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+      />
     </section>
   )
 }

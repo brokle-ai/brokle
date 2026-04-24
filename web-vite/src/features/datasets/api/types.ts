@@ -71,3 +71,20 @@ export interface DatasetItem {
 }
 
 export type DatasetItemsListResponse = EvaluationPageList<DatasetItem>
+
+// Create/update request bodies. Shapes mirror
+// `evaluationDomain.CreateDatasetRequest` and `UpdateDatasetRequest` at
+// internal/core/domain/evaluation/entities.go. `description` is
+// optional on both; `metadata` is provider-agnostic and omitted from
+// the list form since the v1 dialog only exposes name + description.
+export interface CreateDatasetRequest {
+  name: string
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface UpdateDatasetRequest {
+  name?: string
+  description?: string
+  metadata?: Record<string, unknown>
+}

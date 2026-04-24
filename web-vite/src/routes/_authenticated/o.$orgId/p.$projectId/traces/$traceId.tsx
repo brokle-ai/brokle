@@ -5,6 +5,8 @@ import { ArrowLeft } from 'lucide-react'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import { TraceDetail } from '@/features/traces/components'
+import { AnnotationsDrawer } from '@/features/traces/components/annotations-drawer'
+import { CommentsDrawer } from '@/features/traces/components/comments-drawer'
 import {
   traceDetailQueryOptions,
   traceSpansQueryOptions,
@@ -74,7 +76,16 @@ function TraceDetailPage() {
         </Link>
       </Button>
 
-      <TraceDetail trace={trace} spans={spans} />
+      <TraceDetail
+        trace={trace}
+        spans={spans}
+        headerActions={
+          <>
+            <AnnotationsDrawer projectId={projectId} traceId={traceId} />
+            <CommentsDrawer projectId={projectId} traceId={traceId} />
+          </>
+        }
+      />
     </main>
   )
 }

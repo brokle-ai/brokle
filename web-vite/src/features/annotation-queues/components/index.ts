@@ -1,3 +1,4 @@
 export { AnnotationQueuesTable } from './annotation-queues-table'
 export { QueueItemsTable } from './queue-items-table'
 export { AnnotationQueueDetail } from './annotation-queue-detail'
+export { ReviewItem } from './review-item'

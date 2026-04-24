@@ -123,3 +123,93 @@ export interface ChatMlMessage {
   tool_calls?: ChatMlToolCall[]
   tool_call_id?: string
 }
+
+// Trace annotation scores — endpoint:
+//   GET/POST /api/v1/traces/{traceId}/scores?project_id=...
+//   DELETE /api/v1/traces/{traceId}/scores/{scoreId}?project_id=...
+//
+// Shape mirrors observability.AnnotationResponse: numeric storage via
+// `value` (also 1.0/0.0 for BOOLEAN), categorical via `string_value`.
+// `source` is the free-form category the backend assigns; human
+// annotations are 'annotation' and automated scores are 'api' or
+// 'eval'. The drawer segments the list by source.
+export type TraceScoreDataType = 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
+
+export interface TraceAnnotation {
+  id: string
+  project_id: string
+  trace_id?: string
+  span_id?: string
+  name: string
+  value?: number
+  string_value?: string
+  type: TraceScoreDataType
+  source: string
+  reason?: string
+  created_by?: string
+  timestamp: string
+}
+
+export interface CreateTraceAnnotationRequest {
+  name: string
+  value?: number
+  string_value?: string
+  type: TraceScoreDataType
+  reason?: string
+}
+
+// Trace comments — endpoint:
+//   GET/POST /api/v1/traces/{traceId}/comments?project_id=...
+//   POST .../comments/{commentId}/replies
+//   POST .../comments/{commentId}/reactions
+//
+// Shape mirrors comment.CommentResponse. `replies` is populated on the
+// list response for top-level comments (one level deep — parent_id on
+// a reply is the top-level comment). Reactions are summarised (emoji
+// + count + user names + whether the current user reacted).
+export interface TraceCommentUser {
+  id: string
+  name: string
+  email: string
+  avatar_url?: string
+}
+
+export interface TraceReaction {
+  emoji: string
+  count: number
+  users: string[]
+  has_user: boolean
+}
+
+export interface TraceComment {
+  id: string
+  entity_type: 'trace' | 'span'
+  entity_id: string
+  project_id: string
+  parent_id?: string
+  content: string
+  created_by?: string
+  updated_by?: string
+  created_at: string
+  updated_at: string
+  is_edited: boolean
+  is_deleted: boolean
+  author?: TraceCommentUser
+  editor?: TraceCommentUser
+  reactions: TraceReaction[]
+  replies?: TraceComment[]
+  reply_count: number
+}
+
+export interface TraceCommentsListResponse {
+  comments: TraceComment[]
+  total: number
+}
+
+export interface CreateTraceCommentRequest {
+  content: string
+}
+
+export interface ToggleReactionRequest {
+  emoji: string
+}

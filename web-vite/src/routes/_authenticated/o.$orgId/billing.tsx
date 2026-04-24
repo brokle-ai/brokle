@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useMatches } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { BrokleError } from '@/lib/api/errors'
-import { PlanCard } from '@/features/billing/components'
+import { BudgetCard, PlanCard } from '@/features/billing/components'
 import { planQueryOptions } from '@/features/billing/api/queries'
 
 // The billing surface is three tabs over one layout — plan (this
@@ -72,7 +72,12 @@ function BillingLayout() {
 
 function PlanLandingContent({ orgId }: { orgId: string }) {
   const { data: pricing } = useSuspenseQuery(planQueryOptions(orgId))
-  return <PlanCard pricing={pricing} />
+  return (
+    <div className="space-y-6">
+      <BudgetCard orgId={orgId} />
+      <PlanCard pricing={pricing} />
+    </div>
+  )
 }
 
 // Thin wrapper so the active tab picks up an underline. TanStack

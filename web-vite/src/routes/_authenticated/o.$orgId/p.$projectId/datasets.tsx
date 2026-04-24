@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
-import { DatasetsTable } from '@/features/datasets/components'
+import { DatasetFormDialog, DatasetsTable } from '@/features/datasets/components'
 import { datasetListQueryOptions } from '@/features/datasets/api/queries'
 
 // Zod-validated search params. `.catch` keeps a hostile URL from
@@ -55,6 +56,8 @@ function DatasetsErrorBoundary({ error }: { error: Error }) {
 function DatasetsPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
+  const navigate = useNavigate()
+  const [createOpen, setCreateOpen] = useState(false)
   const { data } = useSuspenseQuery(
     datasetListQueryOptions(projectId, {
       page: search.page,
@@ -79,7 +82,24 @@ function DatasetsPage() {
             {total.toLocaleString()} total
           </p>
         </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          New dataset
+        </Button>
       </header>
+
+      <DatasetFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        projectId={projectId}
+        mode={{ kind: 'create' }}
+        onSuccess={(created) =>
+          navigate({
+            to: '/o/$orgId/p/$projectId/datasets/$datasetId',
+            params: { orgId, projectId, datasetId: created.id },
+            search: { page: 1, limit: 20 },
+          })
+        }
+      />
 
       <DatasetsTable rows={rows} orgId={orgId} projectId={projectId} />
 

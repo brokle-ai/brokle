@@ -1,11 +1,23 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
-import { ScoresTable } from '@/features/scores/components'
+import {
+  ScoresFilterBar,
+  ScoresTable,
+  type ScoresFilterValue,
+} from '@/features/scores/components'
 import { scoreListQueryOptions } from '@/features/scores/api/queries'
 
+// Zod-validated search params. `.catch` keeps a hostile URL from
+// throwing the whole route — invalid values fall back to the default.
+// Backend param names (checked against
+// `internal/transport/http/handlers/observability/dashboard_types.go`
+// scoreFilterQuery): name, source, type, trace_id, span_id. On the
+// URL we keep `traceId`/`spanId` camelCase to match React search
+// conventions; the query fetcher translates to snake_case at the
+// HTTP boundary.
 const searchSchema = z.object({
   page: z.number().int().min(1).catch(1),
   limit: z.number().int().min(1).max(100).catch(20),
@@ -15,6 +27,8 @@ const searchSchema = z.object({
     .enum(['NUMERIC', 'CATEGORICAL', 'BOOLEAN'])
     .optional()
     .catch(undefined),
+  traceId: z.string().optional().catch(undefined),
+  spanId: z.string().optional().catch(undefined),
 })
 
 export const Route = createFileRoute(
@@ -27,6 +41,8 @@ export const Route = createFileRoute(
     name: search.name,
     source: search.source,
     type: search.type,
+    traceId: search.traceId,
+    spanId: search.spanId,
   }),
   loader: ({ params, context, deps }) =>
     context.queryClient.ensureQueryData(
@@ -36,6 +52,8 @@ export const Route = createFileRoute(
         name: deps.name,
         source: deps.source,
         type: deps.type,
+        traceId: deps.traceId,
+        spanId: deps.spanId,
       }),
     ),
   errorComponent: ScoresErrorBoundary,
@@ -65,6 +83,8 @@ function ScoresErrorBoundary({ error }: { error: Error }) {
 function ScoresPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+
   const { data } = useSuspenseQuery(
     scoreListQueryOptions(projectId, {
       page: search.page,
@@ -72,6 +92,8 @@ function ScoresPage() {
       name: search.name,
       source: search.source,
       type: search.type,
+      traceId: search.traceId,
+      spanId: search.spanId,
     }),
   )
 
@@ -80,6 +102,29 @@ function ScoresPage() {
   const { data: rows, pagination } = data
   const hasPrev = pagination.page > 1
   const hasNext = pagination.page < pagination.total_pages
+
+  const filterValue: ScoresFilterValue = {
+    name: search.name,
+    source: search.source,
+    type: search.type,
+    traceId: search.traceId,
+    spanId: search.spanId,
+  }
+
+  const handleFilterChange = (next: ScoresFilterValue) => {
+    // Any filter change resets the pager to page 1.
+    navigate({
+      search: {
+        page: 1,
+        limit: search.limit,
+        name: next.name,
+        source: next.source,
+        type: next.type,
+        traceId: next.traceId,
+        spanId: next.spanId,
+      },
+    })
+  }
 
   return (
     <main className="mx-auto max-w-7xl p-6 space-y-4">
@@ -91,6 +136,8 @@ function ScoresPage() {
           </p>
         </div>
       </header>
+
+      <ScoresFilterBar value={filterValue} onChange={handleFilterChange} />
 
       <ScoresTable rows={rows} />
 
@@ -109,6 +156,8 @@ function ScoresPage() {
                 name: search.name,
                 source: search.source,
                 type: search.type,
+                traceId: search.traceId,
+                spanId: search.spanId,
               }}
             >
               Previous
@@ -124,6 +173,8 @@ function ScoresPage() {
                 name: search.name,
                 source: search.source,
                 type: search.type,
+                traceId: search.traceId,
+                spanId: search.spanId,
               }}
             >
               Next

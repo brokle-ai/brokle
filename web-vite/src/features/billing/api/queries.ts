@@ -1,8 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  CreateBudgetRequest,
   EffectivePricing,
   InvoiceListResponse,
+  UpdateBudgetRequest,
+  UsageBudget,
   UsageOverview,
 } from './types'
 
@@ -15,6 +18,8 @@ export const billingKeys = {
   invoices: () => [...billingKeys.all, 'invoices'] as const,
   invoiceList: (orgId: string, params: InvoiceListParams) =>
     [...billingKeys.invoices(), orgId, params] as const,
+  budgets: () => [...billingKeys.all, 'budgets'] as const,
+  budgetList: (orgId: string) => [...billingKeys.budgets(), orgId] as const,
 } as const
 
 // "Plan" surface is served by the effective-pricing endpoint — it
@@ -78,3 +83,54 @@ export const invoiceListQueryOptions = (
     }),
     staleTime: 60 * 1000,
   })
+
+// ---- Budgets -------------------------------------------------------------
+// Backend returns `List` directly (no envelope) — a bare JSON array of
+// `UsageBudget`. An org can have one org-level budget plus N project
+// budgets; the billing card today uses the first org-level row.
+
+export const budgetsQueryOptions = (orgId: string) =>
+  queryOptions({
+    queryKey: billingKeys.budgetList(orgId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/organizations/${orgId}/budgets`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as UsageBudget[]
+    },
+    // Usage counters embedded in the budget update continuously, but
+    // the card is a landing-page summary — 30s keeps it lively without
+    // hammering the billing service.
+    staleTime: 30 * 1000,
+  })
+
+export async function createBudget(
+  orgId: string,
+  data: CreateBudgetRequest,
+): Promise<UsageBudget> {
+  const resp = await rawFetch(`/api/v1/organizations/${orgId}/budgets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as UsageBudget
+}
+
+// Backend uses PUT (not PATCH) for budget updates — see
+// `handlers/billing/handlers.go` operation "update-budget".
+export async function updateBudget(
+  orgId: string,
+  budgetId: string,
+  data: UpdateBudgetRequest,
+): Promise<UsageBudget> {
+  const resp = await rawFetch(
+    `/api/v1/organizations/${orgId}/budgets/${budgetId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as UsageBudget
+}

@@ -73,3 +73,38 @@ export interface LLMScorerConfigShape {
   response_format: 'json' | 'text'
   output_schema: LLMScorerOutputField[]
 }
+
+// Create/update request shapes. Mirrors
+// `evaluationDomain.CreateEvaluatorRequest` / `UpdateEvaluatorRequest`
+// at internal/core/domain/evaluation/rule.go. `filter` and
+// `variable_mapping` are typed `unknown[]` here to match the list DTO
+// — the v1 form serialises them as raw JSON strings and relies on the
+// backend for schema validation. Filter typing can narrow later when
+// the form grows a structured editor.
+export interface CreateEvaluatorRequest {
+  name: string
+  description?: string
+  status?: EvaluatorStatus
+  trigger_type?: EvaluatorTrigger
+  target_scope?: TargetScope
+  filter?: unknown[]
+  span_names?: string[]
+  sampling_rate?: number
+  scorer_type: ScorerType
+  scorer_config: Record<string, unknown>
+  variable_mapping?: unknown[]
+}
+
+export interface UpdateEvaluatorRequest {
+  name?: string
+  description?: string
+  status?: EvaluatorStatus
+  trigger_type?: EvaluatorTrigger
+  target_scope?: TargetScope
+  filter?: unknown[]
+  span_names?: string[]
+  sampling_rate?: number
+  scorer_type?: ScorerType
+  scorer_config?: Record<string, unknown>
+  variable_mapping?: unknown[]
+}

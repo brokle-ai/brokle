@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -7,9 +8,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { RevokeApiKeyDialog } from './revoke-api-key-dialog'
 import type { ApiKeyListItem } from '../api/types'
 
 interface ApiKeysTableProps {
+  projectId: string
   rows: ApiKeyListItem[]
 }
 
@@ -27,7 +31,11 @@ function StatusBadge({ status }: { status: ApiKeyListItem['status'] }) {
   return <Badge variant="destructive">Expired</Badge>
 }
 
-export function ApiKeysTable({ rows }: ApiKeysTableProps) {
+export function ApiKeysTable({ projectId, rows }: ApiKeysTableProps) {
+  // One revoke dialog per table — the row button sets which key it
+  // targets. Keeps the tree shallow vs. a dialog per row.
+  const [revokeTarget, setRevokeTarget] = useState<ApiKeyListItem | null>(null)
+
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -41,41 +49,65 @@ export function ApiKeysTable({ rows }: ApiKeysTableProps) {
   }
 
   return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Preview</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Last used</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Expires</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((k) => (
-            <TableRow key={k.id}>
-              <TableCell className="font-medium">{k.name}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {k.key_preview}
-              </TableCell>
-              <TableCell>
-                <StatusBadge status={k.status} />
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimestamp(k.last_used)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimestamp(k.created_at)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimestamp(k.expires_at)}
-              </TableCell>
+    <>
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Preview</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last used</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Expires</TableHead>
+              <TableHead className="w-[1%] text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {rows.map((k) => (
+              <TableRow key={k.id}>
+                <TableCell className="font-medium">{k.name}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {k.key_preview}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={k.status} />
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimestamp(k.last_used)}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimestamp(k.created_at)}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimestamp(k.expires_at)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRevokeTarget(k)}
+                  >
+                    Revoke
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {revokeTarget && (
+        <RevokeApiKeyDialog
+          projectId={projectId}
+          keyId={revokeTarget.id}
+          keyName={revokeTarget.name}
+          open={!!revokeTarget}
+          onOpenChange={(open) => {
+            if (!open) setRevokeTarget(null)
+          }}
+        />
+      )}
+    </>
   )
 }

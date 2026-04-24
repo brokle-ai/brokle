@@ -1,10 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  CreateExperimentRequest,
   ExperimentDetail,
   ExperimentItemListResponse,
   ExperimentListResponse,
   ExperimentMetricsResponse,
+  RerunExperimentRequest,
 } from './types'
 
 export const experimentsKeys = {
@@ -116,3 +118,48 @@ export const experimentItemsListQueryOptions = (
     },
     staleTime: 10 * 1000,
   })
+
+// Mutation functions. Only create + delete + rerun are wired at the
+// dashboard plane; update is also exposed on the backend but the v1
+// form has no fields to surface it (name-only editing isn't a workflow
+// the product has today).
+export async function createExperiment(
+  projectId: string,
+  data: CreateExperimentRequest,
+): Promise<ExperimentDetail> {
+  const resp = await rawFetch(`/api/v1/projects/${projectId}/experiments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as ExperimentDetail
+}
+
+export async function deleteExperiment(
+  projectId: string,
+  experimentId: string,
+): Promise<void> {
+  await rawFetch(
+    `/api/v1/projects/${projectId}/experiments/${experimentId}`,
+    { method: 'DELETE' },
+  )
+}
+
+// Rerun clones the experiment against the same dataset and returns the
+// new experiment (the backend creates a fresh row and queues it for
+// execution). The empty body is valid — all fields are optional.
+export async function rerunExperiment(
+  projectId: string,
+  experimentId: string,
+  data: RerunExperimentRequest = {},
+): Promise<ExperimentDetail> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/experiments/${experimentId}/rerun`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as ExperimentDetail
+}

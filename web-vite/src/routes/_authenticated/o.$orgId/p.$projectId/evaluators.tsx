@@ -74,6 +74,15 @@ function EvaluatorsPage() {
             {total.toLocaleString()} total
           </p>
         </div>
+        <Button asChild size="sm">
+          <Link
+            to="/o/$orgId/p/$projectId/evaluators/new"
+            params={{ orgId, projectId }}
+            search={{ page: 1, limit: 20, q: undefined }}
+          >
+            New evaluator
+          </Link>
+        </Button>
       </header>
 
       <EvaluatorsTable rows={rows} orgId={orgId} projectId={projectId} />

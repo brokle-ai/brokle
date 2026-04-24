@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
-import { ApiKeysTable } from '@/features/api-keys/components'
+import {
+  ApiKeysTable,
+  CreateApiKeyDialog,
+} from '@/features/api-keys/components'
 import { apiKeyListQueryOptions } from '@/features/api-keys/api/queries'
 
 // Backend caps limit at 100 (see handlers/apikey/handlers.go
@@ -50,6 +54,7 @@ function ApiKeysErrorBoundary({ error }: { error: Error }) {
 function ApiKeysPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
+  const [createOpen, setCreateOpen] = useState(false)
   const { data } = useSuspenseQuery(
     apiKeyListQueryOptions(projectId, {
       page: search.page,
@@ -61,14 +66,17 @@ function ApiKeysPage() {
 
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">API keys</h2>
-        <p className="text-sm text-muted-foreground">
-          {pagination.total.toLocaleString()} total
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">API keys</h2>
+          <p className="text-sm text-muted-foreground">
+            {pagination.total.toLocaleString()} total
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>Create key</Button>
       </div>
 
-      <ApiKeysTable rows={rows} />
+      <ApiKeysTable projectId={projectId} rows={rows} />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
@@ -108,6 +116,12 @@ function ApiKeysPage() {
           </Button>
         </div>
       </nav>
+
+      <CreateApiKeyDialog
+        projectId={projectId}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+      />
     </section>
   )
 }

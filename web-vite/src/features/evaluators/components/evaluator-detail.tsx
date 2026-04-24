@@ -1,5 +1,10 @@
-import { Link } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   Card,
   CardContent,
@@ -8,12 +13,20 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { ReadonlyCode } from '@/editors/readonly-code'
-import { evaluatorDetailQueryOptions } from '../api/queries'
+import { BrokleError } from '@/lib/api/errors'
+import {
+  activateEvaluator,
+  deactivateEvaluator,
+  evaluatorDetailQueryOptions,
+  evaluatorsKeys,
+} from '../api/queries'
 import type {
   EvaluatorDetail as EvaluatorDetailType,
   LLMScorerConfigShape,
 } from '../api/types'
+import { EvaluatorDeleteButton } from './evaluator-delete-button'
 
 interface EvaluatorDetailProps {
   orgId: string
@@ -57,9 +70,36 @@ export function EvaluatorDetail({
   projectId,
   evaluatorId,
 }: EvaluatorDetailProps) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [toggleError, setToggleError] = useState<string | null>(null)
   const { data: evaluator } = useSuspenseQuery(
     evaluatorDetailQueryOptions(projectId, evaluatorId),
   )
+
+  const toggleMutation = useMutation({
+    mutationFn: () => {
+      if (evaluator.status === 'active') {
+        return deactivateEvaluator(projectId, evaluatorId)
+      }
+      return activateEvaluator(projectId, evaluatorId)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: evaluatorsKeys.detail(evaluatorId),
+      })
+      await queryClient.invalidateQueries({ queryKey: evaluatorsKeys.lists() })
+    },
+    onError: (err) => {
+      setToggleError(
+        err instanceof BrokleError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to update status',
+      )
+    },
+  })
 
   const llm = asLLMConfig(evaluator)
 
@@ -79,14 +119,53 @@ export function EvaluatorDetail({
       </nav>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <CardTitle>{evaluator.name}</CardTitle>
-            <StatusBadge status={evaluator.status} />
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <CardTitle>{evaluator.name}</CardTitle>
+              <StatusBadge status={evaluator.status} />
+            </div>
+            {evaluator.description ? (
+              <CardDescription>{evaluator.description}</CardDescription>
+            ) : null}
           </div>
-          {evaluator.description ? (
-            <CardDescription>{evaluator.description}</CardDescription>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={toggleMutation.isPending}
+              onClick={() => {
+                setToggleError(null)
+                toggleMutation.mutate()
+              }}
+            >
+              {toggleMutation.isPending
+                ? 'Saving…'
+                : evaluator.status === 'active'
+                  ? 'Deactivate'
+                  : 'Activate'}
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to="/o/$orgId/p/$projectId/evaluators/$evaluatorId/edit"
+                params={{ orgId, projectId, evaluatorId }}
+                search={{ page: 1, limit: 20, q: undefined }}
+              >
+                Edit
+              </Link>
+            </Button>
+            <EvaluatorDeleteButton
+              projectId={projectId}
+              evaluatorId={evaluatorId}
+              onDeleted={() =>
+                navigate({
+                  to: '/o/$orgId/p/$projectId/evaluators',
+                  params: { orgId, projectId },
+                  search: { page: 1, limit: 20, q: undefined },
+                })
+              }
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
@@ -125,6 +204,12 @@ export function EvaluatorDetail({
           </div>
         </CardContent>
       </Card>
+
+      {toggleError ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+          {toggleError}
+        </div>
+      ) : null}
 
       {llm ? (
         <Card>

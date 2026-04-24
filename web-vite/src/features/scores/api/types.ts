@@ -47,3 +47,29 @@ export interface ScoreListResponse {
   data: ScoreListItem[]
   pagination: ScoresPagination
 }
+
+// Score-config endpoint — GET /api/v1/projects/{projectId}/score-configs.
+// Envelope is the evaluation-package flat pageList — `{data, total,
+// page, limit}`. `min_value`/`max_value` are only present for NUMERIC;
+// `categories` only for CATEGORICAL. The annotation form + review UI
+// dispatch on `type` to render the right input widget.
+export interface ScoreConfig {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  type: ScoreDataType
+  min_value?: number
+  max_value?: number
+  categories?: string[]
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface ScoreConfigListResponse {
+  data: ScoreConfig[]
+  total: number
+  page: number
+  limit: number
+}

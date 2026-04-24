@@ -1,5 +1,10 @@
-import { Link } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   Card,
   CardContent,
@@ -9,11 +14,15 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { BrokleError } from '@/lib/api/errors'
 import {
   experimentDetailQueryOptions,
   experimentItemsListQueryOptions,
   experimentMetricsQueryOptions,
+  experimentsKeys,
+  rerunExperiment,
 } from '../api/queries'
+import { ExperimentDeleteButton } from './experiment-delete-button'
 import { ExperimentItemsTable } from './experiment-items-table'
 import type { ExperimentDetail as ExperimentDetailType } from '../api/types'
 
@@ -47,9 +56,35 @@ export function ExperimentDetail({
   limit,
   offset,
 }: ExperimentDetailProps) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [rerunError, setRerunError] = useState<string | null>(null)
   const { data: experiment } = useSuspenseQuery(
     experimentDetailQueryOptions(projectId, experimentId),
   )
+
+  const rerunMutation = useMutation({
+    mutationFn: () => rerunExperiment(projectId, experimentId),
+    onSuccess: async (fresh) => {
+      await queryClient.invalidateQueries({
+        queryKey: experimentsKeys.lists(),
+      })
+      await navigate({
+        to: '/o/$orgId/p/$projectId/experiments/$experimentId',
+        params: { orgId, projectId, experimentId: fresh.id },
+        search: { page: 1, limit: 20, offset: 0, q: undefined },
+      })
+    },
+    onError: (err) => {
+      setRerunError(
+        err instanceof BrokleError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to rerun experiment',
+      )
+    },
+  })
   const { data: itemsResp } = useSuspenseQuery(
     experimentItemsListQueryOptions(projectId, experimentId, {
       limit,
@@ -90,14 +125,40 @@ export function ExperimentDetail({
       </nav>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <CardTitle>{experiment.name}</CardTitle>
-            <StatusBadge status={experiment.status} />
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <CardTitle>{experiment.name}</CardTitle>
+              <StatusBadge status={experiment.status} />
+            </div>
+            {experiment.description ? (
+              <CardDescription>{experiment.description}</CardDescription>
+            ) : null}
           </div>
-          {experiment.description ? (
-            <CardDescription>{experiment.description}</CardDescription>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={rerunMutation.isPending}
+              onClick={() => {
+                setRerunError(null)
+                rerunMutation.mutate()
+              }}
+            >
+              {rerunMutation.isPending ? 'Rerunning…' : 'Rerun'}
+            </Button>
+            <ExperimentDeleteButton
+              projectId={projectId}
+              experimentId={experimentId}
+              onDeleted={() =>
+                navigate({
+                  to: '/o/$orgId/p/$projectId/experiments',
+                  params: { orgId, projectId },
+                  search: { page: 1, limit: 20, q: undefined },
+                })
+              }
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
@@ -126,6 +187,12 @@ export function ExperimentDetail({
           </div>
         </CardContent>
       </Card>
+
+      {rerunError ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+          {rerunError}
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>

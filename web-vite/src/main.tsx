@@ -6,6 +6,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { routeTree } from './routeTree.gen'
 import { createAppQueryClient } from '@/lib/api/query-client'
 import { useAuthStore } from '@/stores/auth-store'
+import { Toaster } from '@/components/ui/sonner'
 import './index.css'
 
 const queryClient = createAppQueryClient()
@@ -50,6 +51,7 @@ createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   </StrictMode>,
 )

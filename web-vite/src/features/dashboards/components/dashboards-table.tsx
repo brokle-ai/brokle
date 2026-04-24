@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   Table,
   TableBody,
@@ -11,6 +12,13 @@ import type { DashboardListItem } from '../api/types'
 
 interface DashboardsTableProps {
   rows: DashboardListItem[]
+  // Wrap the name cell in a router-typed `<Link>`. Parent owns
+  // routing, table stays framework-agnostic. Pattern mirrors
+  // `TracesTable.renderNameLink`.
+  renderNameLink?: (
+    dashboard: DashboardListItem,
+    children: ReactNode,
+  ) => ReactNode
 }
 
 function formatTimestamp(iso: string): string {
@@ -19,7 +27,10 @@ function formatTimestamp(iso: string): string {
   return d.toLocaleString()
 }
 
-export function DashboardsTable({ rows }: DashboardsTableProps) {
+export function DashboardsTable({
+  rows,
+  renderNameLink,
+}: DashboardsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -47,7 +58,9 @@ export function DashboardsTable({ rows }: DashboardsTableProps) {
         <TableBody>
           {rows.map((d) => (
             <TableRow key={d.id}>
-              <TableCell className="font-medium">{d.name}</TableCell>
+              <TableCell className="font-medium">
+                {renderNameLink ? renderNameLink(d, d.name) : d.name}
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {d.description && d.description.length > 0 ? d.description : '—'}
               </TableCell>

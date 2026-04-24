@@ -121,3 +121,62 @@ export interface InvoiceListResponse {
   data: Invoice[]
   pagination: Pagination
 }
+
+// ============================================================================
+// Budget types — wire shape per
+// internal/core/domain/billing/entity.go `UsageBudget` and
+// internal/transport/http/handlers/billing/types.go `createBudgetBody` /
+// `updateBudgetBody`. `cost_limit` and `current_cost` are decimal.Decimal
+// on the backend and arrive as strings; we parse them at the render
+// boundary.
+// ============================================================================
+
+export type BudgetType = 'monthly' | 'weekly'
+
+export interface UsageBudget {
+  id: string
+  organization_id: string
+  project_id?: string
+  name: string
+  budget_type: BudgetType
+
+  span_limit?: number
+  bytes_limit?: number
+  score_limit?: number
+  cost_limit?: string
+
+  current_spans: number
+  current_bytes: number
+  current_scores: number
+  current_cost: string
+
+  alert_thresholds: number[]
+
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Create request — `cost_limit` is a number on the request side (the
+// handler rebinds it to decimal.Decimal server-side). `alert_thresholds`
+// omitted = backend default; `[]` = alerts disabled.
+export interface CreateBudgetRequest {
+  name: string
+  project_id?: string
+  budget_type: BudgetType
+  span_limit?: number
+  bytes_limit?: number
+  score_limit?: number
+  cost_limit?: number
+  alert_thresholds?: number[]
+}
+
+export interface UpdateBudgetRequest {
+  name?: string
+  span_limit?: number
+  bytes_limit?: number
+  score_limit?: number
+  cost_limit?: number
+  alert_thresholds?: number[]
+  is_active?: boolean
+}

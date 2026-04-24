@@ -1,6 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
-import type { ScoreDataType, ScoreListResponse, ScoreSource } from './types'
+import type {
+  ScoreConfigListResponse,
+  ScoreDataType,
+  ScoreListResponse,
+  ScoreSource,
+} from './types'
 
 export const scoresKeys = {
   all: ['scores'] as const,
@@ -9,6 +14,9 @@ export const scoresKeys = {
     [...scoresKeys.lists(), projectId, params] as const,
   details: () => [...scoresKeys.all, 'detail'] as const,
   detail: (scoreId: string) => [...scoresKeys.details(), scoreId] as const,
+  configs: () => [...scoresKeys.all, 'configs'] as const,
+  configsList: (projectId: string) =>
+    [...scoresKeys.configs(), projectId] as const,
 } as const
 
 export interface ScoreListParams {
@@ -43,4 +51,24 @@ export const scoreListQueryOptions = (
       return (await resp.json()) as ScoreListResponse
     },
     staleTime: 30 * 1000,
+  })
+
+// Fetches the full score-config catalog for a project. The queue
+// review UI and the trace annotations drawer both render score inputs
+// driven by this list — NUMERIC fields respect `min_value`/`max_value`,
+// CATEGORICAL dispatches to a select of `categories`, BOOLEAN is a
+// yes/no toggle. Limit is hard-coded high because projects rarely
+// exceed a handful of configs; if that ever becomes a real concern we
+// can paginate at the call site.
+export const scoreConfigsQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: scoresKeys.configsList(projectId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/score-configs?page=1&limit=200`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ScoreConfigListResponse
+    },
+    staleTime: 60 * 1000,
   })

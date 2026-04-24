@@ -1,9 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  CreateDatasetRequest,
   DatasetDetail,
   DatasetItemsListResponse,
   DatasetListResponse,
+  UpdateDatasetRequest,
 } from './types'
 
 // TkDodo-style hierarchical query keys. `list(projectId, params)`
@@ -95,3 +97,46 @@ export const datasetItemsListQueryOptions = (
     },
     staleTime: 15 * 1000,
   })
+
+// Mutation functions — kept thin so callers can compose useMutation +
+// onSuccess/navigate/invalidate in their own component.
+export async function createDataset(
+  projectId: string,
+  data: CreateDatasetRequest,
+): Promise<DatasetDetail> {
+  const resp = await rawFetch(`/api/v1/projects/${projectId}/datasets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as DatasetDetail
+}
+
+// Backend accepts PUT (not PATCH) — matches the update-dataset Huma
+// operation at internal/transport/http/handlers/evaluation/dataset.go.
+// Semantically still a partial update since the handler reads
+// `UpdateDatasetRequest` with `omitempty` pointer fields.
+export async function updateDataset(
+  projectId: string,
+  datasetId: string,
+  data: UpdateDatasetRequest,
+): Promise<DatasetDetail> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/datasets/${datasetId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as DatasetDetail
+}
+
+export async function deleteDataset(
+  projectId: string,
+  datasetId: string,
+): Promise<void> {
+  await rawFetch(`/api/v1/projects/${projectId}/datasets/${datasetId}`, {
+    method: 'DELETE',
+  })
+}

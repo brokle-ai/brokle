@@ -33,3 +33,10 @@ export interface SessionListResponse {
   data: SessionListItem[]
   pagination: Pagination
 }
+
+// There is no dedicated "get session by id" endpoint — sessions are a
+// ClickHouse aggregation over the traces table. The detail view
+// derives its rollup row by calling the sessions list with a
+// `search={sessionId}` filter, which yields the matching summary row.
+// `SessionDetail` is just an alias to keep callers expressive.
+export type SessionDetail = SessionListItem

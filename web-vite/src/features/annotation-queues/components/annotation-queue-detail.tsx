@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import {
   Card,
@@ -50,6 +50,7 @@ export function AnnotationQueueDetail({
   limit,
   status,
 }: AnnotationQueueDetailProps) {
+  const navigate = useNavigate()
   const { data: detail } = useSuspenseQuery(
     queueDetailQueryOptions(projectId, queueId),
   )
@@ -86,9 +87,35 @@ export function AnnotationQueueDetail({
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <CardTitle>{queue.name}</CardTitle>
-            <StatusBadge status={queue.status} />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CardTitle>{queue.name}</CardTitle>
+              <StatusBadge status={queue.status} />
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                // TanStack Router cascades parent search schemas into
+                // the leaf's inferred type, so even though the review
+                // route's own `validateSearch` is an open record, the
+                // target search still requires the parent's
+                // page/limit/status/q fields. We supply defaults
+                // here; the route strips them at runtime.
+                void navigate({
+                  to: '/o/$orgId/p/$projectId/annotation-queues/$queueId/review',
+                  params: { orgId, projectId, queueId },
+                  search: {
+                    page: 1,
+                    limit: 20,
+                    itemStatus: undefined,
+                    status: undefined,
+                    q: undefined,
+                  },
+                })
+              }}
+            >
+              Start review
+            </Button>
           </div>
           {queue.description ? (
             <CardDescription>{queue.description}</CardDescription>

@@ -103,3 +103,27 @@ export interface ExperimentMetricsResponse {
   performance: ExperimentPerformanceMetrics
   scores?: Record<string, ScoreMetrics>
 }
+
+// Create request shape. Mirrors
+// `evaluationDomain.CreateExperimentRequest` at
+// internal/core/domain/evaluation/entities.go:463. The full-fat wizard
+// path (CreateExperimentFromWizardRequest — prompt_id, version_id,
+// evaluators, variable_mapping) is NOT wired on the dashboard plane
+// today — no `create-experiment-wizard` Huma operation exists — so
+// the v1 form is intentionally minimal: name + optional dataset +
+// optional description. Evaluator binding, model, and "run
+// immediately" are deferred until the wizard endpoint lands.
+export interface CreateExperimentRequest {
+  name: string
+  dataset_id?: string
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+// Rerun body — matches `RerunExperimentRequest` in entities.go:472.
+// All fields optional; empty body re-runs with the same name.
+export interface RerunExperimentRequest {
+  name?: string
+  description?: string
+  metadata?: Record<string, unknown>
+}

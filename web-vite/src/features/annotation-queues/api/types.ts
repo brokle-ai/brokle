@@ -78,3 +78,35 @@ export interface QueueItemsListResponse {
   page: number
   limit: number
 }
+
+// Claim / complete / skip — item lifecycle during review.
+// Endpoints:
+//   POST /api/v1/projects/{projectId}/annotation-queues/{queueId}/items/claim
+//   POST .../items/{itemId}/complete
+//   POST .../items/{itemId}/skip
+//
+// ClaimNextRequest.seen_item_ids carries IDs the reviewer has already
+// touched in this session so the server picks a different one. Empty
+// array on first claim, grows as the reviewer progresses.
+export interface ClaimNextRequest {
+  seen_item_ids?: string[]
+}
+
+// Polymorphic value per the backend — number for NUMERIC/BOOLEAN
+// (BOOLEAN encodes true=1/false=0 at the server; we pass the raw
+// boolean here and let the wire serializer honour the polymorphism),
+// string for CATEGORICAL. Validated server-side against the referenced
+// score config's data type.
+export interface ScoreSubmission {
+  score_config_id: string
+  value: number | string | boolean
+  comment?: string
+}
+
+export interface CompleteItemRequest {
+  scores?: ScoreSubmission[]
+}
+
+export interface SkipItemRequest {
+  reason?: string
+}

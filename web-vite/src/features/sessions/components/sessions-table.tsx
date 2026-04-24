@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   Table,
   TableBody,
@@ -11,6 +12,15 @@ import type { SessionListItem } from '../api/types'
 
 interface SessionsTableProps {
   rows: SessionListItem[]
+  // Wrap the session_id cell in a router-typed `<Link>`. Parent owns
+  // routing, table stays framework-agnostic. Pattern mirrors
+  // `TracesTable.renderNameLink`. Not called for the "no-session"
+  // synthetic row (session_id === 'no-session') since those traces
+  // have no identifying attribute to link to.
+  renderSessionLink?: (
+    session: SessionListItem,
+    children: ReactNode,
+  ) => ReactNode
 }
 
 // Duration arrives in nanoseconds (summed OTLP span durations). Format
@@ -46,7 +56,7 @@ function formatTimestamp(iso: string): string {
   return d.toLocaleString()
 }
 
-export function SessionsTable({ rows }: SessionsTableProps) {
+export function SessionsTable({ rows, renderSessionLink }: SessionsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -78,16 +88,18 @@ export function SessionsTable({ rows }: SessionsTableProps) {
         <TableBody>
           {rows.map((s) => {
             const isNoSession = s.session_id === 'no-session'
+            const label = <span>{s.session_id.slice(0, 24)}</span>
+            const sessionCell = isNoSession ? (
+              <span className="italic text-muted-foreground">No session</span>
+            ) : renderSessionLink ? (
+              renderSessionLink(s, label)
+            ) : (
+              label
+            )
             return (
               <TableRow key={s.session_id}>
                 <TableCell className="font-mono text-xs">
-                  {isNoSession ? (
-                    <span className="italic text-muted-foreground">
-                      No session
-                    </span>
-                  ) : (
-                    <span>{s.session_id.slice(0, 24)}</span>
-                  )}
+                  {sessionCell}
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="font-mono">

@@ -16,6 +16,10 @@ import { IoPreview } from './io-preview'
 interface TraceDetailProps {
   trace: TraceDetailType
   spans: Span[]
+  // Optional right-aligned action slot — the trace route mounts the
+  // annotations + comments drawer triggers here. Kept optional so the
+  // component stays reusable in contexts without a project scope.
+  headerActions?: React.ReactNode
 }
 
 function formatDuration(ns: number | undefined): string {
@@ -98,7 +102,7 @@ function MetaPair({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export function TraceDetail({ trace, spans }: TraceDetailProps) {
+export function TraceDetail({ trace, spans, headerActions }: TraceDetailProps) {
   const [selectedSpanId, setSelectedSpanId] = useState<string | undefined>(
     () => spans.find((s) => !s.parent_span_id)?.span_id ?? spans[0]?.span_id,
   )
@@ -109,9 +113,14 @@ export function TraceDetail({ trace, spans }: TraceDetailProps) {
   return (
     <div className="space-y-6">
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{trace.name}</h1>
-          <StatusBadge trace={trace} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold">{trace.name}</h1>
+            <StatusBadge trace={trace} />
+          </div>
+          {headerActions ? (
+            <div className="flex items-center gap-1">{headerActions}</div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">

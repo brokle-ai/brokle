@@ -1,5 +1,6 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   Card,
   CardContent,
@@ -12,6 +13,8 @@ import {
   datasetDetailQueryOptions,
   datasetItemsListQueryOptions,
 } from '../api/queries'
+import { DatasetDeleteButton } from './dataset-delete-button'
+import { DatasetFormDialog } from './dataset-form-dialog'
 import { DatasetItemsTable } from './dataset-items-table'
 
 interface DatasetDetailProps {
@@ -35,6 +38,8 @@ export function DatasetDetail({
   page,
   limit,
 }: DatasetDetailProps) {
+  const navigate = useNavigate()
+  const [editOpen, setEditOpen] = useState(false)
   const { data: dataset } = useSuspenseQuery(
     datasetDetailQueryOptions(projectId, datasetId),
   )
@@ -64,11 +69,33 @@ export function DatasetDetail({
       </nav>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{dataset.name}</CardTitle>
-          {dataset.description ? (
-            <CardDescription>{dataset.description}</CardDescription>
-          ) : null}
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>{dataset.name}</CardTitle>
+            {dataset.description ? (
+              <CardDescription>{dataset.description}</CardDescription>
+            ) : null}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+            >
+              Edit
+            </Button>
+            <DatasetDeleteButton
+              projectId={projectId}
+              datasetId={datasetId}
+              onDeleted={() =>
+                navigate({
+                  to: '/o/$orgId/p/$projectId/datasets',
+                  params: { orgId, projectId },
+                  search: { page: 1, limit: 20, q: undefined },
+                })
+              }
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
@@ -89,6 +116,13 @@ export function DatasetDetail({
           </div>
         </CardContent>
       </Card>
+
+      <DatasetFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        projectId={projectId}
+        mode={{ kind: 'edit', dataset }}
+      />
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Items</h2>

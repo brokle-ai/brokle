@@ -1,11 +1,15 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  ClaimNextRequest,
+  CompleteItemRequest,
   QueueDetail,
+  QueueItem,
   QueueItemStatus,
   QueueItemsListResponse,
   QueueListResponse,
   QueueStatus,
+  SkipItemRequest,
 } from './types'
 
 export const queuesKeys = {
@@ -89,3 +93,57 @@ export const queueItemsListQueryOptions = (
     },
     staleTime: 10 * 1000,
   })
+
+// Item lifecycle mutations — kept thin so callers can compose them
+// with useMutation + their own onSuccess/invalidation logic. Each hits
+// a 2xx-body POST endpoint that returns the post-state QueueItem (or
+// 404 when no claimable item is left).
+export async function claimNextItem(
+  projectId: string,
+  queueId: string,
+  data: ClaimNextRequest = {},
+): Promise<QueueItem> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/items/claim`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as QueueItem
+}
+
+export async function completeItem(
+  projectId: string,
+  queueId: string,
+  itemId: string,
+  data: CompleteItemRequest = {},
+): Promise<QueueItem> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/items/${itemId}/complete`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as QueueItem
+}
+
+export async function skipItem(
+  projectId: string,
+  queueId: string,
+  itemId: string,
+  data: SkipItemRequest = {},
+): Promise<QueueItem> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/items/${itemId}/skip`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as QueueItem
+}
