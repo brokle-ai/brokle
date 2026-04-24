@@ -1,0 +1,29 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Vite / Rolldown
+.vite
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Test + build outputs
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.auth
+
+# Generated
+src/routeTree.gen.ts
+src/lib/api/generated/
+
+# Env
+.env
+.env.*
+!.env.example

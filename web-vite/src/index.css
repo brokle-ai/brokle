@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/*
+  Tailwind v4 CSS-first config. Design tokens land here via @theme blocks
+  as shadcn primitives + theme tokens are ported from web/ in Phase 1.5.
+  The scaffold stays token-free so Phase 1.5 can port web/src/app/globals.css
+  wholesale without conflict.
+*/
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
