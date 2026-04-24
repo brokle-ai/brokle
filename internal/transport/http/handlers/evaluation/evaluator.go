@@ -1,313 +1,288 @@
 package evaluation
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/transport/http/handlers/shared"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-// ---- route registration ---------------------------------------------
-
-func registerEvaluatorRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-evaluator",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/evaluators",
-		Tags:          []string{"evaluators"},
-		Summary:       "Create an evaluator",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-evaluators",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators",
-		Tags:        []string{"evaluators"},
-		Summary:     "List evaluators",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listEvaluators)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-evaluator",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}",
-		Tags:        []string{"evaluators"},
-		Summary:     "Get an evaluator",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-evaluator",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}",
-		Tags:        []string{"evaluators"},
-		Summary:     "Update an evaluator",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-evaluator",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/evaluators/{evaluatorId}",
-		Tags:          []string{"evaluators"},
-		Summary:       "Delete an evaluator",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "activate-evaluator",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/activate",
-		Tags:        []string{"evaluators"},
-		Summary:     "Activate an evaluator",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.activateEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "deactivate-evaluator",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/deactivate",
-		Tags:        []string{"evaluators"},
-		Summary:     "Deactivate an evaluator",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.deactivateEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "trigger-evaluator",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/trigger",
-		Tags:          []string{"evaluators"},
-		Summary:       "Trigger an evaluator against matching spans",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusAccepted,
-	}, h.triggerEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "test-evaluator",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/test",
-		Tags:        []string{"evaluators"},
-		Summary:     "Dry-run an evaluator against sample spans",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.testEvaluator)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-evaluator-analytics",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/analytics",
-		Tags:        []string{"evaluators"},
-		Summary:     "Get evaluator analytics",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getEvaluatorAnalytics)
+// registerEvaluatorRoutes mounts evaluator CRUD + lifecycle under
+// /api/v1/projects/{projectId}/evaluators.
+func registerEvaluatorRoutes(r chi.Router, h *handler) {
+	r.Route("/evaluators", func(r chi.Router) {
+		r.Post("/", h.createEvaluator)
+		r.Get("/", h.listEvaluators)
+		r.Route("/{evaluatorId}", func(r chi.Router) {
+			r.Get("/", h.getEvaluator)
+			r.Put("/", h.updateEvaluator)
+			r.Delete("/", h.deleteEvaluator)
+			r.Post("/activate", h.activateEvaluator)
+			r.Post("/deactivate", h.deactivateEvaluator)
+			r.Post("/trigger", h.triggerEvaluator)
+			r.Post("/test", h.testEvaluator)
+			r.Get("/analytics", h.getEvaluatorAnalytics)
+		})
+	})
 }
 
-// ---- DTOs ------------------------------------------------------------
+// ---- handlers -------------------------------------------------------
 
-// ---- handlers --------------------------------------------------------
-
-func (h *handler) createEvaluator(ctx context.Context, in *CreateEvaluatorInput) (*EvaluatorOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) createEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	ev, err := h.evaluatorSvc.Create(ctx, projectID, userIDPtr(ctx), &body)
+	var body evaluationDomain.CreateEvaluatorRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ev, err := h.evaluatorSvc.Create(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
+	response.Created(w, ev.ToResponse())
 }
 
-func (h *handler) listEvaluators(ctx context.Context, in *ListEvaluatorsInput) (*EvaluatorListOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) listEvaluators(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
+	q := r.URL.Query()
 	allowedSortFields := []string{"name", "status", "sampling_rate", "created_at", "updated_at"}
-	sortBy, err := pagination.ValidateSortField(in.SortBy, allowedSortFields)
+	sortBy, err := pagination.ValidateSortField(q.Get("sort_by"), allowedSortFields)
 	if err != nil {
-		return nil, appErrors.NewValidationError("sort_by", err.Error())
+		response.WriteError(w, appErrors.NewValidationError("sort_by", err.Error()))
+		return
+	}
+	sortDir := q.Get("sort_dir")
+	if sortDir != "" && sortDir != "asc" && sortDir != "desc" {
+		response.WriteError(w, appErrors.NewValidationError("sort_dir", "must be 'asc' or 'desc'"))
+		return
+	}
+
+	page, limit, err := readPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	params := pagination.Params{
-		Page:    in.Page,
-		Limit:   in.Limit,
+		Page:    page,
+		Limit:   limit,
 		SortBy:  sortBy,
-		SortDir: in.SortDir,
-	}
-	if in.SortDir != "" && in.SortDir != "asc" && in.SortDir != "desc" {
-		return nil, appErrors.NewValidationError("sort_dir", "must be 'asc' or 'desc'")
+		SortDir: sortDir,
 	}
 	params.SetDefaults("created_at")
 
 	var filter evaluationDomain.EvaluatorFilter
-	if in.Status != "" {
-		s := evaluationDomain.EvaluatorStatus(in.Status)
+	if v := q.Get("status"); v != "" {
+		s := evaluationDomain.EvaluatorStatus(v)
 		filter.Status = &s
 	}
-	if in.ScorerType != "" {
-		st := evaluationDomain.ScorerType(in.ScorerType)
+	if v := q.Get("scorer_type"); v != "" {
+		st := evaluationDomain.ScorerType(v)
 		filter.ScorerType = &st
 	}
-	if in.Search != "" {
-		s := in.Search
-		filter.Search = &s
+	if v := q.Get("search"); v != "" {
+		filter.Search = &v
 	}
 
-	evs, total, err := h.evaluatorSvc.List(ctx, projectID, &filter, params)
+	evs, total, err := h.evaluatorSvc.List(r.Context(), projectID, &filter, params)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*evaluationDomain.EvaluatorResponse, len(evs))
 	for i, e := range evs {
 		out[i] = e.ToResponse()
 	}
-	return &EvaluatorListOutput{Body: pageList[*evaluationDomain.EvaluatorResponse]{
+	response.Success(w, pageList[*evaluationDomain.EvaluatorResponse]{
 		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
-	}}, nil
+	})
 }
 
-func (h *handler) getEvaluator(ctx context.Context, in *GetEvaluatorInput) (*EvaluatorOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	ev, err := h.evaluatorSvc.GetByID(ctx, evaluatorID, projectID)
+	ev, err := h.evaluatorSvc.GetByID(r.Context(), evaluatorID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
+	response.Success(w, ev.ToResponse())
 }
 
-func (h *handler) updateEvaluator(ctx context.Context, in *UpdateEvaluatorInput) (*EvaluatorOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) updateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	ev, err := h.evaluatorSvc.Update(ctx, evaluatorID, projectID, &body)
+	var body evaluationDomain.UpdateEvaluatorRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ev, err := h.evaluatorSvc.Update(r.Context(), evaluatorID, projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &EvaluatorOutput{Body: ev.ToResponse()}, nil
+	response.Success(w, ev.ToResponse())
 }
 
-func (h *handler) deleteEvaluator(ctx context.Context, in *DeleteEvaluatorInput) (*EmptyOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) deleteEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.evaluatorSvc.Delete(ctx, evaluatorID, projectID); err != nil {
-		return nil, err
+	if err := h.evaluatorSvc.Delete(r.Context(), evaluatorID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &EmptyOutput{}, nil
+	response.NoContent(w)
 }
 
-func (h *handler) activateEvaluator(ctx context.Context, in *GetEvaluatorInput) (*MessageOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) activateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.evaluatorSvc.Activate(ctx, evaluatorID, projectID); err != nil {
-		return nil, err
+	if err := h.evaluatorSvc.Activate(r.Context(), evaluatorID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &MessageOutput{Body: &shared.MessageResponse{Message: "evaluator activated"}}, nil
+	response.Success(w, &shared.MessageResponse{Message: "evaluator activated"})
 }
 
-func (h *handler) deactivateEvaluator(ctx context.Context, in *GetEvaluatorInput) (*MessageOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) deactivateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.evaluatorSvc.Deactivate(ctx, evaluatorID, projectID); err != nil {
-		return nil, err
+	if err := h.evaluatorSvc.Deactivate(r.Context(), evaluatorID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &MessageOutput{Body: &shared.MessageResponse{Message: "evaluator deactivated"}}, nil
+	response.Success(w, &shared.MessageResponse{Message: "evaluator deactivated"})
 }
 
-func (h *handler) triggerEvaluator(ctx context.Context, in *TriggerEvaluatorInput) (*TriggerEvaluatorOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) triggerEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	opts := in.Body
-	res, err := h.evaluatorSvc.TriggerEvaluator(ctx, evaluatorID, projectID, &opts)
+	var body evaluationDomain.TriggerOptions
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	res, err := h.evaluatorSvc.TriggerEvaluator(r.Context(), evaluatorID, projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &TriggerEvaluatorOutput{Body: res}, nil
+	response.JSON(w, http.StatusAccepted, res)
 }
 
-func (h *handler) testEvaluator(ctx context.Context, in *TestEvaluatorInput) (*TestEvaluatorOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) testEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	req := in.Body
-	res, err := h.evaluatorSvc.TestEvaluator(ctx, evaluatorID, projectID, &req)
+	var body evaluationDomain.TestEvaluatorRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	res, err := h.evaluatorSvc.TestEvaluator(r.Context(), evaluatorID, projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &TestEvaluatorOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-func (h *handler) getEvaluatorAnalytics(ctx context.Context, in *GetEvaluatorAnalyticsInput) (*EvaluatorAnalyticsOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getEvaluatorAnalytics(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	period := in.Period
+	q := r.URL.Query()
+	period := q.Get("period")
 	if period == "" {
 		period = "7d"
 	}
 	fromTime, toTime, err := shared.ParseTimeRange(
-		in.FromTimestamp,
-		in.ToTimestamp,
+		q.Get("from_timestamp"),
+		q.Get("to_timestamp"),
 		period,
 		analyticsDomain.TimeRange7Days,
 	)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	params := &evaluationDomain.EvaluatorAnalyticsParams{
 		ProjectID:   projectID,
@@ -316,9 +291,10 @@ func (h *handler) getEvaluatorAnalytics(ctx context.Context, in *GetEvaluatorAna
 		From:        &fromTime,
 		To:          &toTime,
 	}
-	res, err := h.evaluatorSvc.GetAnalytics(ctx, evaluatorID, projectID, params)
+	res, err := h.evaluatorSvc.GetAnalytics(r.Context(), evaluatorID, projectID, params)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &EvaluatorAnalyticsOutput{Body: res}, nil
+	response.Success(w, res)
 }

@@ -1,163 +1,152 @@
 package evaluation
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-// registerScoreConfigRoutes wires the dashboard-plane score-config CRUD
-// operations. Called from RegisterRoutes in handlers.go.
-func registerScoreConfigRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-score-config",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/score-configs",
-		Tags:          []string{"score-configs"},
-		Summary:       "Create a score config",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createScoreConfig)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-score-configs",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/score-configs",
-		Tags:        []string{"score-configs"},
-		Summary:     "List score configs",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listScoreConfigs)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-score-config",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/score-configs/{configId}",
-		Tags:        []string{"score-configs"},
-		Summary:     "Get a score config",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getScoreConfig)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-score-config",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/score-configs/{configId}",
-		Tags:        []string{"score-configs"},
-		Summary:     "Update a score config",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateScoreConfig)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-score-config",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/score-configs/{configId}",
-		Tags:          []string{"score-configs"},
-		Summary:       "Delete a score config",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteScoreConfig)
+// registerScoreConfigRoutes mounts score-config CRUD under
+// /api/v1/projects/{projectId}/score-configs.
+func registerScoreConfigRoutes(r chi.Router, h *handler) {
+	r.Route("/score-configs", func(r chi.Router) {
+		r.Post("/", h.createScoreConfig)
+		r.Get("/", h.listScoreConfigs)
+		r.Get("/{configId}", h.getScoreConfig)
+		r.Put("/{configId}", h.updateScoreConfig)
+		r.Delete("/{configId}", h.deleteScoreConfig)
+	})
 }
 
-func (h *handler) createScoreConfig(ctx context.Context, in *CreateScoreConfigInput) (*ScoreConfigOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) createScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	var body CreateScoreConfigRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	domainReq := &evaluationDomain.CreateScoreConfigRequest{
-		Name:        in.Body.Name,
-		Description: in.Body.Description,
-		Type:        evaluationDomain.ScoreType(in.Body.Type),
-		MinValue:    in.Body.MinValue,
-		MaxValue:    in.Body.MaxValue,
-		Categories:  in.Body.Categories,
-		Metadata:    in.Body.Metadata,
+		Name:        body.Name,
+		Description: body.Description,
+		Type:        evaluationDomain.ScoreType(body.Type),
+		MinValue:    body.MinValue,
+		MaxValue:    body.MaxValue,
+		Categories:  body.Categories,
+		Metadata:    body.Metadata,
 	}
-	cfg, err := h.scoreConfigSvc.Create(ctx, projectID, domainReq)
+	cfg, err := h.scoreConfigSvc.Create(r.Context(), projectID, domainReq)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ScoreConfigOutput{Body: cfg.ToResponse()}, nil
+	response.Created(w, cfg.ToResponse())
 }
 
-func (h *handler) listScoreConfigs(ctx context.Context, in *ListScoreConfigsInput) (*ListScoreConfigsOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) listScoreConfigs(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	page, limit := normalizePagination(in.Page, in.Limit)
-	cfgs, total, err := h.scoreConfigSvc.List(ctx, projectID, page, limit)
+	page, limit, err := readPagination(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	cfgs, total, err := h.scoreConfigSvc.List(r.Context(), projectID, page, limit)
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*evaluationDomain.ScoreConfigResponse, len(cfgs))
 	for i, c := range cfgs {
 		out[i] = c.ToResponse()
 	}
-	return &ListScoreConfigsOutput{Body: pageList[*evaluationDomain.ScoreConfigResponse]{
+	response.Success(w, pageList[*evaluationDomain.ScoreConfigResponse]{
 		Data: out, Total: total, Page: page, Limit: limit,
-	}}, nil
+	})
 }
 
-func (h *handler) getScoreConfig(ctx context.Context, in *GetScoreConfigInput) (*ScoreConfigOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	configID, err := parseScoreConfigID(in.ConfigID)
+	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	cfg, err := h.scoreConfigSvc.GetByID(ctx, configID, projectID)
+	cfg, err := h.scoreConfigSvc.GetByID(r.Context(), configID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ScoreConfigOutput{Body: cfg.ToResponse()}, nil
+	response.Success(w, cfg.ToResponse())
 }
 
-func (h *handler) updateScoreConfig(ctx context.Context, in *UpdateScoreConfigInput) (*ScoreConfigOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) updateScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	configID, err := parseScoreConfigID(in.ConfigID)
+	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	var body UpdateScoreConfigRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
 	var scoreType *evaluationDomain.ScoreType
-	if in.Body.Type != nil {
-		st := evaluationDomain.ScoreType(*in.Body.Type)
+	if body.Type != nil {
+		st := evaluationDomain.ScoreType(*body.Type)
 		scoreType = &st
 	}
 	domainReq := &evaluationDomain.UpdateScoreConfigRequest{
-		Name:        in.Body.Name,
-		Description: in.Body.Description,
+		Name:        body.Name,
+		Description: body.Description,
 		Type:        scoreType,
-		MinValue:    in.Body.MinValue,
-		MaxValue:    in.Body.MaxValue,
-		Categories:  in.Body.Categories,
-		Metadata:    in.Body.Metadata,
+		MinValue:    body.MinValue,
+		MaxValue:    body.MaxValue,
+		Categories:  body.Categories,
+		Metadata:    body.Metadata,
 	}
-	cfg, err := h.scoreConfigSvc.Update(ctx, configID, projectID, domainReq)
+	cfg, err := h.scoreConfigSvc.Update(r.Context(), configID, projectID, domainReq)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ScoreConfigOutput{Body: cfg.ToResponse()}, nil
+	response.Success(w, cfg.ToResponse())
 }
 
-func (h *handler) deleteScoreConfig(ctx context.Context, in *DeleteScoreConfigInput) (*EmptyOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) deleteScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	configID, err := parseScoreConfigID(in.ConfigID)
+	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.scoreConfigSvc.Delete(ctx, configID, projectID); err != nil {
-		return nil, err
+	if err := h.scoreConfigSvc.Delete(r.Context(), configID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &EmptyOutput{}, nil
+	response.NoContent(w)
 }

@@ -6,94 +6,93 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
-	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 	"brokle/pkg/uid"
 )
 
-// registerSDKScoreRoutes wires the SDK-plane score ingestion endpoints.
-// Called from RegisterSDKRoutes in handlers.go.
-func registerSDKScoreRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-create-score",
-		Method:        http.MethodPost,
-		Path:          "/v1/scores",
-		Tags:          []string{"SDK - scores"},
-		Summary:       "Create a score (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.sdkCreateScore)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-create-score-batch",
-		Method:        http.MethodPost,
-		Path:          "/v1/scores/batch",
-		Tags:          []string{"SDK - scores"},
-		Summary:       "Batch-create scores (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.sdkCreateScoreBatch)
+// registerSDKScoreRoutes wires the SDK-plane score ingestion routes.
+func registerSDKScoreRoutes(r chi.Router, h *handler) {
+	r.Post("/v1/scores", h.sdkCreateScore)
+	r.Post("/v1/scores/batch", h.sdkCreateScoreBatch)
 }
 
-func (h *handler) sdkCreateScore(ctx context.Context, in *SDKCreateScoreInput) (*SDKCreateScoreOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-
-	if err := h.validateScoreAgainstConfig(ctx, projectID, in.Body.Name, in.Body.Type, in.Body.Value, in.Body.StringValue); err != nil {
-		return nil, err
+func (h *handler) sdkCreateScore(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	var body CreateScoreRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	score := h.buildScore(projectID, &in.Body)
-	if err := h.scoreSvc.CreateScore(ctx, score); err != nil {
-		return nil, err
+	if err := h.validateScoreAgainstConfig(r.Context(), projectID, body.Name, body.Type, body.Value, body.StringValue); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	h.logger.InfoContext(ctx, "evaluation: score created via SDK",
+	score := h.buildScore(projectID, &body)
+	if err := h.scoreSvc.CreateScore(r.Context(), score); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	h.logger.InfoContext(r.Context(), "evaluation: score created via SDK",
 		"score_id", score.ID,
 		"project_id", projectID,
 		"trace_id", score.TraceID,
 		"name", score.Name,
 	)
 
-	return &SDKCreateScoreOutput{Body: toSubmittedScoreResponse(score)}, nil
+	response.Created(w, toSubmittedScoreResponse(score))
 }
 
-func (h *handler) sdkCreateScoreBatch(ctx context.Context, in *SDKCreateScoreBatchInput) (*SDKCreateScoreBatchOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-
-	if len(in.Body.Scores) == 0 {
-		return nil, appErrors.NewValidationError("Invalid request body", "scores array cannot be empty")
+func (h *handler) sdkCreateScoreBatch(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	var body BatchScoreRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	if len(body.Scores) == 0 {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid request body", "scores array cannot be empty"))
+		return
 	}
 
-	scores := make([]*observability.Score, 0, len(in.Body.Scores))
-	for i, sr := range in.Body.Scores {
-		if err := h.validateScoreAgainstConfig(ctx, projectID, sr.Name, sr.Type, sr.Value, sr.StringValue); err != nil {
-			h.logger.WarnContext(ctx, "evaluation: score validation failed",
+	scores := make([]*observability.Score, 0, len(body.Scores))
+	for i, sr := range body.Scores {
+		if err := h.validateScoreAgainstConfig(r.Context(), projectID, sr.Name, sr.Type, sr.Value, sr.StringValue); err != nil {
+			h.logger.WarnContext(r.Context(), "evaluation: score validation failed",
 				"index", i, "name", sr.Name, "error", err.Error(),
 			)
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 		scores = append(scores, h.buildScore(projectID, &sr))
 	}
 
-	if err := h.scoreSvc.CreateScoreBatch(ctx, scores); err != nil {
-		return nil, err
+	if err := h.scoreSvc.CreateScoreBatch(r.Context(), scores); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	h.logger.InfoContext(ctx, "evaluation: batch scores created via SDK",
+	h.logger.InfoContext(r.Context(), "evaluation: batch scores created via SDK",
 		"project_id", projectID, "count", len(scores),
 	)
 
-	return &SDKCreateScoreBatchOutput{Body: &BatchScoreResponse{Created: len(scores)}}, nil
+	response.Created(w, &BatchScoreResponse{Created: len(scores)})
 }
 
-// validateScoreAgainstConfig verifies a score against the matching ScoreConfig
-// when one exists. Absence of a config is allowed (unvalidated ingestion);
-// lookup errors other than not-found fail closed.
+// validateScoreAgainstConfig verifies a score against the matching
+// ScoreConfig when one exists. Absence of a config is allowed
+// (unvalidated ingestion); lookup errors other than not-found fail
+// closed.
 func (h *handler) validateScoreAgainstConfig(
 	ctx context.Context,
 	projectID uuid.UUID,
@@ -174,8 +173,8 @@ func (h *handler) buildScore(projectID uuid.UUID, req *CreateScoreRequest) *obse
 		Timestamp:        time.Now(),
 	}
 
-	// Span defaults to the trace for trace-linked scores; experiment-only
-	// scores leave both nil.
+	// Span defaults to the trace for trace-linked scores; experiment-
+	// only scores leave both nil.
 	if req.SpanID != nil {
 		score.SpanID = req.SpanID
 	} else if req.TraceID != nil {
@@ -185,9 +184,6 @@ func (h *handler) buildScore(projectID uuid.UUID, req *CreateScoreRequest) *obse
 }
 
 func toSubmittedScoreResponse(s *observability.Score) *SubmittedScoreResponse {
-	// Metadata on the entity is json.RawMessage; sanitize any malformed
-	// legacy bytes by JSON-escaping them into a string. Valid JSON passes
-	// through unchanged.
 	metadata := s.Metadata
 	if len(metadata) > 0 && !json.Valid(metadata) {
 		metadata, _ = json.Marshal(string(metadata))
