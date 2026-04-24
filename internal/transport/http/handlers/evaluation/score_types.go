@@ -50,18 +50,3 @@ type BatchScoreResponse struct {
 	Created int `json:"created"`
 }
 
-type SDKCreateScoreInput struct {
-	Body CreateScoreRequest
-}
-
-type SDKCreateScoreOutput struct {
-	Body *SubmittedScoreResponse
-}
-
-type SDKCreateScoreBatchInput struct {
-	Body BatchScoreRequest
-}
-
-type SDKCreateScoreBatchOutput struct {
-	Body *BatchScoreResponse
-}

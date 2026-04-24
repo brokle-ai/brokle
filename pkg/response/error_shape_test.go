@@ -1,23 +1,16 @@
-// Cross-path wire-contract test. Three code paths can produce an
-// error response body:
+// Cross-path wire-contract test. Two code paths produce an error
+// response body:
 //
-//  1. A Huma operation handler returns *AppError directly. Huma v2
-//     detects huma.StatusError (AppError implements it) and marshals
-//     AppError via its own MarshalJSON (pkg/errors/errors.go).
-//  2. A Huma framework-pipeline error (415, 422, 405, ...). Huma
-//     calls NewError, which our factory wraps *AppError into
-//     *statusError. statusError.MarshalJSON emits ErrorResponse.
-//  3. A chi middleware rejects a request before it reaches Huma
-//     (rate-limit, panic recovery, CORS preflight denial). The
-//     middleware calls pkg/response.WriteError which encodes
-//     ErrorResponse.
+//  1. Handler returns *AppError. AppError.MarshalJSON emits the
+//     canonical {error:{...}} envelope directly.
+//  2. Middleware or handler calls pkg/response.WriteError(w, err).
+//     WriteError builds APIError + ErrorResponse and encodes them.
 //
-// This test guarantees the three paths produce byte-identical
-// envelope bytes for the same input AppError (excluding the optional
-// per-field `errors` array which only path 2 populates). If the
-// envelope shape ever drifts between paths, SDK consumers will see
-// intermittent parse failures that are hell to diagnose — this test
-// is the tripwire.
+// This test guarantees both paths produce byte-identical envelope
+// bytes for the same input AppError, including the per-field
+// `errors` array populated by pkg/request.DecodeJSON. If the envelope
+// shape ever drifts between paths, SDK consumers will see intermittent
+// parse failures that are hell to diagnose — this test is the tripwire.
 package response_test
 
 import (

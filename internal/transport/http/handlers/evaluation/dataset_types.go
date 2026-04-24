@@ -31,17 +31,17 @@ type ImportFromJSONRequest struct {
 	Source      string              `json:"source,omitempty"`
 }
 
-type CSVColumnMappingRequest struct {
+type ImportFromCSVRequest struct {
+	Content       string             `json:"content"`
+	ColumnMapping csvColumnMapping   `json:"column_mapping"`
+	HasHeader     bool               `json:"has_header"`
+	Deduplicate   bool               `json:"deduplicate"`
+}
+
+type csvColumnMapping struct {
 	InputColumn     string   `json:"input_column"`
 	ExpectedColumn  string   `json:"expected_column,omitempty"`
 	MetadataColumns []string `json:"metadata_columns,omitempty"`
-}
-
-type ImportFromCSVRequest struct {
-	Content       string                  `json:"content"`
-	ColumnMapping CSVColumnMappingRequest `json:"column_mapping"`
-	HasHeader     bool                    `json:"has_header"`
-	Deduplicate   bool                    `json:"deduplicate"`
 }
 
 type CreateFromTracesRequest struct {

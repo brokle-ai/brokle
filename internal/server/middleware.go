@@ -42,11 +42,10 @@ import (
 //     the matched route, not an intermediate wrapper.
 //
 //  2. Path-prefix-scoped cross-cutting middleware for the two API
-//     surfaces — CORS + CSRF on /api/v1/*. These MUST live at the
-//     mux level rather than on chi subrouters because humachi binds
-//     its adapter to the captured router reference at construction
-//     time; routes registered via huma.Register land on the mux, not
-//     on any subrouter built later via r.Route / r.Group.
+//     surfaces — CORS + CSRF on /api/v1/*. These live at the mux
+//     level (not on a chi subrouter) so any handler registered under
+//     /api/v1 inherits them regardless of the sub-routing used to
+//     reach it.
 //
 //     The /api/v1 stack is, outer-to-inner:
 //     - corsAdmin — CORS preflight handling + allow headers on

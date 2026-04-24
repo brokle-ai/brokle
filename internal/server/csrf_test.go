@@ -94,8 +94,7 @@ func TestCSRF_PanicsOnMalformedOrigin(t *testing.T) {
 
 // TestCSRF_SafeMethodsBypassCheck — GET/HEAD/OPTIONS pass through
 // regardless of trust state. This is why /api/v1/users/me returns
-// 401 (auth) not 403 (CSRF) when called from any origin, and why
-// /api/v1/openapi.json works for docs viewers from any origin.
+// 401 (auth) not 403 (CSRF) when called from any origin.
 func TestCSRF_SafeMethodsBypassCheck(t *testing.T) {
 	// No trusted origins configured.
 	csrf := crossOriginProtection(stubDeps())

@@ -130,5 +130,3 @@ type CountResponse struct {
 	Created int `json:"created"`
 }
 
-// EmptyOutput is the Huma output wrapper for 204-style empty responses.
-type EmptyOutput struct{}

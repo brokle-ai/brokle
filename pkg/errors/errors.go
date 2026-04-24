@@ -118,9 +118,8 @@ func (t ErrorType) HTTPStatus() int {
 }
 
 // ErrorDetail carries a per-field validation diagnostic. One entry
-// per rejected field. Shape mirrors huma.ErrorDetail (which we used
-// to delegate to) so clients that already parse that layout keep
-// working unchanged.
+// per rejected field, populated by pkg/request.DecodeJSON from
+// go-playground/validator errors.
 //
 // Location is a dotted path from the root of the request document —
 // "body.items[3].tags" for a nested JSON field, "query.page" for a
