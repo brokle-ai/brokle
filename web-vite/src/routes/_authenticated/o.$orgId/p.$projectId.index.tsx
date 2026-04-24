@@ -1,35 +1,72 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { BrokleError } from '@/lib/api/errors'
+import { Button } from '@/components/ui/button'
 import { projectMembershipQueryOptions } from '@/features/projects/queries'
 import { organizationMembershipQueryOptions } from '@/features/organizations/queries'
+import { StatsRow } from '@/features/overview/components'
+import { overviewQueryOptions } from '@/features/overview/api/queries'
 
-// Project home / dashboard entry point. Phase 1.5 replaces this with
-// the actual observability overview when the first feature group
-// ports. Keeps the router tree valid in the meantime.
+// Project home. Phase 1.5 ships the stats row + a link through to
+// the traces list; chart widgets (cost-by-model, trace-volume,
+// top-errors) are deferred to the second port.
 export const Route = createFileRoute('/_authenticated/o/$orgId/p/$projectId/')({
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      overviewQueryOptions(params.projectId, { timeRange: '24h' }),
+    ),
+  errorComponent: OverviewErrorBoundary,
   component: ProjectHome,
 })
+
+function OverviewErrorBoundary({ error }: { error: Error }) {
+  // 4xx (auth-adjacent, not-found) renders inline; 5xx bubbles to the
+  // root boundary where the global 500 UI takes over.
+  if (error instanceof BrokleError && error.status >= 400 && error.status < 500) {
+    return (
+      <main className="mx-auto max-w-5xl p-6">
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-6">
+          <p className="text-sm font-medium text-destructive">
+            Unable to load overview
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+        </div>
+      </main>
+    )
+  }
+  throw error
+}
 
 function ProjectHome() {
   const { orgId, projectId } = Route.useParams()
   const { data: org } = useSuspenseQuery(organizationMembershipQueryOptions(orgId))
   const { data: project } = useSuspenseQuery(projectMembershipQueryOptions(projectId))
+  const { data: overview } = useSuspenseQuery(
+    overviewQueryOptions(projectId, { timeRange: '24h' }),
+  )
 
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <header className="space-y-1">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          {org.name}
-        </p>
-        <h1 className="text-2xl font-semibold">{project.name}</h1>
+    <main className="mx-auto max-w-7xl p-6 space-y-6">
+      <header className="flex items-baseline justify-between">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {org.name}
+          </p>
+          <h1 className="text-2xl font-semibold">{project.name}</h1>
+          <p className="text-sm text-muted-foreground">Last 24 hours</p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link
+            to="/o/$orgId/p/$projectId/traces"
+            params={{ orgId, projectId }}
+            search={{ page: 1, limit: 20, q: undefined }}
+          >
+            View traces →
+          </Link>
+        </Button>
       </header>
-      <section className="rounded-lg border p-6">
-        <h2 className="font-medium">Project home</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Observability overview ports here in Phase 1.5. Tenancy scaffold is live
-          (org {org.id}, project {project.id}).
-        </p>
-      </section>
+
+      <StatsRow stats={overview.stats} />
     </main>
   )
 }
