@@ -7,8 +7,34 @@ export interface Project {
   organization_id: string
   name: string
   slug: string
+  description?: string
+  status?: 'active' | 'archived'
   created_at: string
   updated_at: string
+}
+
+export interface UpdateProjectRequest {
+  name?: string
+  description?: string
+}
+
+export async function updateProject(
+  projectId: string,
+  data: UpdateProjectRequest,
+): Promise<Project> {
+  const resp = await rawFetch(`/api/v1/projects/${projectId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as Project
+}
+
+// DELETE returns 204 — soft-delete on the backend. The project is
+// unrecoverable from the UI; the user loses access immediately and the
+// route redirects to the org landing page on success.
+export async function deleteProject(projectId: string): Promise<void> {
+  await rawFetch(`/api/v1/projects/${projectId}`, { method: 'DELETE' })
 }
 
 export const projectKeys = {

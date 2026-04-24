@@ -9,6 +9,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   MessageSquare,
+  Plug,
   Settings,
   Users,
 } from 'lucide-react'
@@ -55,6 +56,7 @@ function buildGroups(orgId: string, projectId: string): NavGroup[] {
       label: 'Settings',
       items: [
         { label: 'Members', to: `${p}/settings/members`, icon: Users },
+        { label: 'AI Providers', to: `${p}/settings/ai-providers`, icon: Plug },
         { label: 'Project', to: `${p}/settings`, icon: Settings },
         { label: 'Billing', to: `/o/${orgId}/billing`, icon: CreditCard },
       ],

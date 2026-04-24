@@ -4,6 +4,8 @@ import type {
   CreateEvaluatorRequest,
   EvaluatorDetail,
   EvaluatorListResponse,
+  TestEvaluatorRequest,
+  TestEvaluatorResponse,
   UpdateEvaluatorRequest,
 } from './types'
 
@@ -124,4 +126,23 @@ export async function deactivateEvaluator(
     { method: 'POST' },
   )
   return (await resp.json()) as EvaluatorDetail
+}
+
+// Test runs evaluate the configuration against real spans without
+// writing scores. Request is always POST — the backend accepts an
+// empty body for "use defaults" so the UI can keep the form optional.
+export async function testEvaluator(
+  projectId: string,
+  evaluatorId: string,
+  data: TestEvaluatorRequest,
+): Promise<TestEvaluatorResponse> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/test`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as TestEvaluatorResponse
 }

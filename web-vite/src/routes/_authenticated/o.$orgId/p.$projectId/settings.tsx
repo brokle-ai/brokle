@@ -37,6 +37,12 @@ function SettingsShell() {
         >
           API Keys
         </TabLink>
+        <TabLink
+          to="/o/$orgId/p/$projectId/settings/ai-providers"
+          params={{ orgId, projectId }}
+        >
+          AI Providers
+        </TabLink>
       </nav>
 
       <Outlet />

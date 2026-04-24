@@ -108,3 +108,72 @@ export interface UpdateEvaluatorRequest {
   scorer_config?: Record<string, unknown>
   variable_mapping?: unknown[]
 }
+
+// Test-evaluator endpoint shapes — used by the "Test" button on the
+// evaluator detail page. Mirrors the backend's
+// `/evaluators/{id}/test` POST: the request picks the sample source
+// (trace/span IDs, or a time-range + limit for backfill-style sampling)
+// and the response returns per-span resolutions plus an aggregate
+// summary. Fields typed `unknown` where the variant depends on the
+// scorer's output schema (numeric vs categorical vs boolean).
+
+export interface TestEvaluatorRequest {
+  trace_id?: string
+  span_id?: string
+  span_ids?: string[]
+  limit?: number
+  time_range?: '1h' | '24h' | '7d'
+}
+
+export interface TestScoreResult {
+  score_name: string
+  value: number | string | boolean
+  reasoning?: string
+  confidence?: number
+}
+
+export interface TestResolvedVariable {
+  variable_name: string
+  source: string
+  json_path?: string
+  resolved_value: unknown
+}
+
+export interface TestExecution {
+  span_id: string
+  trace_id: string
+  span_name: string
+  matched_filter: boolean
+  status: 'success' | 'failed' | 'skipped' | 'filtered'
+  score_results: TestScoreResult[]
+  llm_response?: string
+  variables_resolved: TestResolvedVariable[]
+  error_message?: string
+  latency_ms?: number
+}
+
+export interface TestSummary {
+  total_spans: number
+  matched_spans: number
+  evaluated_spans: number
+  success_count: number
+  failure_count: number
+  skipped_count: number
+  average_score?: number
+  average_latency_ms?: number
+}
+
+export interface TestEvaluatorPreview {
+  name: string
+  scorer_type: ScorerType
+  filter_description: string
+  variable_names: string[]
+  prompt_preview?: string
+  matching_count?: number
+}
+
+export interface TestEvaluatorResponse {
+  summary: TestSummary
+  executions: TestExecution[]
+  evaluator_preview: TestEvaluatorPreview
+}

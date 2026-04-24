@@ -8,7 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import type { DashboardListItem } from '../api/types'
+import type { DashboardListItem } from '../types'
 
 interface DashboardsTableProps {
   rows: DashboardListItem[]

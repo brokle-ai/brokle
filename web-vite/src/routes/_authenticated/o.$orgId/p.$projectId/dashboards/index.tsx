@@ -3,7 +3,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
-import { DashboardsTable } from '@/features/dashboards/components'
+import {
+  DashboardsTable,
+  CreateDashboardDialog,
+} from '@/features/dashboards/components'
 import { dashboardListQueryOptions } from '@/features/dashboards/api/queries'
 
 const searchSchema = z.object({
@@ -83,6 +86,7 @@ function DashboardsPage() {
             {total.toLocaleString()} total
           </p>
         </div>
+        <CreateDashboardDialog projectId={projectId} />
       </header>
 
       <DashboardsTable

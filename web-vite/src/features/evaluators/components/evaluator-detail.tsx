@@ -27,6 +27,7 @@ import type {
   LLMScorerConfigShape,
 } from '../api/types'
 import { EvaluatorDeleteButton } from './evaluator-delete-button'
+import { TestEvaluatorDialog } from './test-evaluator-dialog'
 
 interface EvaluatorDetailProps {
   orgId: string
@@ -73,6 +74,7 @@ export function EvaluatorDetail({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [toggleError, setToggleError] = useState<string | null>(null)
+  const [testOpen, setTestOpen] = useState(false)
   const { data: evaluator } = useSuspenseQuery(
     evaluatorDetailQueryOptions(projectId, evaluatorId),
   )
@@ -130,6 +132,13 @@ export function EvaluatorDetail({
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTestOpen(true)}
+            >
+              Test
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -280,10 +289,19 @@ export function EvaluatorDetail({
           <CardTitle className="text-base">Runs</CardTitle>
           <CardDescription>
             Execution history endpoint not shipped yet — runs will show
-            here once the dashboard plane exposes them.
+            here once the dashboard plane exposes them. Use the Test
+            button above to preview evaluations in the meantime.
           </CardDescription>
         </CardHeader>
       </Card>
+
+      <TestEvaluatorDialog
+        projectId={projectId}
+        evaluatorId={evaluatorId}
+        evaluatorName={evaluator.name}
+        open={testOpen}
+        onOpenChange={setTestOpen}
+      />
     </main>
   )
 }

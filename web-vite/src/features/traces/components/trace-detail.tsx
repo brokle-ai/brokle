@@ -11,7 +11,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Span, TraceDetail as TraceDetailType } from '../api/types'
 import { SpanTree } from './span-tree'
-import { IoPreview } from './io-preview'
+import { SpanDetailPanel } from './span-detail-panel'
 
 interface TraceDetailProps {
   trace: TraceDetailType
@@ -152,62 +152,20 @@ export function TraceDetail({ trace, spans, headerActions }: TraceDetailProps) {
           </CollapsibleTrigger>
         </div>
         <CollapsibleContent className="mt-2">
-          <SpanTree
-            spans={spans}
-            selectedSpanId={selectedSpanId}
-            onSpanSelect={(s) => setSelectedSpanId(s.span_id)}
-          />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+            <SpanTree
+              spans={spans}
+              selectedSpanId={selectedSpanId}
+              onSpanSelect={(s) => setSelectedSpanId(s.span_id)}
+            />
+            {selectedSpan ? (
+              <div className="lg:sticky lg:top-4">
+                <SpanDetailPanel span={selectedSpan} />
+              </div>
+            ) : null}
+          </div>
         </CollapsibleContent>
       </Collapsible>
-
-      {selectedSpan && (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <MetaPair
-              label="Model"
-              value={selectedSpan.model_name ?? '—'}
-            />
-            <MetaPair
-              label="Provider"
-              value={selectedSpan.provider_name ?? '—'}
-            />
-            <MetaPair
-              label="Latency"
-              value={formatDuration(selectedSpan.duration)}
-            />
-            <MetaPair
-              label="Tokens"
-              value={formatTokens(
-                sumTokens(selectedSpan.usage_details),
-              )}
-            />
-            <MetaPair
-              label="Cost"
-              value={formatCost(selectedSpan.total_cost)}
-            />
-          </div>
-
-          <IoPreview value={selectedSpan.input} label="Input" />
-          <IoPreview value={selectedSpan.output} label="Output" />
-        </section>
-      )}
     </div>
   )
-}
-
-// Small helper: collapse usage_details (a map of token-type -> count)
-// into a single total. Undefined if the map is absent or empty.
-function sumTokens(
-  usage: Record<string, number> | undefined,
-): number | undefined {
-  if (!usage) return undefined
-  let total = 0
-  let sawAny = false
-  for (const v of Object.values(usage)) {
-    if (typeof v === 'number' && Number.isFinite(v)) {
-      total += v
-      sawAny = true
-    }
-  }
-  return sawAny ? total : undefined
 }

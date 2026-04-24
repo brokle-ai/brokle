@@ -10,3 +10,4 @@ export type {
   ParsedEvaluatorForm,
 } from './evaluator-form'
 export { EvaluatorDeleteButton } from './evaluator-delete-button'
+export { TestEvaluatorDialog } from './test-evaluator-dialog'
