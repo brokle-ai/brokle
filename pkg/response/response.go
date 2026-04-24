@@ -56,15 +56,10 @@ type APIError struct {
 	Errors  []ErrorDetail `json:"errors,omitempty" description:"Per-field validation diagnostics (location + message + value)"`
 }
 
-// ErrorDetail carries per-field validation diagnostics. Mirror of
-// huma.ErrorDetail — kept local so our OpenAPI spec exposes it under
-// our own component name and we control the JSON tags. Lossless
-// conversion happens in fromHumaErrors.
-type ErrorDetail struct {
-	Location string `json:"location,omitempty" example:"body.items[3].tags" description:"Dotted path to the offending input field"`
-	Message  string `json:"message" example:"expected string length >= 1" description:"Validation diagnostic"`
-	Value    any    `json:"value,omitempty" description:"The value that failed validation, echoed back verbatim to aid debugging"`
-}
+// ErrorDetail is re-exported from pkg/errors. Callers that already
+// import pkg/response keep compiling; new code is free to import the
+// type directly from pkg/errors.
+type ErrorDetail = appErrors.ErrorDetail
 
 // Pagination is the offset-paginated list metadata published inline
 // on list-response bodies: `{"data": [...], "pagination": {...}}`.
@@ -111,11 +106,11 @@ func BuildPagination(page, limit int, total int64) *Pagination {
 }
 
 // WriteError writes the canonical Brokle error envelope directly to a
-// stdlib http.ResponseWriter. Used by chi middleware that rejects a
-// request (auth failure, rate limit, panic) before it reaches a Huma
-// operation, where there is no Huma Context in scope.
+// stdlib http.ResponseWriter. Used by every chi handler + every chi
+// middleware that rejects a request (auth failure, rate limit, panic).
 //
-// Output shape matches the Huma path exactly:
+// Output shape matches AppError.MarshalJSON exactly — bytes pinned by
+// error_shape_test.go:
 //
 //	{"error":{"type":"...","code":"...","message":"...",...}}
 //
@@ -133,6 +128,41 @@ func WriteError(w http.ResponseWriter, err error) {
 	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: apiError})
 }
 
+// JSON writes status + payload as JSON. The generic 2xx helper.
+//
+// Prefer the semantic helpers (Success, Created, NoContent) where one
+// matches the intended status; JSON is the escape hatch for the less
+// common 2xx codes (e.g. 202 Accepted, 207 Multi-Status). Writes an
+// empty body on 204 per RFC 9110 §15.3.5. JSON-encode errors are
+// swallowed because the response line is already committed.
+func JSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if status == http.StatusNoContent || payload == nil {
+		return
+	}
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// Success writes 200 OK with a JSON-encoded body. Canonical helper
+// for GET / PUT / PATCH happy paths.
+func Success(w http.ResponseWriter, payload any) {
+	JSON(w, http.StatusOK, payload)
+}
+
+// Created writes 201 Created with a JSON-encoded body. Canonical
+// helper for POST operations that create a resource.
+func Created(w http.ResponseWriter, payload any) {
+	JSON(w, http.StatusCreated, payload)
+}
+
+// NoContent writes 204 No Content with no body. Canonical helper
+// for DELETE operations and for PUT/PATCH where the caller
+// explicitly opts out of an echo body.
+func NoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // buildAPIError renders an arbitrary error into the wire APIError plus
 // the HTTP status to write. Shared between WriteError and the Huma
 // NewError override in humaerror.go.
@@ -144,6 +174,7 @@ func buildAPIError(err error) (*APIError, int) {
 			Message: appErr.Message,
 			Details: appErr.Details,
 			Param:   appErr.Param,
+			Errors:  appErr.Errors,
 		}, appErr.HTTPStatus()
 	}
 	return &APIError{

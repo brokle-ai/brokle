@@ -247,6 +247,56 @@ func TestAppError_MarshalJSON_IncludesOptionalFields(t *testing.T) {
 	}
 }
 
+// TestAppError_MarshalJSON_Errors locks the Errors[] wire shape —
+// each entry emits as {location, message, value} with omitempty on
+// location+value. The top-level envelope carries `errors` only when
+// non-empty (omitempty), so nil + empty slices disappear from the
+// wire rather than appearing as `"errors":[]` (drifting from the
+// Huma-path shape).
+func TestAppError_MarshalJSON_Errors(t *testing.T) {
+	t.Run("populated", func(t *testing.T) {
+		err := NewValidationError("Validation failed", "one or more fields failed validation",
+			WithParam("body.name"),
+			WithErrors([]ErrorDetail{
+				{Location: "body.name", Message: "required", Value: ""},
+				{Location: "body.count", Message: "must be >= 1", Value: 0},
+			}),
+		)
+		raw, jerr := json.Marshal(err)
+		if jerr != nil {
+			t.Fatalf("json.Marshal: %v", jerr)
+		}
+
+		var parsed map[string]any
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		inner, _ := parsed["error"].(map[string]any)
+		entries, ok := inner["errors"].([]any)
+		if !ok {
+			t.Fatalf("error.errors missing or not an array: %v", inner["errors"])
+		}
+		if len(entries) != 2 {
+			t.Errorf("expected 2 entries, got %d: %v", len(entries), entries)
+		}
+		first, _ := entries[0].(map[string]any)
+		if first["location"] != "body.name" || first["message"] != "required" {
+			t.Errorf("first entry = %v", first)
+		}
+	})
+
+	t.Run("empty slice omitted", func(t *testing.T) {
+		err := NewValidationError("nope", "why", WithErrors(nil))
+		raw, _ := json.Marshal(err)
+		var parsed map[string]any
+		_ = json.Unmarshal(raw, &parsed)
+		inner, _ := parsed["error"].(map[string]any)
+		if _, exists := inner["errors"]; exists {
+			t.Errorf("empty Errors[] must be omitted, got: %v", inner["errors"])
+		}
+	})
+}
+
 // TestAppError_MarshalJSON_CodeOverridesType locks the CodeOrType
 // fallback: when the caller sets an explicit Code (e.g. a fine-grained
 // domain code like "project_not_found"), it wins over the coarse Type

@@ -122,6 +122,52 @@ func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 	}
 }
 
+// TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors pins
+// that AppError.MarshalJSON (handler path) and WriteError (chi-
+// middleware / chi-handler path) emit byte-identical envelope bytes
+// when the AppError carries per-field Errors[] diagnostics (the
+// go-playground/validator path). Regression guard for the Phase-0
+// addition of AppError.Errors — the two marshal paths must stay
+// byte-identical on both empty-Errors and populated-Errors inputs.
+func TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors(t *testing.T) {
+	e := &appErrors.AppError{
+		Type:    appErrors.TypeValidation,
+		Code:    string(appErrors.TypeValidation),
+		Message: "Validation failed",
+		Details: "one or more fields failed validation",
+		Param:   "body.name",
+		Errors: []appErrors.ErrorDetail{
+			{Location: "body.name", Message: "required", Value: ""},
+			{Location: "body.api_key", Message: "must be at least 10", Value: "abc"},
+		},
+	}
+
+	handlerBytes, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("json.Marshal(AppError): %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	response.WriteError(rec, e)
+	writeErrorBytes := bytes.TrimRight(rec.Body.Bytes(), "\n")
+
+	if !bytes.Equal(handlerBytes, writeErrorBytes) {
+		t.Errorf("envelope drift on Errors[] path:\n"+
+			"  handler path: %s\n"+
+			"  WriteError:   %s",
+			handlerBytes, writeErrorBytes)
+	}
+
+	// Sanity: both paths include the errors array with both entries.
+	if !bytes.Contains(handlerBytes, []byte(`"errors"`)) {
+		t.Errorf("handler path missing `errors` key: %s", handlerBytes)
+	}
+	if !bytes.Contains(handlerBytes, []byte(`"body.name"`)) ||
+		!bytes.Contains(handlerBytes, []byte(`"body.api_key"`)) {
+		t.Errorf("handler path missing ErrorDetail entries: %s", handlerBytes)
+	}
+}
+
 // TestErrorShape_NoSuccessField explicitly guards against
 // reintroducing the `success` boolean on any error path. The
 // Stripe/OpenAI contract is strict: the envelope has exactly one
