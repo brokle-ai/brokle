@@ -108,7 +108,12 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		middleware.LimitByIP(rateLimitD),
 		middleware.LimitByKeyPrefix(rateLimitD),
 	)...)
-	authHandler.RegisterSDKRoutes(sdkPublic, d.APIKey, d.Logger)
+	// SDK validate-key — pre-auth, chi-native.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.LimitByIP(rateLimitD))
+		r.Use(middleware.LimitByKeyPrefix(rateLimitD))
+		authHandler.RegisterSDKRoutes(r, d.APIKey, d.Logger)
+	})
 
 	// All other SDK Huma routes — RequireSDKAuth + LimitByAPIKey.
 	sdkAuth := huma.NewGroup(apiPublic)
@@ -159,18 +164,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// token refresh, website contact form. No auth required.
 	// LimitByIP defends the pre-auth surface against brute-force
 	// credential stuffing and unauthenticated flood.
-	dashPublic := huma.NewGroup(apiAdmin)
-	dashPublic.UseMiddleware(humawrap.Wrap(middleware.LimitByIP(rateLimitD)))
-	authHandler.RegisterPublicRoutes(dashPublic, authHandler.PublicDeps{
-		Auth:          d.Auth,
-		User:          d.User,
-		Registration:  d.Registration,
-		Session:       d.Session,
-		OAuthProvider: d.OAuthProvider,
-		Config:        d.Config,
-		Logger:        d.Logger,
-	})
-	// website — migrated to chi; mounted on the chi dashPublic bridge below.
+	// auth public — migrated to chi; mounted on the chi dashPublic bridge below.
 
 	// Chi-native sibling of dashPublic. Hosts pre-auth handlers that
 	// have moved off Huma. Shares LimitByIP (the IP-scoped pre-auth
@@ -179,6 +173,15 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// GitHub/Stripe/OpenAI — and CLAUDE.md gotcha #37a).
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.LimitByIP(rateLimitD))
+		authHandler.RegisterPublicRoutes(r, authHandler.PublicDeps{
+			Auth:          d.Auth,
+			User:          d.User,
+			Registration:  d.Registration,
+			Session:       d.Session,
+			OAuthProvider: d.OAuthProvider,
+			Config:        d.Config,
+			Logger:        d.Logger,
+		})
 		websiteHandler.RegisterRoutes(r, d.Website, d.Logger)
 	})
 
@@ -213,16 +216,16 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 		annotationHandler.RegisterRoutes(r, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 		organizationHandler.RegisterRoutes(r, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
-	})
-	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
-		Auth:          d.Auth,
-		User:          d.User,
-		Profile:       d.Profile,
-		Registration:  d.Registration,
-		Session:       d.Session,
-		OAuthProvider: d.OAuthProvider,
-		Config:        d.Config,
-		Logger:        d.Logger,
+		authHandler.RegisterProtectedRoutes(r, authHandler.ProtectedDeps{
+			Auth:          d.Auth,
+			User:          d.User,
+			Profile:       d.Profile,
+			Registration:  d.Registration,
+			Session:       d.Session,
+			OAuthProvider: d.OAuthProvider,
+			Config:        d.Config,
+			Logger:        d.Logger,
+		})
 	})
 	// user, apikey — migrated to chi; mounted on the chi bridge group above.
 	// overview — migrated to chi; mounted on the chi bridge group above.

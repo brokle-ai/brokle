@@ -1,16 +1,18 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/core/services/registration"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 // OAuth initiate + callback handlers for Google and GitHub. The two
@@ -30,147 +32,155 @@ import (
 //     to the sign-in page with an error query param on any failure.
 //
 // IMPORTANT: every callback exit path RETURNS A REDIRECT — never an
-// error. Huma has no "return an error AND emit 302" primitive and
-// client browsers don't handle JSON error bodies from a URL they
-// were redirected to. Errors become query params on the signin
-// redirect; the frontend renders the message.
+// error envelope. Client browsers don't handle JSON error bodies
+// from a URL they were redirected to; errors become query params on
+// the signin redirect and the frontend renders the message.
 
 // ----- initiate-google-oauth ---------------------------------------
 
-func (h *handler) initiateGoogleOAuth(ctx context.Context, in *InitiateOAuthInput) (*InitiateOAuthOutput, error) {
-	return h.initiateOAuth(ctx, "google", in.InvitationToken)
+func (h *handler) initiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
+	h.initiateOAuth(w, r, "google", r.URL.Query().Get("invitation_token"))
 }
 
 // ----- initiate-github-oauth ---------------------------------------
 
-func (h *handler) initiateGithubOAuth(ctx context.Context, in *InitiateOAuthInput) (*InitiateOAuthOutput, error) {
-	return h.initiateOAuth(ctx, "github", in.InvitationToken)
+func (h *handler) initiateGithubOAuth(w http.ResponseWriter, r *http.Request) {
+	h.initiateOAuth(w, r, "github", r.URL.Query().Get("invitation_token"))
 }
 
-// initiateOAuth is the shared path both provider-specific
-// initiators dispatch to. State generation + authorization-URL
-// construction + the 302 redirect have no provider-dependent
-// surface beyond the provider name.
-func (h *handler) initiateOAuth(ctx context.Context, provider, invitationToken string) (*InitiateOAuthOutput, error) {
+// initiateOAuth is the shared path both provider-specific initiators
+// dispatch to.
+func (h *handler) initiateOAuth(w http.ResponseWriter, r *http.Request, provider, invitationToken string) {
 	var invitePtr *string
 	if invitationToken != "" {
 		invitePtr = &invitationToken
 	}
 
-	state, err := h.oauthProvider.GenerateState(ctx, invitePtr)
+	state, err := h.oauthProvider.GenerateState(r.Context(), invitePtr)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "oauth initiate: state generation failed", "provider", provider, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "oauth initiate: state generation failed",
+			"provider", provider, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
 	authURL, err := h.oauthProvider.GetAuthorizationURL(provider, state)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "oauth initiate: authorization URL build failed", "provider", provider, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "oauth initiate: authorization URL build failed",
+			"provider", provider, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	return &InitiateOAuthOutput{Status: http.StatusTemporaryRedirect, Location: authURL}, nil
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
-
-// ----- oauth callback shared types --------------------------------
 
 // ----- google-oauth-callback -------------------------------------
 
-func (h *handler) googleOAuthCallback(ctx context.Context, in *OAuthCallbackInput) (*OAuthCallbackOutput, error) {
-	return h.oauthCallback(ctx, "google", in)
+func (h *handler) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	h.oauthCallback(w, r, "google")
 }
 
 // ----- github-oauth-callback -------------------------------------
 
-func (h *handler) githubOAuthCallback(ctx context.Context, in *OAuthCallbackInput) (*OAuthCallbackOutput, error) {
-	return h.oauthCallback(ctx, "github", in)
+func (h *handler) githubOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	h.oauthCallback(w, r, "github")
 }
 
 // oauthCallback is the shared path both provider-specific callbacks
-// dispatch to. The security-check cascade is identical for Google
-// and GitHub; only the provider name varies.
-//
-// All exit paths return a redirect response — no errors escape this
-// function. When a logged error would have been returned in the gin
-// version (which would have produced a JSON body on a URL the
-// browser followed), we redirect to the signin page with an error
-// query param instead.
-func (h *handler) oauthCallback(ctx context.Context, provider string, in *OAuthCallbackInput) (*OAuthCallbackOutput, error) {
+// dispatch to. All exit paths redirect; errors become query params
+// on the signin redirect.
+func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request, provider string) {
+	ctx := r.Context()
 	frontend := h.cfg.Server.AppURL
+	redirect := func(u string) {
+		http.Redirect(w, r, u, http.StatusFound)
+	}
 
-	if in.Code == "" || in.State == "" {
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+
+	if code == "" || state == "" {
 		h.logger.WarnContext(ctx, "oauth callback: missing code or state", "provider", provider)
-		return redirectFrontend(frontend + "/auth/signin?error=oauth_failed"), nil
+		redirect(frontend + "/auth/signin?error=oauth_failed")
+		return
 	}
 
-	// Validate state → returns any invitation token the initiator
-	// tucked away in Redis alongside the state (so invitation-
-	// based OAuth signups survive the round-trip).
-	invitationToken, err := h.oauthProvider.ValidateState(ctx, in.State)
+	invitationToken, err := h.oauthProvider.ValidateState(ctx, state)
 	if err != nil {
-		h.logger.WarnContext(ctx, "oauth callback: invalid state", "provider", provider, "error", err)
-		return redirectFrontend(frontend + "/auth/signin?error=invalid_state"), nil
+		h.logger.WarnContext(ctx, "oauth callback: invalid state",
+			"provider", provider, "error", err)
+		redirect(frontend + "/auth/signin?error=invalid_state")
+		return
 	}
 
-	// Exchange the code for an OAuth access token.
-	token, err := h.oauthProvider.ExchangeCode(ctx, provider, in.Code)
+	token, err := h.oauthProvider.ExchangeCode(ctx, provider, code)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "oauth callback: code exchange failed", "provider", provider, "error", err)
-		return redirectFrontend(frontend + "/auth/signin?error=token_exchange_failed"), nil
+		h.logger.ErrorContext(ctx, "oauth callback: code exchange failed",
+			"provider", provider, "error", err)
+		redirect(frontend + "/auth/signin?error=token_exchange_failed")
+		return
 	}
 
-	// Fetch provider user profile (email, provider ID, etc.).
 	userProfile, err := h.oauthProvider.GetUserProfile(ctx, provider, token)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "oauth callback: profile fetch failed", "provider", provider, "error", err)
-		return redirectFrontend(frontend + "/auth/signin?error=profile_fetch_failed"), nil
+		h.logger.ErrorContext(ctx, "oauth callback: profile fetch failed",
+			"provider", provider, "error", err)
+		redirect(frontend + "/auth/signin?error=profile_fetch_failed")
+		return
 	}
 
-	// Does the email already have an account?
 	existingUser, lookupErr := h.userSvc.GetUserByEmail(ctx, userProfile.Email)
 	if lookupErr == nil && existingUser != nil {
-		// Security check 1: must be an OAuth-auth account.
 		if existingUser.AuthMethod != "oauth" {
-			h.logger.WarnContext(ctx, "oauth callback: password account attempted OAuth login", "email", userProfile.Email, "auth_method", existingUser.AuthMethod)
-			return redirectFrontend(frontend + "/auth/signin?error=account_exists_use_password"), nil
+			h.logger.WarnContext(ctx, "oauth callback: password account attempted OAuth login",
+				"email", userProfile.Email, "auth_method", existingUser.AuthMethod)
+			redirect(frontend + "/auth/signin?error=account_exists_use_password")
+			return
 		}
 
-		// Security check 2: OAuth provider must match.
 		if existingUser.OAuthProvider == nil || *existingUser.OAuthProvider != provider {
 			storedProvider := "a_different_provider"
 			if existingUser.OAuthProvider != nil {
 				storedProvider = *existingUser.OAuthProvider
 			}
-			h.logger.WarnContext(ctx, "oauth callback: wrong provider", "email", userProfile.Email, "stored", storedProvider, "attempted", provider)
-			return redirectFrontend(fmt.Sprintf("%s/auth/signin?error=use_%s", frontend, storedProvider)), nil
+			h.logger.WarnContext(ctx, "oauth callback: wrong provider",
+				"email", userProfile.Email, "stored", storedProvider, "attempted", provider)
+			redirect(fmt.Sprintf("%s/auth/signin?error=use_%s", frontend, storedProvider))
+			return
 		}
 
-		// Security check 3: provider-assigned subject must match.
 		if existingUser.OAuthProviderID != nil && *existingUser.OAuthProviderID != userProfile.ProviderID {
-			h.logger.ErrorContext(ctx, "oauth callback: provider ID mismatch (possible account takeover)", "email", userProfile.Email, "provider", provider)
-			return redirectFrontend(frontend + "/auth/signin?error=authentication_failed"), nil
+			h.logger.ErrorContext(ctx, "oauth callback: provider ID mismatch (possible account takeover)",
+				"email", userProfile.Email, "provider", provider)
+			redirect(frontend + "/auth/signin?error=authentication_failed")
+			return
 		}
 
-		// All checks passed. Generate tokens + one-time login session.
 		loginTokens, tokErr := h.authSvc.GenerateTokensForUser(ctx, existingUser.ID)
 		if tokErr != nil {
 			h.logger.ErrorContext(ctx, "oauth callback: token generation failed", "error", tokErr)
-			return redirectFrontend(frontend + "/auth/signin?error=login_failed"), nil
+			redirect(frontend + "/auth/signin?error=login_failed")
+			return
 		}
 
-		sessionID, sessErr := h.authSvc.CreateLoginTokenSession(ctx, loginTokens.AccessToken, loginTokens.RefreshToken, loginTokens.ExpiresIn, existingUser.ID)
+		sessionID, sessErr := h.authSvc.CreateLoginTokenSession(ctx,
+			loginTokens.AccessToken, loginTokens.RefreshToken,
+			loginTokens.ExpiresIn, existingUser.ID)
 		if sessErr != nil {
 			h.logger.ErrorContext(ctx, "oauth callback: login-session creation failed", "error", sessErr)
-			return redirectFrontend(frontend + "/auth/signin?error=session_failed"), nil
+			redirect(frontend + "/auth/signin?error=session_failed")
+			return
 		}
 
-		h.logger.InfoContext(ctx, "oauth callback: existing user login", "email", userProfile.Email, "provider", provider)
-		return redirectFrontend(fmt.Sprintf("%s/auth/callback?session=%s&type=login", frontend, sessionID)), nil
+		h.logger.InfoContext(ctx, "oauth callback: existing user login",
+			"email", userProfile.Email, "provider", provider)
+		redirect(fmt.Sprintf("%s/auth/callback?session=%s&type=login", frontend, sessionID))
+		return
 	}
 
-	// New user: store the profile in an OAuth session and redirect
-	// to the signup-completion page so the user can pick a role +
-	// organization name.
+	// New user — store profile in OAuth session, redirect to signup-
+	// completion page.
 	session := &authDomain.OAuthSession{
 		Email:           userProfile.Email,
 		FirstName:       userProfile.FirstName,
@@ -182,73 +192,83 @@ func (h *handler) oauthCallback(ctx context.Context, provider string, in *OAuthC
 	sessionID, err := h.authSvc.CreateOAuthSession(ctx, session)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "oauth callback: OAuth session creation failed", "error", err)
-		return redirectFrontend(frontend + "/auth/signin?error=session_creation_failed"), nil
+		redirect(frontend + "/auth/signin?error=session_creation_failed")
+		return
 	}
 
-	h.logger.InfoContext(ctx, "oauth callback: new user signup session created", "email", userProfile.Email, "provider", provider)
-	return redirectFrontend(fmt.Sprintf("%s/auth/signup?session=%s", frontend, sessionID)), nil
-}
-
-// redirectFrontend builds a 302 redirect output pointing at the
-// supplied absolute URL. Temporary redirect (307 in the gin
-// handler) would force GET → GET but browsers treat 302 identically
-// for the OAuth callback flow; use 302 to match the broader web
-// convention for post-callback redirects.
-func redirectFrontend(url string) *OAuthCallbackOutput {
-	return &OAuthCallbackOutput{Status: http.StatusFound, Location: url}
+	h.logger.InfoContext(ctx, "oauth callback: new user signup session created",
+		"email", userProfile.Email, "provider", provider)
+	redirect(fmt.Sprintf("%s/auth/signup?session=%s", frontend, sessionID))
 }
 
 // ----- complete-oauth-signup ---------------------------------------
 
-func (h *handler) completeOAuthSignup(ctx context.Context, in *CompleteOAuthSignupInput) (*CompleteOAuthSignupOutput, error) {
-	session, err := h.authSvc.GetOAuthSession(ctx, in.Body.SessionID)
-	if err != nil {
-		return nil, err
+func (h *handler) completeOAuthSignup(w http.ResponseWriter, r *http.Request) {
+	var body completeOAuthSignupBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	// Validate the required fields on the session; any missing
-	// field indicates tampering or a protocol bug upstream.
+	session, err := h.authSvc.GetOAuthSession(r.Context(), body.SessionID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
 	if session.Email == "" || session.FirstName == "" || session.LastName == "" ||
 		session.Provider == "" || session.ProviderID == "" {
-		h.logger.ErrorContext(ctx, "complete-oauth-signup: OAuth session missing required fields", "session_id", in.Body.SessionID)
-		return nil, appErrors.NewValidationError("Invalid OAuth session", "session missing one or more required profile fields")
+		h.logger.ErrorContext(r.Context(),
+			"complete-oauth-signup: OAuth session missing required fields",
+			"session_id", body.SessionID)
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid OAuth session",
+			"session missing one or more required profile fields",
+		))
+		return
 	}
 
 	oauthReq := &registration.OAuthRegistrationRequest{
 		Email:            session.Email,
 		FirstName:        session.FirstName,
 		LastName:         session.LastName,
-		Role:             in.Body.Role,
+		Role:             body.Role,
 		Provider:         session.Provider,
 		ProviderID:       session.ProviderID,
-		ReferralSource:   in.Body.ReferralSource,
-		OrganizationName: in.Body.OrganizationName,
+		ReferralSource:   body.ReferralSource,
+		OrganizationName: body.OrganizationName,
 		InvitationToken:  session.InvitationToken,
 	}
 
-	regResp, err := h.regSvc.CompleteOAuthRegistration(ctx, oauthReq)
+	regResp, err := h.regSvc.CompleteOAuthRegistration(r.Context(), oauthReq)
 	if err != nil {
-		h.logger.WarnContext(ctx, "complete-oauth-signup: registration failed", "email", session.Email, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "complete-oauth-signup: registration failed",
+			"email", session.Email, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	// Clean up the OAuth session — best-effort, we don't fail the
-	// signup if deletion errors.
-	_ = h.authSvc.DeleteOAuthSession(ctx, in.Body.SessionID)
+	// Best-effort session cleanup.
+	_ = h.authSvc.DeleteOAuthSession(r.Context(), body.SessionID)
 
-	u, err := h.userSvc.GetUserByEmail(ctx, session.Email)
+	u, err := h.userSvc.GetUserByEmail(r.Context(), session.Email)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "complete-oauth-signup: user fetch failed after registration", "email", session.Email, "error", err)
-		return nil, appErrors.NewInternalError("Failed to complete authentication", err)
+		h.logger.ErrorContext(r.Context(),
+			"complete-oauth-signup: user fetch failed after registration",
+			"email", session.Email, "error", err)
+		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		return
 	}
 
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.ErrorContext(ctx, "complete-oauth-signup: CSRF token generation failed", "error", err)
-		return nil, appErrors.NewInternalError("Authentication setup failed", err)
+		h.logger.ErrorContext(r.Context(),
+			"complete-oauth-signup: CSRF token generation failed", "error", err)
+		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		return
 	}
 
-	cookies := buildAuthCookies(
+	setAuthCookies(w,
 		regResp.LoginTokens.AccessToken,
 		regResp.LoginTokens.RefreshToken,
 		csrfToken,
@@ -257,51 +277,57 @@ func (h *handler) completeOAuthSignup(ctx context.Context, in *CompleteOAuthSign
 
 	expiresAt := time.Now().Add(time.Duration(regResp.LoginTokens.ExpiresIn) * time.Second)
 
-	h.logger.InfoContext(ctx, "complete-oauth-signup successful", "email", session.Email, "provider", session.Provider)
+	h.logger.InfoContext(r.Context(), "complete-oauth-signup successful",
+		"email", session.Email, "provider", session.Provider)
 
-	return &CompleteOAuthSignupOutput{
-		SetCookie: cookies,
-		Body: completeOAuthSignupResponse{
-			User:         u,
-			Organization: regResp.Organization,
-			ExpiresAt:    expiresAt.UnixMilli(),
-			ExpiresIn:    regResp.LoginTokens.ExpiresIn * 1000,
-		},
-	}, nil
+	response.Created(w, completeOAuthSignupResponse{
+		User:         u,
+		Organization: regResp.Organization,
+		ExpiresAt:    expiresAt.UnixMilli(),
+		ExpiresIn:    regResp.LoginTokens.ExpiresIn * 1000,
+	})
 }
 
-// ----- exchange-login-session ---------------------------------------
-//
-// One-time exchange of a login-session ID (issued by the OAuth
-// callback for an existing OAuth user) for the actual three
-// httpOnly cookies. Reads the session from Redis and the service
-// deletes it immediately (one-time use) to prevent replay.
+// ----- exchange-login-session --------------------------------------
 
-func (h *handler) exchangeLoginSession(ctx context.Context, in *ExchangeLoginSessionInput) (*ExchangeLoginSessionOutput, error) {
-	sessionData, err := h.authSvc.GetLoginTokenSession(ctx, in.SessionID)
+func (h *handler) exchangeLoginSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "session_id")
+
+	sessionData, err := h.authSvc.GetLoginTokenSession(r.Context(), sessionID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
 	if sessionData.AccessToken == "" || sessionData.RefreshToken == "" ||
 		sessionData.ExpiresIn <= 0 || sessionData.UserID == uuid.Nil {
-		h.logger.ErrorContext(ctx, "exchange-login-session: session missing fields", "session_id", in.SessionID)
-		return nil, appErrors.NewValidationError("Invalid session data", "login session missing required fields")
+		h.logger.ErrorContext(r.Context(),
+			"exchange-login-session: session missing fields", "session_id", sessionID)
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid session data",
+			"login session missing required fields",
+		))
+		return
 	}
 
-	u, err := h.userSvc.GetUser(ctx, sessionData.UserID)
+	u, err := h.userSvc.GetUser(r.Context(), sessionData.UserID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "exchange-login-session: user fetch failed", "user_id", sessionData.UserID, "error", err)
-		return nil, appErrors.NewInternalError("Failed to complete authentication", err)
+		h.logger.ErrorContext(r.Context(),
+			"exchange-login-session: user fetch failed",
+			"user_id", sessionData.UserID, "error", err)
+		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		return
 	}
 
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.ErrorContext(ctx, "exchange-login-session: CSRF token generation failed", "error", err)
-		return nil, appErrors.NewInternalError("Authentication setup failed", err)
+		h.logger.ErrorContext(r.Context(),
+			"exchange-login-session: CSRF token generation failed", "error", err)
+		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		return
 	}
 
-	cookies := buildAuthCookies(
+	setAuthCookies(w,
 		sessionData.AccessToken,
 		sessionData.RefreshToken,
 		csrfToken,
@@ -310,14 +336,13 @@ func (h *handler) exchangeLoginSession(ctx context.Context, in *ExchangeLoginSes
 
 	expiresAt := time.Now().Add(time.Duration(sessionData.ExpiresIn) * time.Second)
 
-	h.logger.InfoContext(ctx, "exchange-login-session successful", "user_id", sessionData.UserID)
+	h.logger.InfoContext(r.Context(), "exchange-login-session successful",
+		"user_id", sessionData.UserID)
 
-	return &ExchangeLoginSessionOutput{
-		SetCookie: cookies,
-		Body: loginResponse{
-			User:      u,
-			ExpiresAt: expiresAt.UnixMilli(),
-			ExpiresIn: sessionData.ExpiresIn * 1000,
-		},
-	}, nil
+	response.Success(w, loginResponse{
+		User:      u,
+		ExpiresAt: expiresAt.UnixMilli(),
+		ExpiresIn: sessionData.ExpiresIn * 1000,
+	})
 }
+
