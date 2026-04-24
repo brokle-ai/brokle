@@ -8,8 +8,6 @@ import (
 	"brokle/pkg/response"
 )
 
-// Huma operation types for the project package.
-
 // project is the wire shape for list / get / create / update.
 type project struct {
 	ID             uuid.UUID `json:"id"`
@@ -21,77 +19,21 @@ type project struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-type ListProjectsInput struct {
-	OrganizationID string `query:"organization_id" required:"false" format:"uuid" doc:"Optional organization filter"`
-	Status         string `query:"status" required:"false" enum:"active,paused,archived" doc:"Filter by project status"`
-	Search         string `query:"search" required:"false" doc:"Search by name"`
-	Page           int    `query:"page" required:"false" minimum:"1" doc:"Page number, 1-indexed"`
-	Limit          int    `query:"limit" required:"false" doc:"Items per page (10, 25, 50, 100)"`
-	SortBy         string `query:"sort_by" required:"false" enum:"created_at,name" doc:"Sort field"`
-	SortDir        string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Sort direction"`
-}
-
-type ListProjectsOutput struct {
-	Body projectListBody
-}
-
-// projectListBody is the inline `{data, pagination}` list-response
-// shape shared by every Brokle list endpoint.
+// projectListBody — inline {data, pagination} list-response shape.
 type projectListBody struct {
 	Data       []project            `json:"data"`
 	Pagination *response.Pagination `json:"pagination"`
 }
 
-type CreateProjectInput struct {
-	Body createProjectBody
-}
-
+// createProjectBody — POST /api/v1/projects.
 type createProjectBody struct {
-	Name           string `json:"name" minLength:"2" maxLength:"100" doc:"Project name"`
-	Description    string `json:"description,omitempty" maxLength:"500" doc:"Optional description"`
-	OrganizationID string `json:"organization_id" format:"uuid" doc:"Organization the project belongs to"`
+	Name           string `json:"name"                  validate:"required,min=2,max=100"`
+	Description    string `json:"description,omitempty" validate:"omitempty,max=500"`
+	OrganizationID string `json:"organization_id"       validate:"required"`
 }
 
-type CreateProjectOutput struct {
-	Body project
-}
-
-type GetProjectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type GetProjectOutput struct {
-	Body project
-}
-
-type UpdateProjectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      updateProjectBody
-}
-
+// updateProjectBody — PUT /api/v1/projects/{projectId}.
 type updateProjectBody struct {
-	Name        *string `json:"name,omitempty" minLength:"2" maxLength:"100"`
-	Description *string `json:"description,omitempty" maxLength:"500"`
+	Name        *string `json:"name,omitempty"        validate:"omitempty,min=2,max=100"`
+	Description *string `json:"description,omitempty" validate:"omitempty,max=500"`
 }
-
-type UpdateProjectOutput struct {
-	Body project
-}
-
-type DeleteProjectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type DeleteProjectOutput struct{}
-
-type ArchiveProjectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type ArchiveProjectOutput struct{}
-
-type UnarchiveProjectInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-}
-
-type UnarchiveProjectOutput struct{}

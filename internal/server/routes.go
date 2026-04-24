@@ -202,6 +202,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		apikeyHandler.RegisterRoutes(r, d.APIKey, d.Logger)
 		userHandler.RegisterRoutes(r, d.User, d.Profile, d.Organization, d.Logger)
 		commentHandler.RegisterRoutes(r, d.Comment, d.Logger)
+		projectHandler.RegisterRoutes(r, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -216,7 +217,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// user, apikey — migrated to chi; mounted on the chi bridge group above.
 	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
-	projectHandler.RegisterRoutes(dashAuth, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 	dashboardHandler.RegisterRoutes(dashAuth, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 	annotationHandler.RegisterRoutes(dashAuth, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 	billingHandler.RegisterRoutes(dashAuth, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)

@@ -49,7 +49,6 @@ import (
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	playgroundHandler "brokle/internal/transport/http/handlers/playground"
-	projectHandler "brokle/internal/transport/http/handlers/project"
 	promptHandler "brokle/internal/transport/http/handlers/prompt"
 	rbacHandler "brokle/internal/transport/http/handlers/rbac"
 )
@@ -114,7 +113,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// credentialsHandler is chi-native (off Huma); it no longer
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
-	projectHandler.RegisterRoutes(api, dummyProject{}, dummyOrg{}, dummyMember{}, logger)
 	dashboardHandler.RegisterRoutes(api, dummyDashboard{}, dummyWidgetQuery{}, dummyTemplate{}, logger)
 	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
 	billingHandler.RegisterRoutes(api, dummyBillingUsage{}, dummyBillingBudget{}, dummyBillingContract{}, dummyBillingPricing{}, logger)
