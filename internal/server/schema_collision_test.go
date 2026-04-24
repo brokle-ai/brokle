@@ -33,13 +33,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
-	billingDomain "brokle/internal/core/domain/billing"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
-	billingHandler "brokle/internal/transport/http/handlers/billing"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
@@ -59,10 +57,6 @@ type dummyMember struct{ orgDomain.MemberService }
 type dummyAnnotationQueue struct{ annotationDomain.QueueService }
 type dummyAnnotationItem struct{ annotationDomain.ItemService }
 type dummyAnnotationAssignment struct{ annotationDomain.AssignmentService }
-type dummyBillingUsage struct{ billingDomain.BillableUsageService }
-type dummyBillingBudget struct{ billingDomain.BudgetService }
-type dummyBillingContract struct{ billingDomain.ContractService }
-type dummyBillingPricing struct{ billingDomain.PricingService }
 type dummyInvitation struct{ orgDomain.InvitationService }
 type dummyOrgSettings struct{ orgDomain.OrganizationSettingsService }
 type dummyEvalScoreConfig struct{ evaluationDomain.ScoreConfigService }
@@ -95,7 +89,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
 	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
-	billingHandler.RegisterRoutes(api, dummyBillingUsage{}, dummyBillingBudget{}, dummyBillingContract{}, dummyBillingPricing{}, logger)
 	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)
 
 	// Observability takes concrete *TraceService / *ScoreService /

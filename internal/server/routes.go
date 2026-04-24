@@ -209,6 +209,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		dashboardHandler.RegisterRoutes(r, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
 		promptHandler.RegisterRoutes(r, d.Prompt, d.PromptCompiler, d.Logger)
+		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -224,7 +225,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
 	annotationHandler.RegisterRoutes(dashAuth, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
-	billingHandler.RegisterRoutes(dashAuth, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 	organizationHandler.RegisterRoutes(dashAuth, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
 	observabilityHandler.RegisterRoutes(
 		dashAuth,
