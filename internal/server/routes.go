@@ -206,6 +206,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		projectHandler.RegisterRoutes(r, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 		playgroundHandler.RegisterRoutes(r, d.Playground, d.Project, d.Logger)
 		dashboardHandler.RegisterRoutes(r, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
+		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -224,7 +225,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	billingHandler.RegisterRoutes(dashAuth, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 	organizationHandler.RegisterRoutes(dashAuth, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
 	promptHandler.RegisterRoutes(dashAuth, d.Prompt, d.PromptCompiler, d.Logger)
-	rbacHandler.RegisterRoutes(dashAuth, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
 	observabilityHandler.RegisterRoutes(
 		dashAuth,
 		d.Observability.TraceService,
