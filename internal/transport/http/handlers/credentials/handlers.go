@@ -1,257 +1,203 @@
 // Package credentials exposes /api/v1/organizations/{orgId}/credentials/ai
 // operations — AI provider credential CRUD + connection-test + available-
-// models discovery. Dashboard plane (apiAdmin). Every op requires
-// RequireAuth.
+// models discovery. Dashboard plane, RequireAuth.
 package credentials
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
 
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	credentialsService "brokle/internal/core/services/credentials"
 	"brokle/internal/transport/http/httpctx"
-	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 type handler struct {
-	svc      credentialsDomain.ProviderCredentialService
-	catalog  credentialsService.ModelCatalogService
-	logger   *slog.Logger
+	svc     credentialsDomain.ProviderCredentialService
+	catalog credentialsService.ModelCatalogService
+	logger  *slog.Logger
 }
 
-// RegisterRoutes registers every credential operation on apiAdmin.
+// RegisterRoutes registers every credential operation on the provided
+// chi router. Expected mount context: the authed dashboard group
+// (RequireAuth + LimitByUser already applied).
 func RegisterRoutes(
-	api huma.API,
+	r chi.Router,
 	svc credentialsDomain.ProviderCredentialService,
 	catalog credentialsService.ModelCatalogService,
 	logger *slog.Logger,
 ) {
 	h := &handler{svc: svc, catalog: catalog, logger: logger}
 
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-credential",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/organizations/{orgId}/credentials/ai",
-		Tags:          []string{"credentials"},
-		Summary:       "Create an AI provider credential",
-		Description:   "Each credential has a unique name within the organization. The API key is encrypted at rest; the response returns a masked preview.",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.create)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-credentials",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/credentials/ai",
-		Tags:        []string{"credentials"},
-		Summary:     "List AI provider credentials for an organization",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.list)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-credential",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/credentials/ai/{credentialId}",
-		Tags:        []string{"credentials"},
-		Summary:     "Get a specific AI provider credential",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.get)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-credential",
-		Method:      http.MethodPatch,
-		Path:        "/api/v1/organizations/{orgId}/credentials/ai/{credentialId}",
-		Tags:        []string{"credentials"},
-		Summary:     "Update an AI provider credential (partial)",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.update)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-credential",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/organizations/{orgId}/credentials/ai/{credentialId}",
-		Tags:          []string{"credentials"},
-		Summary:       "Delete an AI provider credential",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.delete)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "test-credential-connection",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/organizations/{orgId}/credentials/ai/test",
-		Tags:        []string{"credentials"},
-		Summary:     "Test an AI provider connection without saving",
-		Description: "Validates the provided API key + configuration against the provider. Returns a structured result rather than an error envelope so the caller can render field-level feedback.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.testConnection)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-available-models",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/organizations/{orgId}/credentials/ai/models",
-		Tags:        []string{"credentials"},
-		Summary:     "Get available models derived from configured providers",
-		Description: "Standard providers (openai, anthropic, …) return the default model set plus any custom models. Custom providers return only user-defined models.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getAvailableModels)
+	r.Route("/api/v1/organizations/{orgId}/credentials/ai", func(r chi.Router) {
+		r.Post("/", h.create)
+		r.Get("/", h.list)
+		r.Get("/{credentialId}", h.get)
+		r.Patch("/{credentialId}", h.update)
+		r.Delete("/{credentialId}", h.delete)
+		r.Post("/test", h.testConnection)
+		r.Get("/models", h.getAvailableModels)
+	})
 }
 
-// ----- shared input helpers --------------------------------------------
+// ---------------------------------------------------------------------------
 
-func parseOrg(orgIDStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(orgIDStr)
+func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	return id, nil
-}
 
-func parseCred(credIDStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(credIDStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid credential ID", "credentialId must be a valid UUID")
+	var body createCredentialBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return id, nil
-}
 
-// ----- create ----------------------------------------------------------
-
-func (h *handler) create(ctx context.Context, in *CreateCredentialInput) (*CreateCredentialOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
-	if err != nil {
-		return nil, err
-	}
-	userID := httpctx.MustGetUserID(ctx)
-
-	cred, err := h.svc.Create(ctx, &credentialsDomain.CreateCredentialRequest{
+	userID := httpctx.MustGetUserID(r.Context())
+	cred, err := h.svc.Create(r.Context(), &credentialsDomain.CreateCredentialRequest{
 		OrganizationID: orgID,
-		Name:           in.Body.Name,
-		Adapter:        credentialsDomain.Provider(in.Body.Adapter),
-		APIKey:         in.Body.APIKey,
-		BaseURL:        in.Body.BaseURL,
-		Config:         in.Body.Config,
-		CustomModels:   in.Body.CustomModels,
-		Headers:        in.Body.Headers,
+		Name:           body.Name,
+		Adapter:        credentialsDomain.Provider(body.Adapter),
+		APIKey:         body.APIKey,
+		BaseURL:        body.BaseURL,
+		Config:         body.Config,
+		CustomModels:   body.CustomModels,
+		Headers:        body.Headers,
 		CreatedBy:      &userID,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateCredentialOutput{Body: cred}, nil
+	response.Created(w, cred)
 }
 
-// ----- list ------------------------------------------------------------
-
-func (h *handler) list(ctx context.Context, in *ListCredentialsInput) (*ListCredentialsOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) list(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	creds, err := h.svc.List(ctx, orgID)
+	creds, err := h.svc.List(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListCredentialsOutput{Body: creds}, nil
+	response.Success(w, creds)
 }
 
-// ----- get -------------------------------------------------------------
-
-func (h *handler) get(ctx context.Context, in *GetCredentialInput) (*GetCredentialOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) get(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	credID, err := parseCred(in.CredentialID)
+	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	cred, err := h.svc.GetByID(ctx, credID, orgID)
+	cred, err := h.svc.GetByID(r.Context(), credID, orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetCredentialOutput{Body: cred}, nil
+	response.Success(w, cred)
 }
 
-// ----- update ----------------------------------------------------------
-
-func (h *handler) update(ctx context.Context, in *UpdateCredentialInput) (*UpdateCredentialOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	credID, err := parseCred(in.CredentialID)
+	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	cred, err := h.svc.Update(ctx, credID, orgID, &credentialsDomain.UpdateCredentialRequest{
-		Name:         in.Body.Name,
-		APIKey:       in.Body.APIKey,
-		BaseURL:      in.Body.BaseURL,
-		Config:       in.Body.Config,
-		CustomModels: in.Body.CustomModels,
-		Headers:      in.Body.Headers,
+	var body updateCredentialBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	cred, err := h.svc.Update(r.Context(), credID, orgID, &credentialsDomain.UpdateCredentialRequest{
+		Name:         body.Name,
+		APIKey:       body.APIKey,
+		BaseURL:      body.BaseURL,
+		Config:       body.Config,
+		CustomModels: body.CustomModels,
+		Headers:      body.Headers,
 	})
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateCredentialOutput{Body: cred}, nil
+	response.Success(w, cred)
 }
 
-// ----- delete ----------------------------------------------------------
-
-func (h *handler) delete(ctx context.Context, in *DeleteCredentialInput) (*DeleteCredentialOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	credID, err := parseCred(in.CredentialID)
+	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.svc.Delete(ctx, credID, orgID); err != nil {
-		return nil, err
+	if err := h.svc.Delete(r.Context(), credID, orgID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteCredentialOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- test-connection -------------------------------------------------
-//
-// Returns a structured TestConnectionResponse regardless of success/
-// failure — the caller wants field-level feedback on connection
-// problems, not an error envelope it has to decode differently from
-// every other API call.
-
-func (h *handler) testConnection(ctx context.Context, in *TestConnectionInput) (*TestConnectionOutput, error) {
-	if _, err := parseOrg(in.OrgID); err != nil {
-		return nil, err
+// testConnection returns a structured TestConnectionResponse on both
+// success and probe-level failure so the caller can render field-
+// level feedback. Only input-validation / auth failures emit the
+// standard error envelope.
+func (h *handler) testConnection(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	result := h.svc.TestConnection(ctx, &credentialsDomain.TestConnectionRequest{
-		Adapter: credentialsDomain.Provider(in.Body.Adapter),
-		APIKey:  in.Body.APIKey,
-		BaseURL: in.Body.BaseURL,
-		Config:  in.Body.Config,
-		Headers: in.Body.Headers,
+
+	var body testConnectionBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	result := h.svc.TestConnection(r.Context(), &credentialsDomain.TestConnectionRequest{
+		Adapter: credentialsDomain.Provider(body.Adapter),
+		APIKey:  body.APIKey,
+		BaseURL: body.BaseURL,
+		Config:  body.Config,
+		Headers: body.Headers,
 	})
-	return &TestConnectionOutput{Body: result}, nil
+	response.Success(w, result)
 }
 
-// ----- get-available-models --------------------------------------------
-
-func (h *handler) getAvailableModels(ctx context.Context, in *GetAvailableModelsInput) (*GetAvailableModelsOutput, error) {
-	orgID, err := parseOrg(in.OrgID)
+func (h *handler) getAvailableModels(w http.ResponseWriter, r *http.Request) {
+	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	models, err := h.catalog.GetAvailableModels(ctx, orgID)
+	models, err := h.catalog.GetAvailableModels(r.Context(), orgID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetAvailableModelsOutput{Body: models}, nil
+	response.Success(w, models)
 }

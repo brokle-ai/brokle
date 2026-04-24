@@ -175,6 +175,20 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		middleware.RequireAuth(d.authMiddlewareDeps()),
 		middleware.LimitByUser(rateLimitD),
 	)...)
+
+	// Chi-native sibling of dashAuth. Hosts handlers that have moved
+	// off Huma during the chi-only migration. Shares the same
+	// middleware chain (RequireAuth + LimitByUser) and mounts at the
+	// mux root — converted handlers own the full `/api/v1/...` path
+	// inside their own RegisterRoutes. Coexists with the Huma group
+	// until the migration completes; at that point Phase 3 collapses
+	// both groups into a single chi topology and this bridge
+	// disappears.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAuth(d.authMiddlewareDeps()))
+		r.Use(middleware.LimitByUser(rateLimitD))
+		credentialsHandler.RegisterRoutes(r, d.Credential, d.CredentialModelCatalog, d.Logger)
+	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
 		User:          d.User,
@@ -189,7 +203,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	apikeyHandler.RegisterRoutes(dashAuth, d.APIKey, d.Logger)
 	commentHandler.RegisterRoutes(dashAuth, d.Comment, d.Logger)
 	overviewHandler.RegisterRoutes(dashAuth, d.Overview, d.Logger)
-	credentialsHandler.RegisterRoutes(dashAuth, d.Credential, d.CredentialModelCatalog, d.Logger)
+	// credentials — migrated to chi; mounted on the chi bridge group above.
 	projectHandler.RegisterRoutes(dashAuth, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 	dashboardHandler.RegisterRoutes(dashAuth, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 	annotationHandler.RegisterRoutes(dashAuth, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)

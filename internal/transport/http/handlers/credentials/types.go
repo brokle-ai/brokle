@@ -1,112 +1,46 @@
+// Request-body DTOs for the credentials handler. One struct per
+// body shape; validation tags drive go-playground/validator/v10 via
+// pkg/request.DecodeJSON. Response bodies are the domain
+// ProviderCredentialResponse / TestConnectionResponse /
+// analyticsDomain.AvailableModel types directly — no wrapper DTOs
+// because every response is a single resource or a list of
+// resources and the domain types already carry the wire tags.
 package credentials
 
-import (
-	analyticsDomain "brokle/internal/core/domain/analytics"
-	credentialsDomain "brokle/internal/core/domain/credentials"
-)
-
-// Huma operation types for the credentials package.
-
-// ----- create ----------------------------------------------------------
-
-type CreateCredentialInput struct {
-	OrgID string `path:"orgId" format:"uuid" doc:"Organization the credential belongs to"`
-	Body  createCredentialBody
-}
-
+// createCredentialBody — POST /api/v1/organizations/{orgId}/credentials/ai
 type createCredentialBody struct {
-	Name         string            `json:"name" minLength:"1" maxLength:"100" doc:"Human-readable credential name, unique within the organization"`
-	Adapter      string            `json:"adapter" enum:"openai,anthropic,azure,gemini,openrouter,custom" doc:"Provider adapter"`
-	APIKey       string            `json:"api_key" minLength:"10" doc:"Provider API key — encrypted at rest on storage"`
-	BaseURL      *string           `json:"base_url,omitempty" doc:"Override the provider base URL (required for azure / custom)"`
-	Config       map[string]any    `json:"config,omitempty" doc:"Adapter-specific config (e.g. azure deployment_id)"`
-	CustomModels []string          `json:"custom_models,omitempty" doc:"Custom model identifiers — required for custom adapter"`
-	Headers      map[string]string `json:"headers,omitempty" doc:"Extra HTTP headers sent on every provider request"`
+	Name         string            `json:"name"                    validate:"required,min=1,max=100"`
+	Adapter      string            `json:"adapter"                 validate:"required,oneof=openai anthropic azure gemini openrouter custom"`
+	APIKey       string            `json:"api_key"                 validate:"required,min=10"`
+	BaseURL      *string           `json:"base_url,omitempty"      validate:"omitempty,url"`
+	Config       map[string]any    `json:"config,omitempty"`
+	CustomModels []string          `json:"custom_models,omitempty" validate:"omitempty,dive,min=1"`
+	Headers      map[string]string `json:"headers,omitempty"`
 }
 
-type CreateCredentialOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-// ----- list ------------------------------------------------------------
-
-type ListCredentialsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type ListCredentialsOutput struct {
-	Body []*credentialsDomain.ProviderCredentialResponse
-}
-
-// ----- get -------------------------------------------------------------
-
-type GetCredentialInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-}
-
-type GetCredentialOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-// ----- update ----------------------------------------------------------
-
-type UpdateCredentialInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-	Body         updateCredentialBody
-}
-
+// updateCredentialBody — PATCH /api/v1/organizations/{orgId}/credentials/ai/{credentialId}
+//
+// All fields are optional — absent = leave unchanged. Headers is a
+// pointer-to-map so an explicit `{}` clears all headers (distinct
+// from omitting the key).
 type updateCredentialBody struct {
-	Name         *string        `json:"name,omitempty" minLength:"1" maxLength:"100"`
-	APIKey       *string        `json:"api_key,omitempty" minLength:"10"`
-	BaseURL      *string        `json:"base_url,omitempty"`
-	Config       map[string]any `json:"config,omitempty"`
-	CustomModels []string       `json:"custom_models,omitempty"`
-	// Headers is a pointer-to-map so an explicit empty object clears
-	// all headers, while omitting the field leaves them untouched.
-	// Matches the domain UpdateCredentialRequest contract.
-	Headers *map[string]string `json:"headers,omitempty"`
+	Name         *string            `json:"name,omitempty"          validate:"omitempty,min=1,max=100"`
+	APIKey       *string            `json:"api_key,omitempty"       validate:"omitempty,min=10"`
+	BaseURL      *string            `json:"base_url,omitempty"      validate:"omitempty,url"`
+	Config       map[string]any     `json:"config,omitempty"`
+	CustomModels []string           `json:"custom_models,omitempty" validate:"omitempty,dive,min=1"`
+	Headers      *map[string]string `json:"headers,omitempty"`
 }
 
-type UpdateCredentialOutput struct {
-	Body *credentialsDomain.ProviderCredentialResponse
-}
-
-// ----- delete ----------------------------------------------------------
-
-type DeleteCredentialInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	CredentialID string `path:"credentialId" format:"uuid"`
-}
-
-type DeleteCredentialOutput struct{}
-
-// ----- test-connection -------------------------------------------------
-
-type TestConnectionInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  testConnectionBody
-}
-
+// testConnectionBody — POST /api/v1/organizations/{orgId}/credentials/ai/test
+//
+// APIKey uses a looser min=1 than createCredentialBody because some
+// adapters accept short placeholder tokens during connectivity probes
+// (e.g. a custom adapter pointing at a local proxy).
 type testConnectionBody struct {
-	Adapter string            `json:"adapter" enum:"openai,anthropic,azure,gemini,openrouter,custom"`
-	APIKey  string            `json:"api_key" minLength:"1" doc:"API key to probe — not persisted"`
-	BaseURL *string           `json:"base_url,omitempty"`
+	Adapter string            `json:"adapter"            validate:"required,oneof=openai anthropic azure gemini openrouter custom"`
+	APIKey  string            `json:"api_key"            validate:"required,min=1"`
+	BaseURL *string           `json:"base_url,omitempty" validate:"omitempty,url"`
 	Config  map[string]any    `json:"config,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
-}
-
-type TestConnectionOutput struct {
-	Body *credentialsDomain.TestConnectionResponse
-}
-
-// ----- get-available-models --------------------------------------------
-
-type GetAvailableModelsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type GetAvailableModelsOutput struct {
-	Body []*analyticsDomain.AvailableModel
 }

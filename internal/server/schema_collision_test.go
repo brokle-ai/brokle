@@ -37,7 +37,6 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
 	commentDomain "brokle/internal/core/domain/comment"
-	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
@@ -45,14 +44,12 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	userDomain "brokle/internal/core/domain/user"
 	websiteDomain "brokle/internal/core/domain/website"
-	credentialsService "brokle/internal/core/services/credentials"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
 	billingHandler "brokle/internal/transport/http/handlers/billing"
 	commentHandler "brokle/internal/transport/http/handlers/comment"
-	credentialsHandler "brokle/internal/transport/http/handlers/credentials"
 	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
@@ -82,8 +79,6 @@ type dummyAPIKey struct{ authDomain.APIKeyService }
 type dummyUser struct{ userDomain.UserService }
 type dummyProfile struct{ userDomain.ProfileService }
 type dummyOrg struct{ orgDomain.OrganizationService }
-type dummyCredential struct{ credentialsDomain.ProviderCredentialService }
-type dummyModelCatalog struct{ credentialsService.ModelCatalogService }
 type dummyProject struct{ orgDomain.ProjectService }
 type dummyMember struct{ orgDomain.MemberService }
 type dummyDashboard struct{ dashboardDomain.DashboardService }
@@ -133,7 +128,9 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	overviewHandler.RegisterRoutes(api, dummyOverview{}, logger)
 	apikeyHandler.RegisterRoutes(api, dummyAPIKey{}, logger)
 	userHandler.RegisterRoutes(api, dummyUser{}, dummyProfile{}, dummyOrg{}, logger)
-	credentialsHandler.RegisterRoutes(api, dummyCredential{}, dummyModelCatalog{}, logger)
+	// credentialsHandler is chi-native (off Huma); it no longer
+	// shares the Huma schema registry and is excluded here. Chi has
+	// no schema namespace, so collisions are structurally impossible.
 	projectHandler.RegisterRoutes(api, dummyProject{}, dummyOrg{}, dummyMember{}, logger)
 	dashboardHandler.RegisterRoutes(api, dummyDashboard{}, dummyWidgetQuery{}, dummyTemplate{}, logger)
 	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
