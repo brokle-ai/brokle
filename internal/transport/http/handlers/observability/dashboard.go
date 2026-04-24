@@ -1,284 +1,115 @@
 package observability
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 	"brokle/pkg/uid"
 )
 
-// registerDashboardOps wires every dashboard-plane observability
-// operation onto apiAdmin. Called from RegisterRoutes in handlers.go.
-func registerDashboardOps(api huma.API, h *dashboardHandler) {
-	// ---- traces ---------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-traces",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces",
-		Tags:        []string{"traces"},
-		Summary:     "List traces for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listTraces)
+// registerDashboardOps wires every dashboard-plane observability route
+// onto r. Called from RegisterRoutes in handlers.go.
+func registerDashboardOps(r chi.Router, h *dashboardHandler) {
+	r.Route("/api/v1/traces", func(r chi.Router) {
+		r.Get("/", h.listTraces)
+		r.Get("/filter-options", h.getTraceFilterOptions)
+		r.Get("/attributes", h.discoverAttributes)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", h.getTrace)
+			r.Delete("/", h.deleteTrace)
+			r.Get("/spans", h.getTraceSpans)
+			r.Get("/scores", h.getTraceScores)
+			r.Post("/scores", h.createTraceScore)
+			r.Delete("/scores/{scoreId}", h.deleteTraceScore)
+			r.Put("/tags", h.updateTraceTags)
+			r.Put("/bookmark", h.updateTraceBookmark)
+		})
+	})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-trace-filter-options",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/filter-options",
-		Tags:        []string{"traces"},
-		Summary:     "Get available filter options for traces",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getTraceFilterOptions)
+	r.Route("/api/v1/spans", func(r chi.Router) {
+		r.Get("/", h.listSpans)
+		r.Get("/{id}", h.getSpan)
+		r.Delete("/{id}", h.deleteSpan)
+	})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "discover-trace-attributes",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/attributes",
-		Tags:        []string{"traces"},
-		Summary:     "Discover attribute keys from trace data",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.discoverAttributes)
+	r.Route("/api/v1/scores", func(r chi.Router) {
+		r.Get("/", h.listScores)
+		r.Get("/{id}", h.getScore)
+		r.Put("/{id}", h.updateScore)
+	})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-trace",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/{id}",
-		Tags:        []string{"traces"},
-		Summary:     "Get trace by ID",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getTrace)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-trace",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/traces/{id}",
-		Tags:          []string{"traces"},
-		Summary:       "Delete a trace",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteTrace)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-trace-spans",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/{id}/spans",
-		Tags:        []string{"traces"},
-		Summary:     "Get spans for a trace",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getTraceSpans)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-trace-scores",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/{id}/scores",
-		Tags:        []string{"traces", "scores"},
-		Summary:     "List scores for a trace",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getTraceScores)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-trace-score",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/traces/{id}/scores",
-		Tags:          []string{"traces", "scores"},
-		Summary:       "Create annotation score for a trace",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createTraceScore)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-trace-score",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/traces/{id}/scores/{scoreId}",
-		Tags:          []string{"traces", "scores"},
-		Summary:       "Delete annotation score",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteTraceScore)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-trace-tags",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/traces/{id}/tags",
-		Tags:        []string{"traces"},
-		Summary:     "Update trace tags",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateTraceTags)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-trace-bookmark",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/traces/{id}/bookmark",
-		Tags:        []string{"traces"},
-		Summary:     "Update trace bookmark status",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateTraceBookmark)
-
-	// ---- spans ----------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-spans",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/spans",
-		Tags:        []string{"spans"},
-		Summary:     "List spans",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listSpans)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-span",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/spans/{id}",
-		Tags:        []string{"spans"},
-		Summary:     "Get span by ID",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getSpan)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-span",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/spans/{id}",
-		Tags:          []string{"spans"},
-		Summary:       "Delete a span",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteSpan)
-
-	// ---- scores (global + project scoped) -------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-scores",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/scores",
-		Tags:        []string{"scores"},
-		Summary:     "List quality scores",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listScores)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-score",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/scores/{id}",
-		Tags:        []string{"scores"},
-		Summary:     "Get score by ID",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getScore)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-score",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/scores/{id}",
-		Tags:        []string{"scores"},
-		Summary:     "Update score by ID",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateScore)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-project-scores",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/scores",
-		Tags:        []string{"scores"},
-		Summary:     "List quality scores for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listProjectScores)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-score-analytics",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/scores/analytics",
-		Tags:        []string{"scores"},
-		Summary:     "Get score analytics for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getScoreAnalytics)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-score-names",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/scores/names",
-		Tags:        []string{"scores"},
-		Summary:     "Get distinct score names for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getScoreNames)
-
-	// ---- sessions -------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-trace-sessions",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/sessions",
-		Tags:        []string{"sessions"},
-		Summary:     "List sessions for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listSessions)
-
-	// ---- filter presets -------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-filter-preset",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/filter-presets",
-		Tags:          []string{"filter-presets"},
-		Summary:       "Create a filter preset",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createFilterPreset)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-filter-presets",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/filter-presets",
-		Tags:        []string{"filter-presets"},
-		Summary:     "List filter presets for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listFilterPresets)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-filter-preset",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/filter-presets/{id}",
-		Tags:        []string{"filter-presets"},
-		Summary:     "Get filter preset",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getFilterPreset)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-filter-preset",
-		Method:      http.MethodPatch,
-		Path:        "/api/v1/projects/{projectId}/filter-presets/{id}",
-		Tags:        []string{"filter-presets"},
-		Summary:     "Update filter preset",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateFilterPreset)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-filter-preset",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/filter-presets/{id}",
-		Tags:          []string{"filter-presets"},
-		Summary:       "Delete filter preset",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deleteFilterPreset)
+	r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
+		r.Get("/scores", h.listProjectScores)
+		r.Get("/scores/analytics", h.getScoreAnalytics)
+		r.Get("/scores/names", h.getScoreNames)
+		r.Get("/sessions", h.listSessions)
+		r.Route("/filter-presets", func(r chi.Router) {
+			r.Post("/", h.createFilterPreset)
+			r.Get("/", h.listFilterPresets)
+			r.Get("/{id}", h.getFilterPreset)
+			r.Patch("/{id}", h.updateFilterPreset)
+			r.Delete("/{id}", h.deleteFilterPreset)
+		})
+	})
 }
 
-// ---- shared helpers -----------------------------------------------
+// ---- shared helpers -------------------------------------------------
 
-func parseUUIDParam(v, field, humanField string) (uuid.UUID, error) {
-	id, err := uuid.Parse(v)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid "+humanField, field+" must be a valid UUID")
+func parsePaginationQuery(r *http.Request) pagination.Params {
+	q := r.URL.Query()
+	page, _ := parsePositiveInt(q.Get("page"))
+	limit, _ := parsePositiveInt(q.Get("limit"))
+	p := pagination.Params{
+		Page:    page,
+		Limit:   limit,
+		SortBy:  q.Get("sort_by"),
+		SortDir: q.Get("sort_dir"),
 	}
-	return id, nil
-}
-
-func paginationParams(page, limit int, sortBy, sortDir string) pagination.Params {
-	p := pagination.Params{Page: page, Limit: limit, SortBy: sortBy, SortDir: sortDir}
 	p.SetDefaults("")
 	return p
+}
+
+func parsePositiveInt(s string) (int, error) {
+	if s == "" {
+		return 0, nil
+	}
+	var v int
+	_, err := fmtSscanf(s, "%d", &v)
+	if err != nil || v < 0 {
+		return 0, err
+	}
+	return v, nil
+}
+
+// fmtSscanf avoids pulling in the stdlib `fmt` for one call.
+func fmtSscanf(s, format string, args ...any) (int, error) {
+	var n int
+	_ = format
+	_ = args
+	// Minimal positive-int parser — just strconv.Atoi.
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, appErrors.NewValidationError("Invalid number", "expected positive integer")
+		}
+		n = n*10 + int(s[i]-'0')
+	}
+	if len(args) > 0 {
+		if ptr, ok := args[0].(*int); ok {
+			*ptr = n
+		}
+	}
+	return n, nil
 }
 
 func newPaginationMeta(p pagination.Params, total int64) paginationMeta {
@@ -289,32 +120,16 @@ func newPaginationMeta(p pagination.Params, total int64) paginationMeta {
 	return paginationMeta{Page: p.Page, Limit: p.Limit, Total: total, TotalPages: pages}
 }
 
-// ==================================================================
-// TRACES
-// ==================================================================
-
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
 	}
-	out := []string{}
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ',' {
-			if start < i {
-				seg := s[start:i]
-				// trim spaces
-				for len(seg) > 0 && seg[0] == ' ' {
-					seg = seg[1:]
-				}
-				for len(seg) > 0 && seg[len(seg)-1] == ' ' {
-					seg = seg[:len(seg)-1]
-				}
-				if seg != "" {
-					out = append(out, seg)
-				}
-			}
-			start = i + 1
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
 		}
 	}
 	return out
@@ -323,172 +138,245 @@ func splitCSV(s string) []string {
 func validateStatusList(values []string, field string) error {
 	for _, v := range values {
 		if v != "ok" && v != "error" && v != "unset" {
-			return appErrors.NewValidationError("Invalid "+field+" value", field+" must be one of: ok, error, unset (got: "+v+")")
+			return appErrors.NewValidationError(
+				"Invalid "+field+" value",
+				field+" must be one of: ok, error, unset (got: "+v+")",
+				appErrors.WithParam(field),
+			)
 		}
 	}
 	return nil
 }
 
-func (h *dashboardHandler) listTraces(ctx context.Context, in *ListTracesInput) (*ListTracesOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
+// parseProjectIDQuery parses the `project_id` query parameter as a UUID.
+func parseProjectIDQuery(r *http.Request) (uuid.UUID, error) {
+	raw := r.URL.Query().Get("project_id")
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, appErrors.NewValidationError(
+			"Invalid project ID", "project_id must be a valid UUID",
+			appErrors.WithParam("project_id"),
+		)
+	}
+	return id, nil
+}
+
+// ==================================================================
+// TRACES
+// ==================================================================
+
+func (h *dashboardHandler) listTraces(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
+	q := r.URL.Query()
 
 	filter := &observability.TraceFilter{ProjectID: projectID}
+	if v := q.Get("session_id"); v != "" {
+		filter.SessionID = &v
+	}
+	if v := q.Get("user_id"); v != "" {
+		filter.UserID = &v
+	}
+	if v := q.Get("service_name"); v != "" {
+		filter.ServiceName = &v
+	}
+	if v := q.Get("model_name"); v != "" {
+		filter.ModelName = &v
+	}
+	if v := q.Get("provider_name"); v != "" {
+		filter.ProviderName = &v
+	}
 
-	if in.SessionID != "" {
-		filter.SessionID = &in.SessionID
-	}
-	if in.UserID != "" {
-		filter.UserID = &in.UserID
-	}
-	if in.ServiceName != "" {
-		filter.ServiceName = &in.ServiceName
-	}
-	if in.ModelName != "" {
-		filter.ModelName = &in.ModelName
-	}
-	if in.ProviderName != "" {
-		filter.ProviderName = &in.ProviderName
-	}
-	if in.MinCost != 0 {
-		v := in.MinCost
+	if v, err := parseFloat(q.Get("min_cost")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MinCost = &v
 	}
-	if in.MaxCost != 0 {
-		v := in.MaxCost
+	if v, err := parseFloat(q.Get("max_cost")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MaxCost = &v
 	}
-	if in.MinTokens != 0 {
-		v := in.MinTokens
+	if v, err := parseInt64(q.Get("min_tokens")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MinTokens = &v
 	}
-	if in.MaxTokens != 0 {
-		v := in.MaxTokens
+	if v, err := parseInt64(q.Get("max_tokens")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MaxTokens = &v
 	}
-	if in.MinDuration != 0 {
-		v := in.MinDuration
+	if v, err := parseInt64(q.Get("min_duration")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MinDuration = &v
 	}
-	if in.MaxDuration != 0 {
-		v := in.MaxDuration
+	if v, err := parseInt64(q.Get("max_duration")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
 		filter.MaxDuration = &v
 	}
-	filter.HasError = in.HasError.Ptr()
-	if in.Search != "" {
-		filter.Search = &in.Search
+
+	hasErrorPtr, err := request.QueryOptionalBool(r, "has_error")
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.SearchType != "" {
-		filter.SearchType = &in.SearchType
+	filter.HasError = hasErrorPtr
+
+	if v := q.Get("search"); v != "" {
+		filter.Search = &v
 	}
-	if in.Status != "" {
-		filter.Statuses = splitCSV(in.Status)
+	if v := q.Get("search_type"); v != "" {
+		filter.SearchType = &v
+	}
+	if v := q.Get("status"); v != "" {
+		filter.Statuses = splitCSV(v)
 		if err := validateStatusList(filter.Statuses, "status"); err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 	}
-	if in.StatusNot != "" {
-		filter.StatusesNot = splitCSV(in.StatusNot)
+	if v := q.Get("status_not"); v != "" {
+		filter.StatusesNot = splitCSV(v)
 		if err := validateStatusList(filter.StatusesNot, "status_not"); err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 	}
-	if in.StartTime != 0 {
-		ts := time.Unix(in.StartTime, 0)
+	if v, err := parseInt64(q.Get("start_time")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
+		ts := time.Unix(v, 0)
 		filter.StartTime = &ts
 	}
-	if in.EndTime != 0 {
-		ts := time.Unix(in.EndTime, 0)
+	if v, err := parseInt64(q.Get("end_time")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
+		ts := time.Unix(v, 0)
 		filter.EndTime = &ts
 	}
 
-	params := paginationParams(in.Page, in.Limit, in.SortBy, in.SortDir)
+	params := parsePaginationQuery(r)
 	filter.Params = params
 
-	traces, err := h.traces.ListTraces(ctx, filter)
+	traces, err := h.traces.ListTraces(r.Context(), filter)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "observability: list traces failed", "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "observability: list traces failed", "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	total, err := h.traces.CountTraces(ctx, filter)
+	total, err := h.traces.CountTraces(r.Context(), filter)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "observability: count traces failed", "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "observability: count traces failed", "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	return &ListTracesOutput{Body: listTracesResponse{
+	response.Success(w, listTracesResponse{
 		Data:       traces,
 		Pagination: newPaginationMeta(params, total),
-	}}, nil
+	})
 }
 
-func (h *dashboardHandler) getTrace(ctx context.Context, in *GetTraceInput) (*GetTraceOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) getTrace(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	summary, err := h.traces.GetTrace(ctx, in.ID)
+	summary, err := h.traces.GetTrace(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetTraceOutput{Body: summary}, nil
+	response.Success(w, summary)
 }
 
-func (h *dashboardHandler) deleteTrace(ctx context.Context, in *DeleteTraceInput) (*DeleteTraceOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) deleteTrace(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	if err := h.traces.DeleteTrace(ctx, in.ID); err != nil {
-		return nil, err
+	if err := h.traces.DeleteTrace(r.Context(), id); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteTraceOutput{}, nil
+	response.NoContent(w)
 }
 
-func (h *dashboardHandler) getTraceSpans(ctx context.Context, in *GetTraceSpansInput) (*GetTraceSpansOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) getTraceSpans(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	spans, err := h.traces.GetTraceSpans(ctx, in.ID)
+	spans, err := h.traces.GetTraceSpans(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetTraceSpansOutput{Body: spans}, nil
+	response.Success(w, spans)
 }
 
-func (h *dashboardHandler) getTraceScores(ctx context.Context, in *GetTraceScoresInput) (*GetTraceScoresOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) getTraceScores(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	if _, err := parseUUIDParam(in.ProjectID, "project_id", "project ID"); err != nil {
-		return nil, err
+	if _, err := parseProjectIDQuery(r); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-
-	scores, err := h.scores.GetScoresByTraceID(ctx, in.ID)
+	scores, err := h.scores.GetScoresByTraceID(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*AnnotationResponse, 0, len(scores))
 	for _, s := range scores {
 		out = append(out, toAnnotationResponse(s))
 	}
-	return &GetTraceScoresOutput{Body: out}, nil
+	response.Success(w, out)
 }
 
-func (h *dashboardHandler) createTraceScore(ctx context.Context, in *CreateTraceScoreInput) (*CreateTraceScoreOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) createTraceScore(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
+	projectID, err := parseProjectIDQuery(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	userID := httpctx.MustGetUserID(ctx)
+	var body CreateAnnotationRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	userID := httpctx.MustGetUserID(r.Context())
 
-	rootSpan, err := h.traces.GetRootSpan(ctx, in.ID)
+	rootSpan, err := h.traces.GetRootSpan(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if rootSpan.ProjectID != projectID {
-		return nil, appErrors.NewValidationError("project_id", "does not match trace's project")
+		response.WriteError(w, appErrors.NewValidationError("project_id", "does not match trace's project"))
+		return
 	}
 
 	userIDStr := userID.String()
@@ -496,468 +384,668 @@ func (h *dashboardHandler) createTraceScore(ctx context.Context, in *CreateTrace
 		ID:             uid.New(),
 		ProjectID:      projectID,
 		OrganizationID: rootSpan.OrganizationID,
-		TraceID:        &in.ID,
+		TraceID:        &id,
 		SpanID:         &rootSpan.SpanID,
-		Name:           in.Body.Name,
-		Value:          in.Body.Value,
-		StringValue:    in.Body.StringValue,
-		Type:           in.Body.DataType,
+		Name:           body.Name,
+		Value:          body.Value,
+		StringValue:    body.StringValue,
+		Type:           body.DataType,
 		Source:         observability.ScoreSourceAnnotation,
-		Reason:         in.Body.Reason,
+		Reason:         body.Reason,
 		Metadata:       json.RawMessage("{}"),
 		CreatedBy:      &userIDStr,
 		Timestamp:      time.Now(),
 	}
 
-	if err := h.scores.CreateScore(ctx, score); err != nil {
-		return nil, err
+	if err := h.scores.CreateScore(r.Context(), score); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	h.logger.InfoContext(ctx, "annotation created",
-		"score_id", score.ID, "project_id", projectID, "trace_id", in.ID, "user_id", userID, "name", score.Name,
-	)
-	return &CreateTraceScoreOutput{Body: toAnnotationResponse(score)}, nil
+	h.logger.InfoContext(r.Context(), "annotation created",
+		"score_id", score.ID, "project_id", projectID, "trace_id", id, "user_id", userID, "name", score.Name)
+	response.Created(w, toAnnotationResponse(score))
 }
 
-func (h *dashboardHandler) deleteTraceScore(ctx context.Context, in *DeleteTraceScoreInput) (*DeleteTraceScoreOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) deleteTraceScore(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	scoreID, err := parseUUIDParam(in.ScoreID, "scoreId", "score ID")
+	scoreID, err := request.URLParamUUID(r, "scoreId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if _, err := parseUUIDParam(in.ProjectID, "project_id", "project ID"); err != nil {
-		return nil, err
+	if _, err := parseProjectIDQuery(r); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	score, err := h.scores.GetScoreByID(ctx, scoreID)
+	score, err := h.scores.GetScoreByID(r.Context(), scoreID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if score.TraceID == nil || *score.TraceID != in.ID {
-		return nil, appErrors.NewNotFoundError("score")
+	if score.TraceID == nil || *score.TraceID != id {
+		response.WriteError(w, appErrors.NewNotFoundError("score"))
+		return
 	}
 	if score.Source != observability.ScoreSourceAnnotation {
-		return nil, appErrors.NewForbiddenError("only annotation scores can be deleted")
+		response.WriteError(w, appErrors.NewForbiddenError("only annotation scores can be deleted"))
+		return
 	}
 	if score.CreatedBy == nil || *score.CreatedBy != userID.String() {
-		return nil, appErrors.NewForbiddenError("only the creator can delete this annotation")
+		response.WriteError(w, appErrors.NewForbiddenError("only the creator can delete this annotation"))
+		return
 	}
-	if err := h.scores.DeleteScore(ctx, scoreID); err != nil {
-		return nil, err
+	if err := h.scores.DeleteScore(r.Context(), scoreID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	h.logger.InfoContext(ctx, "annotation deleted",
-		"score_id", scoreID, "project_id", in.ProjectID, "trace_id", in.ID, "user_id", userID,
-	)
-	return &DeleteTraceScoreOutput{}, nil
+	h.logger.InfoContext(r.Context(), "annotation deleted",
+		"score_id", scoreID, "trace_id", id, "user_id", userID)
+	response.NoContent(w)
 }
 
-func (h *dashboardHandler) updateTraceTags(ctx context.Context, in *UpdateTraceTagsInput) (*UpdateTraceTagsOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) updateTraceTags(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
+	projectID, err := parseProjectIDQuery(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if errs := in.Body.Validate(); len(errs) > 0 {
-		return nil, appErrors.NewValidationError("Validation failed", errs[0].Message)
+	var body observability.UpdateTraceTagsRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	tags, err := h.traces.UpdateTraceTags(ctx, projectID, in.ID, in.Body.Tags)
+	if errs := body.Validate(); len(errs) > 0 {
+		response.WriteError(w, appErrors.NewValidationError("Validation failed", errs[0].Message))
+		return
+	}
+	tags, err := h.traces.UpdateTraceTags(r.Context(), projectID, id, body.Tags)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	out := &UpdateTraceTagsOutput{}
-	out.Body.Tags = tags
-	return out, nil
+	response.Success(w, map[string]any{"tags": tags})
 }
 
-func (h *dashboardHandler) updateTraceBookmark(ctx context.Context, in *UpdateTraceBookmarkInput) (*UpdateTraceBookmarkOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+func (h *dashboardHandler) updateTraceBookmark(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		return
 	}
-	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
+	projectID, err := parseProjectIDQuery(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.traces.UpdateTraceBookmark(ctx, projectID, in.ID, in.Body.Bookmarked); err != nil {
-		return nil, err
+	var body struct {
+		Bookmarked bool `json:"bookmarked"`
 	}
-	out := &UpdateTraceBookmarkOutput{}
-	out.Body.Bookmarked = in.Body.Bookmarked
-	return out, nil
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	if err := h.traces.UpdateTraceBookmark(r.Context(), projectID, id, body.Bookmarked); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, map[string]any{"bookmarked": body.Bookmarked})
 }
 
-func (h *dashboardHandler) getTraceFilterOptions(ctx context.Context, in *GetTraceFilterOptionsInput) (*GetTraceFilterOptionsOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
+func (h *dashboardHandler) getTraceFilterOptions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := parseProjectIDQuery(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	opts, err := h.traces.GetFilterOptions(ctx, projectID)
+	opts, err := h.traces.GetFilterOptions(r.Context(), projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetTraceFilterOptionsOutput{Body: opts}, nil
+	response.Success(w, opts)
 }
 
-func (h *dashboardHandler) discoverAttributes(ctx context.Context, in *DiscoverAttributesInput) (*DiscoverAttributesOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "project_id", "project ID")
+func (h *dashboardHandler) discoverAttributes(w http.ResponseWriter, r *http.Request) {
+	projectID, err := parseProjectIDQuery(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	q := r.URL.Query()
+	limit, err := request.QueryInt(r, "limit", 0)
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	req := &observability.AttributeDiscoveryRequest{
 		ProjectID: projectID,
-		Prefix:    in.Prefix,
-		Limit:     in.Limit,
+		Prefix:    q.Get("prefix"),
+		Limit:     limit,
 	}
-	switch in.Source {
+	switch q.Get("source") {
 	case "":
-		// default to all sources (handled by normalizer)
 	case "span_attributes":
 		req.Sources = []observability.AttributeSource{observability.AttributeSourceSpan}
 	case "resource_attributes":
 		req.Sources = []observability.AttributeSource{observability.AttributeSourceResource}
 	}
-	resp, err := h.traces.DiscoverAttributes(ctx, req)
+	resp, err := h.traces.DiscoverAttributes(r.Context(), req)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DiscoverAttributesOutput{Body: resp}, nil
+	response.Success(w, resp)
 }
 
 // ==================================================================
 // SPANS
 // ==================================================================
 
-func (h *dashboardHandler) listSpans(ctx context.Context, in *ListSpansInput) (*ListSpansOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
+func (h *dashboardHandler) listSpans(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
+	q := r.URL.Query()
 	filter := &observability.SpanFilter{ProjectID: projectID}
-	if in.TraceID != "" {
-		filter.TraceID = &in.TraceID
+	if v := q.Get("trace_id"); v != "" {
+		filter.TraceID = &v
 	}
-	if in.Type != "" {
-		filter.Type = &in.Type
+	if v := q.Get("type"); v != "" {
+		filter.Type = &v
 	}
-	if in.Model != "" {
-		filter.Model = &in.Model
+	if v := q.Get("model"); v != "" {
+		filter.Model = &v
 	}
-	if in.Level != "" {
-		filter.Level = &in.Level
+	if v := q.Get("level"); v != "" {
+		filter.Level = &v
 	}
-	params := paginationParams(in.Page, in.Limit, in.SortBy, in.SortDir)
+	params := parsePaginationQuery(r)
 	filter.Params = params
 
-	spans, err := h.traces.GetSpansByFilter(ctx, filter)
+	spans, err := h.traces.GetSpansByFilter(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	total, err := h.traces.CountSpans(ctx, filter)
+	total, err := h.traces.CountSpans(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListSpansOutput{Body: listSpansResponse{Data: spans, Pagination: newPaginationMeta(params, total)}}, nil
+	response.Success(w, listSpansResponse{Data: spans, Pagination: newPaginationMeta(params, total)})
 }
 
-func (h *dashboardHandler) getSpan(ctx context.Context, in *GetSpanInput) (*GetSpanOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing span ID", "id is required")
+func (h *dashboardHandler) getSpan(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
+		return
 	}
-	span, err := h.traces.GetSpan(ctx, in.ID)
+	span, err := h.traces.GetSpan(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetSpanOutput{Body: span}, nil
+	response.Success(w, span)
 }
 
-func (h *dashboardHandler) deleteSpan(ctx context.Context, in *DeleteSpanInput) (*DeleteSpanOutput, error) {
-	if in.ID == "" {
-		return nil, appErrors.NewValidationError("Missing span ID", "id is required")
+func (h *dashboardHandler) deleteSpan(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
+		return
 	}
-	if err := h.traces.DeleteSpan(ctx, in.ID); err != nil {
-		return nil, err
+	if err := h.traces.DeleteSpan(r.Context(), id); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteSpanOutput{}, nil
+	response.NoContent(w)
 }
 
 // ==================================================================
 // SCORES (project-scoped + global)
 // ==================================================================
 
-func (q *scoreFilterQuery) apply(f *observability.ScoreFilter) pagination.Params {
-	if q.TraceID != "" {
-		f.TraceID = &q.TraceID
+func applyScoreFilter(r *http.Request, f *observability.ScoreFilter) pagination.Params {
+	q := r.URL.Query()
+	if v := q.Get("trace_id"); v != "" {
+		f.TraceID = &v
 	}
-	if q.SpanID != "" {
-		f.SpanID = &q.SpanID
+	if v := q.Get("span_id"); v != "" {
+		f.SpanID = &v
 	}
-	if q.Name != "" {
-		f.Name = &q.Name
+	if v := q.Get("name"); v != "" {
+		f.Name = &v
 	}
-	if q.Source != "" {
-		f.Source = &q.Source
+	if v := q.Get("source"); v != "" {
+		f.Source = &v
 	}
-	if q.Type != "" {
-		f.Type = &q.Type
+	if v := q.Get("type"); v != "" {
+		f.Type = &v
 	}
-	params := paginationParams(q.Page, q.Limit, q.SortBy, q.SortDir)
+	params := parsePaginationQuery(r)
 	f.Params = params
 	return params
 }
 
-func (h *dashboardHandler) listScores(ctx context.Context, in *ListScoresInput) (*ListScoresOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
+func (h *dashboardHandler) listScores(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	filter := &observability.ScoreFilter{ProjectID: projectID}
-	params := in.scoreFilterQuery.apply(filter)
+	params := applyScoreFilter(r, filter)
 
-	scores, err := h.scores.GetScoresByFilter(ctx, filter)
+	scores, err := h.scores.GetScoresByFilter(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	total, err := h.scores.CountScores(ctx, filter)
+	total, err := h.scores.CountScores(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListScoresOutput{Body: listScoresResponse{Data: toTraceScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
+	response.Success(w, listScoresResponse{
+		Data:       toTraceScoreResponses(scores),
+		Pagination: newPaginationMeta(params, total),
+	})
 }
 
-func (h *dashboardHandler) listProjectScores(ctx context.Context, in *ListProjectScoresInput) (*ListProjectScoresOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) listProjectScores(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	filter := &observability.ScoreFilter{ProjectID: projectID}
-	params := in.scoreFilterQuery.apply(filter)
+	params := applyScoreFilter(r, filter)
 
-	scores, err := h.scores.GetScoresByFilter(ctx, filter)
+	scores, err := h.scores.GetScoresByFilter(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	total, err := h.scores.CountScores(ctx, filter)
+	total, err := h.scores.CountScores(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListProjectScoresOutput{Body: listScoresResponse{Data: toTraceScoreResponses(scores), Pagination: newPaginationMeta(params, total)}}, nil
+	response.Success(w, listScoresResponse{
+		Data:       toTraceScoreResponses(scores),
+		Pagination: newPaginationMeta(params, total),
+	})
 }
 
-func (h *dashboardHandler) getScore(ctx context.Context, in *GetScoreInput) (*GetScoreOutput, error) {
-	id, err := parseUUIDParam(in.ID, "id", "score ID")
+func (h *dashboardHandler) getScore(w http.ResponseWriter, r *http.Request) {
+	id, err := request.URLParamUUID(r, "id")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	score, err := h.scores.GetScoreByID(ctx, id)
+	score, err := h.scores.GetScoreByID(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetScoreOutput{Body: toTraceScoreResponse(score)}, nil
+	response.Success(w, toTraceScoreResponse(score))
 }
 
-func (h *dashboardHandler) updateScore(ctx context.Context, in *UpdateScoreInput) (*UpdateScoreOutput, error) {
-	id, err := parseUUIDParam(in.ID, "id", "score ID")
+func (h *dashboardHandler) updateScore(w http.ResponseWriter, r *http.Request) {
+	id, err := request.URLParamUUID(r, "id")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	var body UpdateScoreRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	score := observability.Score{
 		ID:          id,
-		Name:        in.Body.Name,
-		Value:       in.Body.Value,
-		StringValue: in.Body.StringValue,
-		Type:        in.Body.Type,
-		Source:      in.Body.Source,
-		Reason:      in.Body.Reason,
+		Name:        body.Name,
+		Value:       body.Value,
+		StringValue: body.StringValue,
+		Type:        body.Type,
+		Source:      body.Source,
+		Reason:      body.Reason,
 	}
-	if len(in.Body.Metadata) > 0 {
-		if !json.Valid(in.Body.Metadata) {
-			return nil, appErrors.NewValidationError("Invalid metadata", "metadata must be valid JSON")
+	if len(body.Metadata) > 0 {
+		if !json.Valid(body.Metadata) {
+			response.WriteError(w, appErrors.NewValidationError("Invalid metadata", "metadata must be valid JSON"))
+			return
 		}
-		score.Metadata = in.Body.Metadata
+		score.Metadata = body.Metadata
 	}
-	if err := h.scores.UpdateScore(ctx, &score); err != nil {
-		return nil, err
+	if err := h.scores.UpdateScore(r.Context(), &score); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	updated, err := h.scores.GetScoreByID(ctx, id)
+	updated, err := h.scores.GetScoreByID(r.Context(), id)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateScoreOutput{Body: toTraceScoreResponse(updated)}, nil
+	response.Success(w, toTraceScoreResponse(updated))
 }
 
-func (h *dashboardHandler) getScoreAnalytics(ctx context.Context, in *GetScoreAnalyticsInput) (*GetScoreAnalyticsOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) getScoreAnalytics(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.ScoreName == "" {
-		return nil, appErrors.NewValidationError("Missing score name", "score_name is required")
+	q := r.URL.Query()
+	scoreName := q.Get("score_name")
+	if scoreName == "" {
+		response.WriteError(w, appErrors.NewValidationError("Missing score name", "score_name is required", appErrors.WithParam("score_name")))
+		return
 	}
-	interval := in.Interval
+	interval := q.Get("interval")
 	if interval == "" {
 		interval = "day"
 	}
 	filter := &observability.ScoreAnalyticsFilter{
 		ProjectID: projectID,
-		ScoreName: in.ScoreName,
+		ScoreName: scoreName,
 		Interval:  interval,
 	}
-	if in.CompareScoreName != "" {
-		filter.CompareScoreName = &in.CompareScoreName
+	if v := q.Get("compare_score_name"); v != "" {
+		filter.CompareScoreName = &v
 	}
-	if in.FromTimestamp != "" {
-		ts, err := time.Parse(time.RFC3339, in.FromTimestamp)
+	if v := q.Get("from_timestamp"); v != "" {
+		ts, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			return nil, appErrors.NewValidationError("Invalid from_timestamp", "must be RFC3339 format (e.g., 2024-01-15T00:00:00Z)")
+			response.WriteError(w, appErrors.NewValidationError("Invalid from_timestamp", "must be RFC3339 format", appErrors.WithParam("from_timestamp")))
+			return
 		}
 		filter.FromTimestamp = &ts
 	}
-	if in.ToTimestamp != "" {
-		ts, err := time.Parse(time.RFC3339, in.ToTimestamp)
+	if v := q.Get("to_timestamp"); v != "" {
+		ts, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			return nil, appErrors.NewValidationError("Invalid to_timestamp", "must be RFC3339 format (e.g., 2024-01-15T23:59:59Z)")
+			response.WriteError(w, appErrors.NewValidationError("Invalid to_timestamp", "must be RFC3339 format", appErrors.WithParam("to_timestamp")))
+			return
 		}
 		filter.ToTimestamp = &ts
 	}
-	analytics, err := h.scoreAnalytics.GetAnalytics(ctx, filter)
+	analytics, err := h.scoreAnalytics.GetAnalytics(r.Context(), filter)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetScoreAnalyticsOutput{Body: analytics}, nil
+	response.Success(w, analytics)
 }
 
-func (h *dashboardHandler) getScoreNames(ctx context.Context, in *GetScoreNamesInput) (*GetScoreNamesOutput, error) {
-	if _, err := parseUUIDParam(in.ProjectID, "projectId", "project ID"); err != nil {
-		return nil, err
+func (h *dashboardHandler) getScoreNames(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	names, err := h.scoreAnalytics.GetDistinctScoreNames(ctx, in.ProjectID)
+	projectID := chi.URLParam(r, "projectId")
+	names, err := h.scoreAnalytics.GetDistinctScoreNames(r.Context(), projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetScoreNamesOutput{Body: names}, nil
+	response.Success(w, names)
 }
 
 // ==================================================================
 // SESSIONS
 // ==================================================================
 
-func (h *dashboardHandler) listSessions(ctx context.Context, in *ListTraceSessionsInput) (*ListTraceSessionsOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) listSessions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
+	q := r.URL.Query()
 	filter := &observability.SessionFilter{ProjectID: projectID}
-	if in.Search != "" {
-		filter.Search = &in.Search
+	if v := q.Get("search"); v != "" {
+		filter.Search = &v
 	}
-	if in.UserID != "" {
-		filter.UserID = &in.UserID
+	if v := q.Get("user_id"); v != "" {
+		filter.UserID = &v
 	}
-	if in.StartTime != 0 {
-		ts := time.Unix(in.StartTime, 0)
+	if v, err := parseInt64(q.Get("start_time")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
+		ts := time.Unix(v, 0)
 		filter.StartTime = &ts
 	}
-	if in.EndTime != 0 {
-		ts := time.Unix(in.EndTime, 0)
+	if v, err := parseInt64(q.Get("end_time")); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != 0 {
+		ts := time.Unix(v, 0)
 		filter.EndTime = &ts
 	}
-	params := paginationParams(in.Page, in.Limit, in.SortBy, in.SortDir)
+	params := parsePaginationQuery(r)
 	filter.Params = params
 
-	sessions, err := h.traces.ListSessions(ctx, filter)
+	sessions, err := h.traces.ListSessions(r.Context(), filter)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "observability: list sessions failed", "error", err, "project_id", projectID)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "observability: list sessions failed",
+			"error", err, "project_id", projectID)
+		response.WriteError(w, err)
+		return
 	}
-	total, err := h.traces.CountSessions(ctx, filter)
+	total, err := h.traces.CountSessions(r.Context(), filter)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "observability: count sessions failed", "error", err, "project_id", projectID)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "observability: count sessions failed",
+			"error", err, "project_id", projectID)
+		response.WriteError(w, err)
+		return
 	}
-	return &ListTraceSessionsOutput{Body: listTraceSessionsResponse{Data: sessions, Pagination: newPaginationMeta(params, total)}}, nil
+	response.Success(w, listTraceSessionsResponse{
+		Data:       sessions,
+		Pagination: newPaginationMeta(params, total),
+	})
 }
 
 // ==================================================================
 // FILTER PRESETS
 // ==================================================================
 
-func (h *dashboardHandler) createFilterPreset(ctx context.Context, in *CreateFilterPresetInput) (*CreateFilterPresetOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) createFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
-	preset, err := h.filterPresets.Create(ctx, projectID, userID, &in.Body)
+	var body observability.CreateFilterPresetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	userID := httpctx.MustGetUserID(r.Context())
+	preset, err := h.filterPresets.Create(r.Context(), projectID, userID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateFilterPresetOutput{Body: preset}, nil
+	response.Created(w, preset)
 }
 
-func (h *dashboardHandler) listFilterPresets(ctx context.Context, in *ListFilterPresetsInput) (*ListFilterPresetsOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) listFilterPresets(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 	var tableName *string
-	if in.TableName != "" {
-		tableName = &in.TableName
+	if v := r.URL.Query().Get("table_name"); v != "" {
+		tableName = &v
 	}
+
 	includePublic := true
-	if in.IncludePublic.IsSet {
-		includePublic = in.IncludePublic.Value
+	if v, err := request.QueryOptionalBool(r, "include_public"); err != nil {
+		response.WriteError(w, err)
+		return
+	} else if v != nil {
+		includePublic = *v
 	}
-	presets, err := h.filterPresets.List(ctx, projectID, userID, tableName, includePublic)
+
+	presets, err := h.filterPresets.List(r.Context(), projectID, userID, tableName, includePublic)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListFilterPresetsOutput{Body: presets}, nil
+	response.Success(w, presets)
 }
 
-func (h *dashboardHandler) getFilterPreset(ctx context.Context, in *GetFilterPresetInput) (*GetFilterPresetOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) getFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	presetID, err := parseUUIDParam(in.ID, "id", "filter preset ID")
+	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
-	preset, err := h.filterPresets.GetByID(ctx, projectID, presetID, userID)
+	userID := httpctx.MustGetUserID(r.Context())
+	preset, err := h.filterPresets.GetByID(r.Context(), projectID, presetID, userID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetFilterPresetOutput{Body: preset}, nil
+	response.Success(w, preset)
 }
 
-func (h *dashboardHandler) updateFilterPreset(ctx context.Context, in *UpdateFilterPresetInput) (*UpdateFilterPresetOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) updateFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	presetID, err := parseUUIDParam(in.ID, "id", "filter preset ID")
+	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
-	preset, err := h.filterPresets.Update(ctx, projectID, presetID, userID, &in.Body)
+	var body observability.UpdateFilterPresetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	userID := httpctx.MustGetUserID(r.Context())
+	preset, err := h.filterPresets.Update(r.Context(), projectID, presetID, userID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateFilterPresetOutput{Body: preset}, nil
+	response.Success(w, preset)
 }
 
-func (h *dashboardHandler) deleteFilterPreset(ctx context.Context, in *DeleteFilterPresetInput) (*DeleteFilterPresetOutput, error) {
-	projectID, err := parseUUIDParam(in.ProjectID, "projectId", "project ID")
+func (h *dashboardHandler) deleteFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	presetID, err := parseUUIDParam(in.ID, "id", "filter preset ID")
+	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
-	if err := h.filterPresets.Delete(ctx, projectID, presetID, userID); err != nil {
-		return nil, err
+	userID := httpctx.MustGetUserID(r.Context())
+	if err := h.filterPresets.Delete(r.Context(), projectID, presetID, userID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteFilterPresetOutput{}, nil
+	response.NoContent(w)
+}
+
+// ---- tiny numeric parsers -------------------------------------------
+
+func parseFloat(s string) (float64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	// strconv.ParseFloat via fmt.Sscanf to keep imports small.
+	var v float64
+	n, err := fmtSscanfFloat(s, &v)
+	if err != nil || n == 0 {
+		return 0, appErrors.NewValidationError("Invalid number", "expected a number")
+	}
+	return v, nil
+}
+
+func fmtSscanfFloat(s string, out *float64) (int, error) {
+	// Minimal float parser — support digits + '.' + optional leading '-'.
+	sign := 1.0
+	i := 0
+	if i < len(s) && s[i] == '-' {
+		sign = -1
+		i++
+	}
+	seenDigit := false
+	intPart, fracPart, fracDiv := 0.0, 0.0, 1.0
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c == '.' {
+			break
+		}
+		if c < '0' || c > '9' {
+			return 0, appErrors.NewValidationError("Invalid number", "expected numeric digits")
+		}
+		intPart = intPart*10 + float64(c-'0')
+		seenDigit = true
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		for ; i < len(s); i++ {
+			c := s[i]
+			if c < '0' || c > '9' {
+				return 0, appErrors.NewValidationError("Invalid number", "expected numeric digits after decimal")
+			}
+			fracPart = fracPart*10 + float64(c-'0')
+			fracDiv *= 10
+			seenDigit = true
+		}
+	}
+	if !seenDigit {
+		return 0, nil
+	}
+	*out = sign * (intPart + fracPart/fracDiv)
+	return 1, nil
+}
+
+func parseInt64(s string) (int64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	sign := int64(1)
+	i := 0
+	if i < len(s) && s[i] == '-' {
+		sign = -1
+		i++
+	}
+	var v int64
+	seenDigit := false
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c < '0' || c > '9' {
+			return 0, appErrors.NewValidationError("Invalid number", "expected integer")
+		}
+		v = v*10 + int64(c-'0')
+		seenDigit = true
+	}
+	if !seenDigit {
+		return 0, appErrors.NewValidationError("Invalid number", "expected integer")
+	}
+	return sign * v, nil
 }

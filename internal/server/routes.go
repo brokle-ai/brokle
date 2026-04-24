@@ -124,7 +124,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// annotation SDK — migrated to chi; mounted on the chi bridge below.
 	// prompt SDK — migrated to chi; mounted on the chi bridge below.
 	// playground SDK — migrated to chi; mounted on the chi bridge below.
-	observabilityHandler.RegisterSDKRoutes(sdkAuth, d.Observability.SpanQueryService, d.Logger)
+	// observability SDK — migrated to chi; mounted on the chi bridge below.
 	evaluationHandler.RegisterSDKRoutes(
 		sdkAuth,
 		d.EvalScoreConfig, d.EvalDataset, d.EvalDatasetItem, d.EvalDatasetVersion,
@@ -152,6 +152,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		playgroundHandler.RegisterSDKRoutes(r, d.Playground, d.Logger)
 		promptHandler.RegisterSDKRoutes(r, d.Prompt, d.Logger)
 		annotationHandler.RegisterSDKRoutes(r, d.AnnotationItem, d.Logger)
+		observabilityHandler.RegisterSDKRoutes(r, d.Observability.SpanQueryService, d.Logger)
 	})
 
 	// -------------------- /api/v1 dashboard plane --------------------
@@ -216,6 +217,14 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 		annotationHandler.RegisterRoutes(r, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 		organizationHandler.RegisterRoutes(r, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
+		observabilityHandler.RegisterRoutes(
+			r,
+			d.Observability.TraceService,
+			d.Observability.ScoreService,
+			d.Observability.ScoreAnalyticsService,
+			d.Observability.FilterPresetService,
+			d.Logger,
+		)
 		authHandler.RegisterProtectedRoutes(r, authHandler.ProtectedDeps{
 			Auth:          d.Auth,
 			User:          d.User,
@@ -230,14 +239,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// user, apikey — migrated to chi; mounted on the chi bridge group above.
 	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
-	observabilityHandler.RegisterRoutes(
-		dashAuth,
-		d.Observability.TraceService,
-		d.Observability.ScoreService,
-		d.Observability.ScoreAnalyticsService,
-		d.Observability.FilterPresetService,
-		d.Logger,
-	)
+	// observability — migrated to chi; mounted on the chi bridge group above.
 	evaluationHandler.RegisterRoutes(
 		dashAuth,
 		d.EvalScoreConfig, d.EvalDataset, d.EvalDatasetItem, d.EvalDatasetVersion,

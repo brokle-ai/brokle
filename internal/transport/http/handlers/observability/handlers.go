@@ -1,23 +1,18 @@
 // Package observability exposes observability operations on three
-// auth planes:
+// surfaces:
 //
-//   - Dashboard plane (apiAdmin, RequireAuth) — traces browse, spans
+//   - Dashboard plane (RequireAuth) — traces browse, spans
 //     list/get/delete, scores CRUD, sessions list, filter-preset CRUD.
 //     See dashboard.go.
-//   - SDK plane (apiPublic, RequireSDKAuth) — span query + filter
-//     validation. See sdk.go.
-//   - OTLP ingestion (/v1/traces, /v1/logs, /v1/metrics) is HUMA-EXEMPT
-//     and mounted as plain chi handlers. See otlp.go.
-//
-// Public entry points (RegisterRoutes, RegisterSDKRoutes,
-// RegisterOTLPChiRoutes) live here; each feature file holds a private
-// registerXxxOps helper plus its handler methods.
+//   - SDK plane (RequireSDKAuth) — span query + filter validation.
+//     See sdk.go.
+//   - OTLP ingestion (/v1/traces, /v1/logs, /v1/metrics) — plain chi
+//     handlers unaware of the chi↔Huma migration. See otlp.go.
 package observability
 
 import (
 	"log/slog"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/observability"
@@ -35,10 +30,6 @@ type dashboardHandler struct {
 	logger         *slog.Logger
 }
 
-// sdkHandler exposes SDK-plane (apiPublic, RequireSDKAuth) observability
-// operations. The OTLP ingestion endpoints (/v1/traces, /v1/logs, /v1/metrics)
-// are NOT registered here — they are HUMA-EXEMPT and mounted as plain
-// chi handlers via RegisterOTLPChiRoutes (see otlp.go).
 type sdkHandler struct {
 	spanQuery *obsServices.SpanQueryService
 	logger    *slog.Logger
@@ -61,13 +52,10 @@ type OTLPDeps struct {
 
 // ---- public entry points --------------------------------------------
 
-// RegisterRoutes wires the dashboard-plane observability operations onto
-// apiAdmin. All routes require RequireAuth. Routes scoped to a specific
-// project carry {projectId}; routes on /traces or /spans expect the
-// RequireProjectAccess middleware to pin the project via
-// httpctx.WithProjectID (access via query param + middleware).
+// RegisterRoutes mounts the dashboard-plane observability routes on r.
+// Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
-	api huma.API,
+	r chi.Router,
 	traces *obsServices.TraceService,
 	scores *obsServices.ScoreService,
 	scoreAnalytics *obsServices.ScoreAnalyticsService,
@@ -81,22 +69,22 @@ func RegisterRoutes(
 		filterPresets:  filterPresets,
 		logger:         logger,
 	}
-	registerDashboardOps(api, h)
+	registerDashboardOps(r, h)
 }
 
-// RegisterSDKRoutes wires the SDK-plane span-query operations onto apiPublic.
-// Project ID is derived from the API key via the RequireSDKAuth middleware.
+// RegisterSDKRoutes mounts the SDK-plane observability routes on r.
+// Expected mount context: the SDK-authed chi group.
 func RegisterSDKRoutes(
-	api huma.API,
+	r chi.Router,
 	spanQuery *obsServices.SpanQueryService,
 	logger *slog.Logger,
 ) {
 	h := &sdkHandler{spanQuery: spanQuery, logger: logger}
-	registerSDKOps(api, h)
+	registerSDKOps(r, h)
 }
 
-// RegisterOTLPChiRoutes mounts the three OTLP HTTP ingestion endpoints as
-// plain chi handlers. The caller is responsible for applying
+// RegisterOTLPChiRoutes mounts the three OTLP HTTP ingestion endpoints
+// as plain chi handlers. The caller is responsible for applying
 // RequireSDKAuth and rate-limit middleware on the surrounding chi group.
 func RegisterOTLPChiRoutes(r chi.Router, deps OTLPDeps) {
 	h := &otlpHandler{deps: deps}

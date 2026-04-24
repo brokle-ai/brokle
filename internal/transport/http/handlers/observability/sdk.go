@@ -1,101 +1,97 @@
 package observability
 
 import (
-	"context"
 	"net/http"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-// registerSDKOps wires the SDK-plane span-query operations onto apiPublic.
-// Called from RegisterSDKRoutes in handlers.go.
-func registerSDKOps(api huma.API, h *sdkHandler) {
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-query-spans",
-		Method:      http.MethodPost,
-		Path:        "/v1/spans/query",
-		Tags:        []string{"SDK - span-query"},
-		Summary:     "Query spans using filter expressions",
-		Description: "Query production telemetry data using human-readable filter syntax. " +
-			"Supports operators: =, !=, >, <, >=, <=, CONTAINS, IN, EXISTS. " +
-			"Logical operators AND, OR with parentheses grouping.",
-		Security: []map[string][]string{{"apiKey": {}}},
-	}, h.querySpans)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-validate-span-filter",
-		Method:      http.MethodPost,
-		Path:        "/v1/spans/query/validate",
-		Tags:        []string{"SDK - span-query"},
-		Summary:     "Validate a filter expression",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.validateFilter)
+// registerSDKOps wires the SDK-plane span-query routes onto r. Called
+// from RegisterSDKRoutes in handlers.go.
+func registerSDKOps(r chi.Router, h *sdkHandler) {
+	r.Route("/v1/spans/query", func(r chi.Router) {
+		r.Post("/", h.querySpans)
+		r.Post("/validate", h.validateFilter)
+	})
 }
 
-// ---- query spans ---------------------------------------------------
+// ---- query spans ----------------------------------------------------
 
-func (h *sdkHandler) querySpans(ctx context.Context, in *QuerySpansInput) (*QuerySpansOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx).String()
+func (h *sdkHandler) querySpans(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context()).String()
 
-	limit := in.Body.Limit
+	var body SpanQueryRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	limit := body.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	page := in.Body.Page
+	page := body.Page
 	if page <= 0 {
 		page = 1
 	}
 
 	domainReq := &observability.SpanQueryRequest{
-		Filter: in.Body.Filter,
+		Filter: body.Filter,
 		Limit:  limit,
 		Page:   page,
 	}
-	if in.Body.StartTime != "" {
-		ts, err := parseRFC3339(in.Body.StartTime, "start_time")
+	if body.StartTime != "" {
+		ts, err := parseRFC3339(body.StartTime, "start_time")
 		if err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 		domainReq.StartTime = ts
 	}
-	if in.Body.EndTime != "" {
-		ts, err := parseRFC3339(in.Body.EndTime, "end_time")
+	if body.EndTime != "" {
+		ts, err := parseRFC3339(body.EndTime, "end_time")
 		if err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 		domainReq.EndTime = ts
 	}
 
-	result, err := h.spanQuery.QuerySpans(ctx, projectID, domainReq)
+	result, err := h.spanQuery.QuerySpans(r.Context(), projectID, domainReq)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &QuerySpansOutput{Body: SpanQueryResponse{
+	response.Success(w, SpanQueryResponse{
 		Spans:      result.Spans,
 		TotalCount: result.TotalCount,
 		HasMore:    result.HasMore,
-	}}, nil
+	})
 }
 
 // ---- validate filter -----------------------------------------------
 
-func (h *sdkHandler) validateFilter(ctx context.Context, in *ValidateFilterInput) (*ValidateFilterOutput, error) {
-	// RequireSDKAuth middleware guarantees a project is present; use the
-	// Must* accessor so a misconfiguration panics loudly.
-	_ = httpctx.MustGetProjectID(ctx)
+func (h *sdkHandler) validateFilter(w http.ResponseWriter, r *http.Request) {
+	// RequireSDKAuth middleware guarantees a project is present.
+	_ = httpctx.MustGetProjectID(r.Context())
 
-	if err := h.spanQuery.ValidateFilter(in.Body.Filter); err != nil {
-		return nil, err
+	var body ValidateFilterRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	out := &ValidateFilterOutput{}
-	out.Body.Valid = true
-	out.Body.Message = "Filter expression is valid"
-	return out, nil
+	if err := h.spanQuery.ValidateFilter(body.Filter); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, map[string]any{"valid": true, "message": "Filter expression is valid"})
 }
 
 // ---- helpers -------------------------------------------------------
@@ -103,7 +99,11 @@ func (h *sdkHandler) validateFilter(ctx context.Context, in *ValidateFilterInput
 func parseRFC3339(v, field string) (*time.Time, error) {
 	ts, err := time.Parse(time.RFC3339, v)
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid "+field, field+" must be an RFC3339 timestamp")
+		return nil, appErrors.NewValidationError(
+			"Invalid "+field,
+			field+" must be an RFC3339 timestamp",
+			appErrors.WithParam(field),
+		)
 	}
 	return &ts, nil
 }

@@ -34,10 +34,8 @@ import (
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
-	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
-	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 )
 
 // ---- interface stubs -------------------------------------------------
@@ -83,17 +81,7 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
 
-	// Observability takes concrete *TraceService / *ScoreService /
-	// *ScoreAnalyticsService / *FilterPresetService pointers (not
-	// interfaces). Typed-nil pointers satisfy the signature and
-	// panic on method call exactly like embedded-interface stubs —
-	// same invariant, different Go syntax.
-	observabilityHandler.RegisterRoutes(api,
-		(*obsServices.TraceService)(nil),
-		(*obsServices.ScoreService)(nil),
-		(*obsServices.ScoreAnalyticsService)(nil),
-		(*obsServices.FilterPresetService)(nil),
-		logger)
+	// observabilityHandler is chi-native (off Huma).
 
 	evaluationHandler.RegisterRoutes(api,
 		dummyEvalScoreConfig{},
