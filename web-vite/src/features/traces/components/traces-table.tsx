@@ -1,4 +1,14 @@
-import type { ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  useReactTable,
+  type ColumnFiltersState,
+  type VisibilityState,
+  type RowSelectionState,
+  type SortingState,
+} from '@tanstack/react-table'
 import {
   Table,
   TableBody,
@@ -7,122 +17,272 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import type { TraceListItem } from '../api/types'
+import { DataTablePagination } from '@/components/shared/tables/data-table-pagination'
+import type { TraceListItem, Pagination } from '../api/types'
+import type { TracesFilterValue } from './traces-filter-bar'
+import { buildTracesColumns } from './traces-columns'
+import { TracesToolbar } from './data-table-toolbar'
+import { TracesBulkActions } from './data-table-bulk-actions'
 
-interface TracesTableProps {
+export type TracesSortKey =
+  | 'duration'
+  | 'model_name'
+  | 'total_cost'
+  | 'total_tokens'
+  | 'span_count'
+  | 'start_time'
+
+export interface TracesTableServerControl {
+  /** Server pagination metadata (from the list response). */
+  pagination: Pagination
+  /** Page-size choices to surface in the pagination footer. */
+  pageSizes?: number[]
+  /** URL-backed filter bar state. */
+  filterValue: TracesFilterValue
+  onFilterChange: (next: TracesFilterValue) => void
+  /** Pagination change → parent updates URL. */
+  onPaginationChange: (page: number, pageSize: number) => void
+  /** Sort change → parent updates URL. */
+  sortBy?: TracesSortKey | null
+  sortDir?: 'asc' | 'desc' | null
+  onSortChange?: (
+    sortBy: TracesSortKey | null,
+    sortDir: 'asc' | 'desc' | null,
+  ) => void
+  /** Subtle spinner during loader refetch. */
+  isFetching?: boolean
+  /** Row-level action callbacks. Parent owns navigation + mutations. */
+  onViewDetail?: (trace: TraceListItem) => void
+  onAddToDataset?: (trace: TraceListItem) => void
+  onDelete?: (trace: TraceListItem) => void
+  /** Whole-row click (opens peek / detail). */
+  onRowClick?: (trace: TraceListItem) => void
+}
+
+export interface TracesTableProps {
   rows: TraceListItem[]
-  // Render a link for the trace name column. The parent owns routing
-  // (TanStack Router `<Link>` with typed params), the table stays
-  // framework-agnostic.
+  /**
+   * Link renderer for the name column — parent owns routing so the
+   * table stays framework-agnostic. Shared by both embedded (sessions
+   * detail) and full (traces index) modes.
+   */
   renderNameLink?: (trace: TraceListItem, children: ReactNode) => ReactNode
+  /**
+   * When provided, renders the full TanStack Table experience: toolbar
+   * with filters + faceted filters + column-visibility menu, pagination
+   * footer, and bulk-actions strip. When omitted (embedded mode, e.g.
+   * the sessions detail page), the table renders rows-only.
+   */
+  server?: TracesTableServerControl
 }
 
-// Duration arrives in nanoseconds (OTLP spec). Format into the biggest
-// sensible unit so the column stays narrow without hiding outliers.
-function formatDuration(ns: number | undefined): string {
-  if (ns === undefined || ns === null) return '—'
-  if (ns < 1_000) return `${ns}ns`
-  const us = ns / 1_000
-  if (us < 1_000) return `${us.toFixed(1)}µs`
-  const ms = us / 1_000
-  if (ms < 1_000) return `${ms.toFixed(1)}ms`
-  const s = ms / 1_000
-  return `${s.toFixed(2)}s`
-}
+/**
+ * The sort-key → server column name mapping is intentional. The Go
+ * backend exposes a fixed enum of sortable columns (see
+ * `internal/transport/http/handlers/observability/dashboard_types.go`:
+ * `ListTracesInput.SortBy`). The faceted filters remain purely
+ * client-side — they're narrowing the current page of results — while
+ * pagination + sort round-trip to the server.
+ */
+export function TracesTable({ rows, renderNameLink, server }: TracesTableProps) {
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
 
-// Cost arrives as a shopspring/decimal string (e.g. "0.000123"). Parse
-// defensively — a bad string renders as "—" rather than "NaN".
-function formatCost(costStr: string | undefined): string {
-  if (!costStr) return '—'
-  const n = Number(costStr)
-  if (!Number.isFinite(n)) return '—'
-  if (n === 0) return '$0.00'
-  if (n < 0.01) return `$${n.toFixed(6)}`
-  return `$${n.toFixed(4)}`
-}
+  const columns = useMemo(
+    () =>
+      buildTracesColumns({
+        renderNameLink,
+        onViewDetail: server?.onViewDetail,
+        onAddToDataset: server?.onAddToDataset,
+        onDelete: server?.onDelete,
+      }),
+    [
+      renderNameLink,
+      server?.onViewDetail,
+      server?.onAddToDataset,
+      server?.onDelete,
+    ],
+  )
 
-function formatTokens(tokens: number | undefined): string {
-  if (tokens === undefined || tokens === null) return '—'
-  return tokens.toLocaleString()
-}
+  const sorting: SortingState = useMemo(() => {
+    if (!server?.sortBy) return []
+    return [{ id: server.sortBy, desc: server.sortDir === 'desc' }]
+  }, [server?.sortBy, server?.sortDir])
 
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString()
-}
+  const table = useReactTable({
+    data: rows,
+    columns,
+    pageCount: server
+      ? Math.max(1, server.pagination.total_pages)
+      : undefined,
+    state: {
+      rowSelection,
+      columnFilters,
+      columnVisibility,
+      sorting,
+      pagination: server
+        ? {
+            pageIndex: server.pagination.page - 1,
+            pageSize: server.pagination.limit,
+          }
+        : undefined,
+    },
+    manualPagination: !!server,
+    manualSorting: !!server,
+    enableRowSelection: true,
+    getRowId: (row) => row.trace_id,
+    onRowSelectionChange: setRowSelection,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: server
+      ? (updater) => {
+          const current = {
+            pageIndex: server.pagination.page - 1,
+            pageSize: server.pagination.limit,
+          }
+          const next = typeof updater === 'function' ? updater(current) : updater
+          server.onPaginationChange(next.pageIndex + 1, next.pageSize)
+        }
+      : undefined,
+    onSortingChange: server?.onSortChange
+      ? (updater) => {
+          const current: SortingState = server.sortBy
+            ? [{ id: server.sortBy, desc: server.sortDir === 'desc' }]
+            : []
+          const next = typeof updater === 'function' ? updater(current) : updater
+          if (next.length > 0) {
+            server.onSortChange?.(
+              next[0].id as TracesSortKey,
+              next[0].desc ? 'desc' : 'asc',
+            )
+          } else {
+            server.onSortChange?.(null, null)
+          }
+        }
+      : undefined,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  })
 
-function StatusBadge({ trace }: { trace: TraceListItem }) {
-  if (trace.has_error || trace.status_code === 2) {
-    return <Badge variant="destructive">Error</Badge>
-  }
-  if (trace.status_code === 1) {
-    return <Badge variant="secondary">OK</Badge>
-  }
-  return <Badge variant="outline">Unset</Badge>
-}
+  const { modelFacets, providerFacets } = useMemo(() => {
+    const models = new Set<string>()
+    const providers = new Set<string>()
+    for (const row of rows) {
+      if (row.model_name) models.add(row.model_name)
+      if (row.provider_name) providers.add(row.provider_name)
+    }
+    return {
+      modelFacets: Array.from(models).sort(),
+      providerFacets: Array.from(providers).sort(),
+    }
+  }, [rows])
 
-export function TracesTable({ rows, renderNameLink }: TracesTableProps) {
-  if (rows.length === 0) {
+  // Embedded mode (sessions detail): rows-only render with the name
+  // link renderer, no toolbar / pagination / bulk actions.
+  if (!server) {
     return (
-      <div className="rounded-lg border p-12 text-center">
-        <p className="text-sm text-muted-foreground">No traces yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Traces will appear here once your application sends telemetry to
-          Brokle.
-        </p>
+      <div className="overflow-hidden rounded-md border">
+        <TableShell table={table} columnCount={columns.length} />
       </div>
     )
   }
 
   return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Status</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead>Provider</TableHead>
-            <TableHead>Duration</TableHead>
-            <TableHead>Tokens</TableHead>
-            <TableHead>Cost</TableHead>
-            <TableHead>Start time</TableHead>
-            <TableHead>Trace ID</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((trace) => {
-            const nameCell = renderNameLink
-              ? renderNameLink(trace, trace.name)
-              : trace.name
-            return (
-              <TableRow key={trace.trace_id}>
-                <TableCell>
-                  <StatusBadge trace={trace} />
-                </TableCell>
-                <TableCell className="font-medium">{nameCell}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {trace.model_name ?? '—'}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {trace.provider_name ?? '—'}
-                </TableCell>
-                <TableCell>{formatDuration(trace.duration)}</TableCell>
-                <TableCell>{formatTokens(trace.total_tokens)}</TableCell>
-                <TableCell>{formatCost(trace.total_cost)}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatTimestamp(trace.start_time)}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {trace.trace_id.slice(0, 12)}…
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+    <div className='space-y-4 max-sm:has-[div[role="toolbar"]]:mb-16'>
+      <TracesToolbar
+        table={table}
+        filterValue={server.filterValue}
+        onFilterChange={server.onFilterChange}
+        modelFacets={modelFacets}
+        providerFacets={providerFacets}
+      />
+      <div className="overflow-hidden rounded-md border">
+        <TableShell
+          table={table}
+          columnCount={columns.length}
+          onRowClick={server.onRowClick}
+        />
+      </div>
+      <DataTablePagination
+        table={table}
+        isPending={!!server.isFetching}
+        showSelectedRows
+        serverPagination={{
+          page: server.pagination.page,
+          pageSize: server.pagination.limit,
+          total: server.pagination.total,
+          totalPages: Math.max(1, server.pagination.total_pages),
+          hasNextPage: server.pagination.has_next,
+          hasPreviousPage: server.pagination.has_prev,
+        }}
+        pageSizes={server.pageSizes}
+      />
+      <TracesBulkActions table={table} />
     </div>
+  )
+}
+
+function TableShell({
+  table,
+  columnCount,
+  onRowClick,
+}: {
+  table: ReturnType<typeof useReactTable<TraceListItem>>
+  columnCount: number
+  onRowClick?: (trace: TraceListItem) => void
+}) {
+  const rowModel = table.getRowModel()
+  return (
+    <Table>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id} colSpan={header.colSpan}>
+                {header.isPlaceholder
+                  ? null
+                  : flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {rowModel.rows.length > 0 ? (
+          rowModel.rows.map((row) => (
+            <TableRow
+              key={row.id}
+              data-state={row.getIsSelected() && 'selected'}
+              className={onRowClick ? 'cursor-pointer hover:bg-muted/50' : undefined}
+              onClick={
+                onRowClick
+                  ? (e) => {
+                      const target = e.target as HTMLElement
+                      if (target.closest('[role="checkbox"], button, a')) return
+                      onRowClick(row.original)
+                    }
+                  : undefined
+              }
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={columnCount} className="h-24 text-center">
+              No traces found.
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   )
 }

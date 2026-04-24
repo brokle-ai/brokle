@@ -233,6 +233,49 @@ export async function createTraceCommentReply(
   return (await resp.json()) as TraceComment
 }
 
+// ---------------- trace tags / bookmark -------------------------------
+//
+// Shapes mirror observability.UpdateTraceTagsRequest + the inline body
+// on UpdateTraceBookmarkInput. Both endpoints return the updated
+// field echoed back — we coerce to the raw value here because the
+// caller only needs the new state for cache reconciliation.
+
+export async function updateTraceTags(
+  projectId: string,
+  traceId: string,
+  tags: string[],
+): Promise<string[]> {
+  const params = new URLSearchParams({ project_id: projectId })
+  const resp = await rawFetch(
+    `/api/v1/traces/${encodeURIComponent(traceId)}/tags?${params.toString()}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    },
+  )
+  const result = (await resp.json()) as { tags?: string[] }
+  return Array.isArray(result.tags) ? result.tags : tags
+}
+
+export async function updateTraceBookmark(
+  projectId: string,
+  traceId: string,
+  bookmarked: boolean,
+): Promise<boolean> {
+  const params = new URLSearchParams({ project_id: projectId })
+  const resp = await rawFetch(
+    `/api/v1/traces/${encodeURIComponent(traceId)}/bookmark?${params.toString()}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookmarked }),
+    },
+  )
+  const result = (await resp.json()) as { bookmarked?: boolean }
+  return typeof result.bookmarked === 'boolean' ? result.bookmarked : bookmarked
+}
+
 export async function toggleTraceCommentReaction(
   projectId: string,
   traceId: string,
