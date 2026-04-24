@@ -38,3 +38,5 @@ playwright/
 test-results/
 playwright-report/
 blob-report/
+# Generated OpenAPI types — regenerated via `pnpm gen:api`
+src/lib/api/generated/
