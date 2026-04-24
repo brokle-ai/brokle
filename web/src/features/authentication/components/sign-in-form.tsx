@@ -1,10 +1,9 @@
 'use client'
 
-import { HTMLAttributes } from 'react'
+import { HTMLAttributes, useRef, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { IconFacebook, IconGithub } from '@/assets/brand-icons'
@@ -23,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLoginMutation } from '../hooks/use-auth-queries'
+import { MutationReentryError } from '@/lib/react-query/use-safe-mutation'
 import { Loader2, AlertTriangle } from 'lucide-react'
 
 type SignInFormProps = HTMLAttributes<HTMLFormElement>
@@ -41,6 +41,11 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
   const loginMutation = useLoginMutation()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  // Fire-once guard for the form lifetime. Blocks post-success
+  // duplicate submits (late event delivery, touch-event replay, Fast
+  // Refresh during async navigation). useSafeMutation covers the
+  // concurrent case; this covers the sequential case.
+  const hasSucceededRef = useRef(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -51,27 +56,27 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
   })
 
   async function onSubmit(data: z.infer<typeof formSchema>) {
-    try {
-      setAuthError(null)
-      setIsRedirecting(false)
+    if (hasSucceededRef.current) return
 
+    setAuthError(null)
+    setIsRedirecting(false)
+
+    try {
       await loginMutation.mutateAsync({
         email: data.email,
         password: data.password,
       })
 
+      // Fire-once: set before navigation so any duplicate submit
+      // delivered while the browser is navigating is rejected.
+      hasSucceededRef.current = true
       setIsRedirecting(true)
-
-      // Get redirect URL from search params or default to root
-      const redirectUrl = searchParams.get('redirect') || '/'
-      
-      // Use full page refresh to ensure middleware sees the new cookies
-      // This is the most reliable way to handle post-login navigation
-      window.location.href = redirectUrl
+      window.location.href = searchParams.get('redirect') || '/'
     } catch (error) {
+      if (error instanceof MutationReentryError) return
+
       setIsRedirecting(false)
-      
-      // Enhanced error handling with user-friendly messages
+
       if (error instanceof Error) {
         if (error.message?.includes('Network')) {
           setAuthError('Unable to connect. Please check your internet connection and try again.')

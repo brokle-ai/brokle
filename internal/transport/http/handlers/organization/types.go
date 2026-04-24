@@ -2,6 +2,7 @@ package organization
 
 import (
 	"brokle/internal/core/domain/organization"
+	"brokle/pkg/response"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,10 +56,8 @@ type ListOrganizationsInput struct {
 }
 
 type listOrganizationsBody struct {
-	Organizations []organizationResponse `json:"organizations"`
-	Total         int                    `json:"total"`
-	Page          int                    `json:"page"`
-	Limit         int                    `json:"limit"`
+	Data       []organizationResponse `json:"data"`
+	Pagination *response.Pagination   `json:"pagination"`
 }
 
 type ListOrganizationsOutput struct {

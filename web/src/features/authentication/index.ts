@@ -19,7 +19,6 @@ export {
 
 // Components
 export { SignInForm } from './components/sign-in-form'
-export { SignUpForm } from './components/sign-up-form'
 export { TwoStepSignUpForm } from './components/two-step-signup-form'
 export { ForgotPasswordForm } from './components/forgot-password-form'
 export { OtpForm as OTPForm } from './components/otp-form'

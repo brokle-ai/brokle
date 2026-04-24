@@ -63,51 +63,34 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     console.debug('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
   }
 
-  // Get organization from backend (cookies sent automatically, no manual auth header)
+  // Get organization from backend (cookies sent automatically, no manual auth header).
+  // Backend emits the canonical `{data, pagination}` list shape (CLAUDE.md gotcha #23);
+  // getPaginated unwraps the `data` array and throws on any drift off-contract.
   let organization: Organization
   try {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] Fetching organizations...')
-    }
-
-    const orgResponse = await client.get<Array<{
+    const orgResponse = await client.getPaginated<{
       id: string
       name: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
-    }>>('/v1/organizations')
+    }>('/v1/organizations')
 
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] Organization response:', {
-        isArray: Array.isArray(orgResponse),
-        length: Array.isArray(orgResponse) ? orgResponse.length : 0,
-        orgResponse
-      })
-    }
+    const orgs = orgResponse.data
 
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    // Select organization based on user's default_organization_id preference.
+    let selectedOrg = orgs.length > 0 ? orgs[0] : null
 
-    // If user has a default organization preference, find it in the list
-    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
-      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
+    if (user.defaultOrganizationId) {
+      const defaultOrg = orgs.find(org => org.id === user.defaultOrganizationId)
       if (defaultOrg) {
         selectedOrg = defaultOrg
-        console.log('[AuthAPI] Using default organization:', { id: defaultOrg.id, name: defaultOrg.name })
-      } else {
-        console.log('[AuthAPI] Default org not found in user orgs, using first org')
       }
     }
 
     if (!selectedOrg) {
-      console.error('[AuthAPI] No organizations found in response')
       throw new Error('No organizations found for user')
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] First organization:', { id: selectedOrg.id, name: selectedOrg.name })
     }
 
     organization = {
@@ -193,24 +176,24 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     isEmailVerified: backendResponse.user.is_email_verified,
   }
 
-  // Get organization from backend (cookies sent automatically, no manual auth header)
+  // Get organization from backend (cookies sent automatically, no manual auth header).
+  // Canonical `{data, pagination}` list shape via getPaginated (see login()).
   let organization: Organization
   try {
-    const orgResponse = await client.get<Array<{
+    const orgResponse = await client.getPaginated<{
       id: string
       name: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
-    }>>('/v1/organizations')
+    }>('/v1/organizations')
 
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    const orgs = orgResponse.data
+    let selectedOrg = orgs.length > 0 ? orgs[0] : null
 
-    // If user has a default organization preference, find it in the list
-    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
-      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
+    if (user.defaultOrganizationId) {
+      const defaultOrg = orgs.find(org => org.id === user.defaultOrganizationId)
       if (defaultOrg) {
         selectedOrg = defaultOrg
       }
@@ -324,31 +307,26 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
     const userResponse = await client.get<UserResponse>('/v1/users/me')
     const defaultOrgId = userResponse.default_organization_id
 
-    // Fetch all organizations
-    const orgResponse = await client.get<Array<{
+    // Fetch all organizations — canonical `{data, pagination}` shape.
+    const orgResponse = await client.getPaginated<{
       id: string
       name: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
-    }>>('/v1/organizations')
+    }>('/v1/organizations')
 
-    if (!Array.isArray(orgResponse) || orgResponse.length === 0) {
+    const orgs = orgResponse.data
+    if (orgs.length === 0) {
       throw new Error('No organizations found for user')
     }
 
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = orgResponse[0] // Default to first
-
-    // If user has a default organization preference, find it in the list
+    let selectedOrg = orgs[0]
     if (defaultOrgId) {
-      const defaultOrg = orgResponse.find(org => org.id === defaultOrgId)
+      const defaultOrg = orgs.find(org => org.id === defaultOrgId)
       if (defaultOrg) {
         selectedOrg = defaultOrg
-        console.log('[AuthAPI] Using default organization for current org:', defaultOrg.name)
-      } else {
-        console.log('[AuthAPI] Default org not found in user orgs, using first org')
       }
     }
 

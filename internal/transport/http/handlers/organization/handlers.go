@@ -21,6 +21,7 @@ import (
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/response"
 )
 
 type handler struct {
@@ -371,10 +372,8 @@ func (h *handler) listOrganizations(ctx context.Context, in *ListOrganizationsIn
 	filtered = filtered[offset:end]
 
 	return &ListOrganizationsOutput{Body: listOrganizationsBody{
-		Organizations: filtered,
-		Total:         total,
-		Page:          page,
-		Limit:         limit,
+		Data:       filtered,
+		Pagination: response.BuildPagination(page, limit, int64(total)),
 	}}, nil
 }
 

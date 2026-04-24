@@ -31,7 +31,7 @@
 import 'server-only'
 
 import { cache } from 'react'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { ROUTES } from '@/lib/routes'
@@ -41,6 +41,26 @@ import type { EnhancedUserProfileResponse } from '@/types/api-responses'
 
 const ACCESS_TOKEN_COOKIE = 'access_token'
 const REFRESH_TOKEN_COOKIE = 'refresh_token'
+
+// Stamped on every dashboard request by proxy.ts so the DAL can
+// reconstruct the current URL when building the return-path for a
+// silent-refresh redirect. Missing = proxy didn't run (misconfigured
+// matcher or direct SSR render outside the dashboard matcher); the
+// DAL falls back to "/" which still works — the user just lands on
+// the dashboard home rather than their originally-requested page.
+const PATHNAME_HEADER = 'x-brokle-pathname'
+
+// Loop-guard cookie set by the silent-refresh route handler
+// (web/src/app/api/auth/silent-refresh/route.ts) on successful
+// refresh, with a very short Max-Age (seconds). If /users/me STILL
+// returns 401 while this cookie is present, a second refresh
+// wouldn't help — redirect to /signin. After the Max-Age elapses
+// the cookie is gone, so a genuine later 401 (the next 15-minute
+// access-token rollover on the same URL) is treated as fresh and
+// recoverable. A URL query-param would persist for the life of
+// the navigation and block every future refresh from the same
+// page — that's the regression we're avoiding.
+const REFRESH_MARKER_COOKIE = 'brokle_refresh_attempt'
 
 /**
  * Optimistic session check — verifies a session cookie exists.
@@ -65,7 +85,17 @@ export const verifySession = cache(async (): Promise<{ hasSession: true }> => {
 
 /**
  * Fetches the authenticated user's profile + organizations + projects
- * from the backend in a single call. Redirects to /signin on 401.
+ * from the backend in a single call.
+ *
+ * On 401 the DAL tries to recover before giving up. The proxy handles
+ * the common Max-Age eviction case (access cookie missing on entry);
+ * this 401 branch covers the complementary class — access cookie
+ * present but server-rejected (clock skew, admin revocation, JWT
+ * key rotation, user-wide timestamp blacklist). Next.js 16 forbids
+ * cookie mutation from Server Component rendering, so the DAL
+ * delegates the refresh + Set-Cookie work to a Route Handler at
+ * /api/auth/silent-refresh which redirects back here once cookies
+ * are rotated.
  *
  * Mirrors the shape WorkspaceProvider produces client-side, so the
  * server-fetched payload can be passed straight into the workspace
@@ -76,10 +106,7 @@ export const getCurrentUser = cache(async (): Promise<MappedProfile> => {
 
   const res = await fetchBackend('/api/v1/users/me')
   if (res.status === 401) {
-    // Cookie was present (verifySession passed) but invalid or
-    // expired server-side. Cleanest UX is to redirect to signin
-    // with a status hint so the page can show "Session expired".
-    redirect(`${ROUTES.SIGNIN}?status=expired`)
+    await handleUnauthorized()
   }
   if (!res.ok) {
     throw new Error(
@@ -93,3 +120,38 @@ export const getCurrentUser = cache(async (): Promise<MappedProfile> => {
   const profile = (await res.json()) as EnhancedUserProfileResponse
   return mapEnhancedUserProfile(profile)
 })
+
+// handleUnauthorized is the /users/me-401 recovery policy:
+//
+//   1. If the `brokle_refresh_attempt` cookie is present, a refresh
+//      completed within the last few seconds and /users/me is STILL
+//      401. A second refresh wouldn't help — redirect to /signin to
+//      avoid an infinite refresh loop. The cookie auto-expires
+//      (Max-Age seconds), so a 401 on the *next* access-token
+//      rollover on the same URL is treated as fresh and recoverable.
+//
+//   2. Else if the refresh_token cookie is gone, the refresh
+//      endpoint would 401 too — skip the round-trip and go straight
+//      to /signin.
+//
+//   3. Otherwise defer to the silent-refresh route handler, which
+//      can set cookies. It rotates the session via the backend and
+//      redirects back here.
+//
+// Always exits via `redirect()` — never returns. Callers treat this
+// as `Promise<never>`.
+async function handleUnauthorized(): Promise<never> {
+  const [hdrs, cookieStore] = await Promise.all([headers(), cookies()])
+
+  if (cookieStore.has(REFRESH_MARKER_COOKIE)) {
+    redirect(`${ROUTES.SIGNIN}?status=expired`)
+  }
+  if (!cookieStore.has(REFRESH_TOKEN_COOKIE)) {
+    redirect(`${ROUTES.SIGNIN}?status=expired`)
+  }
+
+  const pathname = hdrs.get(PATHNAME_HEADER) ?? '/'
+  redirect(
+    `/api/auth/silent-refresh?return=${encodeURIComponent(pathname)}`,
+  )
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { HTMLAttributes, useState, useEffect } from 'react'
+import { HTMLAttributes, useRef, useState, useEffect } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,7 +29,29 @@ import {
 } from '@/components/ui/select'
 import { Loader2, AlertTriangle, Mail, Lock } from 'lucide-react'
 import { useSignupMutation, useCompleteOAuthSignupMutation } from '../hooks/use-auth-queries'
+import { MutationReentryError } from '@/lib/react-query/use-safe-mutation'
 import type { InvitationDetails } from '../types'
+
+// deriveSignupError maps a signup-mutation failure to the string
+// shown in the form's destructive alert.
+function deriveSignupError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'An unexpected error occurred. Please try again.'
+  }
+  if (error.message?.includes('email')) {
+    return 'This email is already registered. Please try signing in instead.'
+  }
+  if (error.message?.includes('organization')) {
+    return 'Failed to create organization. Please try again.'
+  }
+  if (error.message?.includes('Network')) {
+    return 'Unable to connect. Please check your internet connection and try again.'
+  }
+  if (error.message?.includes('timeout')) {
+    return 'The request is taking too long. Please try again.'
+  }
+  return error.message || 'Registration failed. Please try again.'
+}
 
 type SignupStep = 'auth' | 'personalization'
 
@@ -83,9 +105,18 @@ export function TwoStepSignUpForm({
   }, [])
 
   const [authData, setAuthData] = useState<{ email: string; password: string } | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  // hasSucceededRef blocks re-submission after the first successful
+  // signup. useSafeMutation already guards against *concurrent*
+  // re-entry (same-microtask double-dispatch); this ref closes the
+  // second class of duplicate — a submit that happens after the
+  // first resolved but before `window.location.href` finishes
+  // navigating away (form is still mounted, button momentarily
+  // re-enabled between isPending→false and isRedirecting→true state
+  // commits, late keyboard/touch event, Fast-Refresh during async).
+  // A single successful signup per form lifecycle, period.
+  const hasSucceededRef = useRef(false)
 
   // Determine if this is invitation-based signup
   const isInvitationSignup = !!(invitationToken || invitationDetails)
@@ -155,14 +186,22 @@ export function TwoStepSignUpForm({
     setStep('personalization')
   }
 
-  // Step 2 Submit: Complete Registration
+  // Step 2 Submit: Complete Registration.
+  //
+  // Duplicate-click guard lives inside useSafeMutation (throws a
+  // MutationReentryError sentinel that we filter here). The button's
+  // `disabled={isPending || isRedirecting}` is the UX surface; the
+  // mutation hook is the structural backstop.
   const handlePersonalizationSubmit = async (data: z.infer<typeof personalizationStepSchema>) => {
-    try {
-      setAuthError(null)
-      setIsSubmitting(true)
+    // Fire-once guard for the lifetime of this form instance. Ref
+    // (not state) so the check is synchronously visible to any
+    // duplicate submit dispatched in the same or a later tick.
+    if (hasSucceededRef.current) return
 
+    setAuthError(null)
+
+    try {
       if (oauthSessionId) {
-        // OAuth completion flow - Use mutation hook (stores tokens automatically)
         await oauthSignupMutation.mutateAsync({
           sessionId: oauthSessionId,
           role: data.role,
@@ -170,11 +209,9 @@ export function TwoStepSignUpForm({
           referralSource: data.referralSource,
         })
       } else {
-        // Email/password signup - Use mutation hook (stores tokens automatically)
         if (!authData) {
           throw new Error('Auth data not found')
         }
-
         await signupMutation.mutateAsync({
           email: authData.email,
           password: authData.password,
@@ -183,30 +220,23 @@ export function TwoStepSignUpForm({
           role: data.role,
           organizationName: data.organizationName,
           referralSource: data.referralSource,
-          invitationToken: invitationToken,
+          invitationToken,
         })
       }
 
+      // Mark success BEFORE setState / navigation so any duplicate
+      // event delivered while React is still committing isRedirecting
+      // is rejected at the top of this handler on the very next call.
+      hasSucceededRef.current = true
       setIsRedirecting(true)
-
-      // Redirect to dashboard
-      const redirectUrl = searchParams.get('redirect') || '/'
-      window.location.href = redirectUrl
+      window.location.href = searchParams.get('redirect') || '/'
     } catch (error) {
-      setIsSubmitting(false)
-      setIsRedirecting(false)
+      // Concurrent-re-entry sentinel from useSafeMutation — the
+      // first call is still in flight, so leave the UI as-is.
+      if (error instanceof MutationReentryError) return
 
-      if (error instanceof Error) {
-        if (error.message?.includes('email')) {
-          setAuthError('This email is already registered. Please try signing in instead.')
-        } else if (error.message?.includes('organization')) {
-          setAuthError('Failed to create organization. Please try again.')
-        } else {
-          setAuthError(error.message || 'Registration failed. Please try again.')
-        }
-      } else {
-        setAuthError('An unexpected error occurred. Please try again.')
-      }
+      setIsRedirecting(false)
+      setAuthError(deriveSignupError(error))
     }
   }
 
@@ -225,10 +255,10 @@ export function TwoStepSignUpForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" type="button" disabled={isSubmitting} onClick={handleGitHubSignup}>
+          <Button variant="outline" type="button" onClick={handleGitHubSignup}>
             <IconGithub className="mr-2 h-4 w-4" /> GitHub
           </Button>
-          <Button variant="outline" type="button" disabled={isSubmitting} onClick={handleGoogleSignup}>
+          <Button variant="outline" type="button" onClick={handleGoogleSignup}>
             <IconFacebook className="mr-2 h-4 w-4" /> Google
           </Button>
         </div>
@@ -437,9 +467,9 @@ export function TwoStepSignUpForm({
           <Button
             type="submit"
             className="w-full"
-            disabled={signupMutation.isPending || oauthSignupMutation.isPending || isSubmitting || isRedirecting}
+            disabled={signupMutation.isPending || oauthSignupMutation.isPending || isRedirecting}
           >
-            {(signupMutation.isPending || oauthSignupMutation.isPending || isSubmitting) ? (
+            {(signupMutation.isPending || oauthSignupMutation.isPending) ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating Account...

@@ -1,16 +1,27 @@
 import type { NextConfig } from "next";
 
 // apiProxyTarget is the upstream the Next.js dev server forwards
-// /api/v1/* and /v1/* to via rewrites below. Server-side env var
-// (no NEXT_PUBLIC_ prefix) — never exposed to the browser, because
-// the browser's view of the API is always relative to its current
-// origin (same-origin posture).
+// /api/v1/* and /v1/* to via rewrites below.
 //
-// Default points at the local Go backend's HTTP port (:8080). Override
-// in CI or when running the dashboard against a remote backend
-// (staging, preview env) by exporting BROKLE_API_PROXY_TARGET before
-// `pnpm dev`.
-const apiProxyTarget = process.env.BROKLE_API_PROXY_TARGET || 'http://localhost:8080';
+// Precedence — mirrors src/lib/env/backend-url.ts exactly (inlined
+// here because next.config.ts runs before the app bundle is
+// available):
+//
+//   1. BROKLE_API_PROXY_TARGET — explicit server-only override for
+//      split-host deployments (browser sees a public URL via load
+//      balancer; the Next.js process reaches a private VPC URL).
+//   2. NEXT_PUBLIC_API_URL — the documented public API URL from
+//      .env.example. Reused here so single-host deployments work
+//      with exactly one env var.
+//   3. http://localhost:8080 — local `make dev` default.
+//
+// Keep these three in lockstep with backend-url.ts. Drift here
+// silently breaks server-side fetches in deployments configured
+// only via NEXT_PUBLIC_API_URL (the .env.example path).
+const apiProxyTarget =
+  process.env.BROKLE_API_PROXY_TARGET ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8080';
 
 const nextConfig: NextConfig = {
   /* config options here */

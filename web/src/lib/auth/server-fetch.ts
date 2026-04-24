@@ -34,8 +34,7 @@ import 'server-only'
 
 import { cookies, headers } from 'next/headers'
 
-const BACKEND_URL =
-  process.env.BROKLE_API_PROXY_TARGET || 'http://localhost:8080'
+import { getBackendBaseURL } from '@/lib/env/backend-url'
 
 // Headers forwarded from the incoming Next.js request to the Go
 // backend. Pass-through only — Next.js does not expose the upstream
@@ -88,7 +87,7 @@ export async function fetchBackend(
     }
   }
 
-  return fetch(`${BACKEND_URL}${path}`, {
+  return fetch(`${getBackendBaseURL()}${path}`, {
     ...init,
     headers: outgoing,
     cache: 'no-store',

@@ -18,10 +18,22 @@ const (
 	cookieNameRefresh = "refresh_token"
 	cookieNameCSRF    = "csrf_token"
 
-	// refreshCookiePath restricts the refresh cookie to the one
-	// endpoint that consumes it. Browsers will NOT send the cookie
-	// to any other path, reducing the blast radius of a leak.
-	refreshCookiePath = "/api/v1/auth/refresh"
+	// refreshCookiePath is "/" so the refresh cookie rides every
+	// same-origin request — required for Next.js middleware / proxy.ts
+	// to see it and perform a silent SSR refresh on cold loads when
+	// the short-lived access cookie has already been evicted by its
+	// own Max-Age. Server Components cannot set cookies (Next.js
+	// 16.x cookies() API: "Setting cookies is not supported during
+	// Server Component rendering"), so the refresh round-trip HAS to
+	// happen in the middleware boundary, which means the cookie has
+	// to be attached to the inbound request to that boundary.
+	//
+	// Path-scoping was an earlier exfil-reduction measure; HttpOnly
+	// + SameSite=Strict + CSRF double-submit (enforced on every
+	// mutating endpoint) are the load-bearing defences. Widening to
+	// "/" aligns with Auth.js v5, Clerk, and Supabase Auth — all of
+	// which emit a single session/refresh cookie at Path=/.
+	refreshCookiePath = "/"
 
 	// accessMaxAgeSeconds matches the JWT exp claim issued by
 	// authService.Login (15 minutes).

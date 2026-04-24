@@ -395,16 +395,17 @@ export const useAuthStore = create<AuthState>()(
             isEmailVerified: response.user.is_email_verified,
           }
 
-          // Fetch organization (cookies sent automatically)
-          const orgResponse = await client.get<Array<{
+          // Fetch organization (cookies sent automatically). Canonical
+          // `{data, pagination}` list shape per CLAUDE.md gotcha #23.
+          const orgResponse = await client.getPaginated<{
             id: string
             name: string
             subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
             created_at: string
             updated_at: string
-          }>>('/v1/organizations')
+          }>('/v1/organizations')
 
-          const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+          const firstOrg = orgResponse.data.length > 0 ? orgResponse.data[0] : null
           let organization: Organization | null = null
 
           if (firstOrg) {

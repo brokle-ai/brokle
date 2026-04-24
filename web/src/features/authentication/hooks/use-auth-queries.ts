@@ -1,6 +1,10 @@
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useSafeMutation,
+  MutationReentryError,
+} from '@/lib/react-query/use-safe-mutation'
 import {
   getCurrentUser,
   getCurrentOrganization,
@@ -23,6 +27,13 @@ import type {
 } from '../types'
 import { toast } from 'sonner'
 import { signinWithStatus } from '@/lib/routes'
+
+// isReentryBlocked filters the sentinel error thrown by useSafeMutation
+// when a duplicate call is blocked while a prior call is still in flight.
+// A blocked duplicate is not a user-facing failure — no toast, no alert.
+function isReentryBlocked(error: unknown): boolean {
+  return error instanceof MutationReentryError
+}
 
 // Query keys for consistent caching
 export const authQueryKeys = {
@@ -69,21 +80,20 @@ export function useLoginMutation() {
   const queryClient = useQueryClient()
   const { login } = useAuth()
 
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (credentials: LoginCredentials) => {
       return login(credentials)
     },
     onSuccess: (data: AuthResponse) => {
-      // Update query cache with new user data
       queryClient.setQueryData(authQueryKeys.user(), data.user)
       queryClient.setQueryData(authQueryKeys.organization(), data.organization)
-      
 
       toast.success('Welcome back!', {
         description: `Signed in as ${data.user?.email || 'Unknown User'}`,
       })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Login Failed', {
         description: error?.message || 'Invalid credentials',
       })
@@ -92,23 +102,25 @@ export function useLoginMutation() {
 }
 
 // Signup mutation
+//
+// No success toast: the full-page navigation to `/` is the success
+// surface, and the signup forms render an inline "Redirecting…" alert
+// while waiting. Toasting on success created a confusing
+// success-then-error double-message whenever post-success client code
+// threw (or a duplicate click fired the mutation twice).
 export function useSignupMutation() {
   const queryClient = useQueryClient()
 
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (credentials: SignUpCredentials) => {
       return authSignup(credentials)
     },
     onSuccess: (data: AuthResponse) => {
-      // Update query cache with new user data
       queryClient.setQueryData(authQueryKeys.user(), data.user)
       queryClient.setQueryData(authQueryKeys.organization(), data.organization)
-
-      toast.success('Account Created!', {
-        description: `Welcome to Brokle, ${data.user.firstName || data.user.email}!`,
-      })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Signup Failed', {
         description: error?.message || 'Failed to create account',
       })
@@ -120,7 +132,7 @@ export function useSignupMutation() {
 export function useCompleteOAuthSignupMutation() {
   const queryClient = useQueryClient()
 
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (data: {
       sessionId: string
       role: string
@@ -130,15 +142,11 @@ export function useCompleteOAuthSignupMutation() {
       return authCompleteOAuthSignup(data)
     },
     onSuccess: (data: AuthResponse) => {
-      // Update query cache
       queryClient.setQueryData(authQueryKeys.user(), data.user)
       queryClient.setQueryData(authQueryKeys.organization(), data.organization)
-
-      toast.success('Account Created!', {
-        description: `Welcome to Brokle, ${data.user.firstName || data.user.email}!`,
-      })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('OAuth Signup Failed', {
         description: error?.message || 'Failed to complete OAuth signup',
       })
@@ -151,7 +159,7 @@ export function useLogoutMutation() {
   const queryClient = useQueryClient()
   const logout = useAuthStore(state => state.logout)
 
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async () => {
       // Show overlay
       if (typeof window !== 'undefined') {
@@ -161,27 +169,21 @@ export function useLogoutMutation() {
       await logout()
     },
     onSuccess: () => {
-      // Clear all cached data
       queryClient.clear()
-
-      // Hard redirect (toast shows on signin page)
       if (typeof window !== 'undefined') {
         window.location.href = signinWithStatus('logout_success')
       }
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      if (isReentryBlocked(error)) return
       try {
-        // Still clear cache even if API call fails
         queryClient.clear()
-
-        // Hard redirect with error param
         if (typeof window !== 'undefined') {
           window.location.href = signinWithStatus('logout_error')
         }
-      } catch (error) {
-        console.error('[Logout] Error during logout error handling:', error)
+      } catch (err) {
+        console.error('[Logout] Error during logout error handling:', err)
       } finally {
-        // Ensure overlay clears even if redirect fails
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth:logout-end'))
         }
@@ -195,18 +197,15 @@ export function useUpdateProfileMutation() {
   const queryClient = useQueryClient()
   const setUser = useAuthStore((state) => state.setUser)
 
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (data: Partial<User>) => {
       return authUpdateProfile(data)
     },
     onSuccess: (updatedUser: User) => {
-      // Merge with existing user to preserve org data not returned by update endpoint
       const currentUser = useAuthStore.getState().user
       const mergedUser = currentUser ? { ...currentUser, ...updatedUser } : updatedUser
-      // Update both caches with merged user for consistency
       setUser(mergedUser)
       queryClient.setQueryData(authQueryKeys.user(), mergedUser)
-      // Invalidate workspace cache so sidebar reflects the updated name
       queryClient.invalidateQueries({ queryKey: ['workspace'] })
 
       toast.success('Profile Updated', {
@@ -214,6 +213,7 @@ export function useUpdateProfileMutation() {
       })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Update Failed', {
         description: error?.message || 'Failed to update profile',
       })
@@ -223,7 +223,7 @@ export function useUpdateProfileMutation() {
 
 // Change password mutation
 export function useChangePasswordMutation() {
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
       await authChangePassword(data.currentPassword, data.newPassword)
     },
@@ -233,6 +233,7 @@ export function useChangePasswordMutation() {
       })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Password Change Failed', {
         description: error?.message || 'Failed to change password',
       })
@@ -242,7 +243,7 @@ export function useChangePasswordMutation() {
 
 // Request password reset mutation
 export function useRequestPasswordResetMutation() {
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (email: string) => {
       await requestPasswordReset(email)
     },
@@ -252,6 +253,7 @@ export function useRequestPasswordResetMutation() {
       })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Reset Failed', {
         description: error?.message || 'Failed to send reset email',
       })
@@ -261,7 +263,7 @@ export function useRequestPasswordResetMutation() {
 
 // Confirm password reset mutation
 export function useConfirmPasswordResetMutation() {
-  return useMutation({
+  return useSafeMutation({
     mutationFn: async (data: { token: string; password: string }) => {
       await confirmPasswordReset(data.token, data.password)
     },
@@ -271,6 +273,7 @@ export function useConfirmPasswordResetMutation() {
       })
     },
     onError: (error: any) => {
+      if (isReentryBlocked(error)) return
       toast.error('Reset Failed', {
         description: error?.message || 'Failed to reset password',
       })
