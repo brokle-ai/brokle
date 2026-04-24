@@ -1,7 +1,9 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  CompareExperimentsRequest,
   CreateExperimentRequest,
+  ExperimentComparisonResponse,
   ExperimentDetail,
   ExperimentItemListResponse,
   ExperimentListResponse,
@@ -23,6 +25,9 @@ export interface ExperimentListParams {
   page: number
   limit: number
   q?: string
+  // Comma-separated UUIDs — used by the selector to rehydrate
+  // selected experiments that fell off the paginated list.
+  ids?: string
 }
 
 export const experimentListQueryOptions = (
@@ -37,6 +42,9 @@ export const experimentListQueryOptions = (
       search.set('limit', String(params.limit))
       if (params.q && params.q.length > 0) {
         search.set('search', params.q)
+      }
+      if (params.ids && params.ids.length > 0) {
+        search.set('ids', params.ids)
       }
       const resp = await rawFetch(
         `/api/v1/projects/${projectId}/experiments?${search.toString()}`,
@@ -162,4 +170,44 @@ export async function rerunExperiment(
     },
   )
   return (await resp.json()) as ExperimentDetail
+}
+
+// ============================================================================
+// Compare — POST /api/v1/projects/{projectId}/experiments/compare. Returns
+// per-experiment summaries + per-score aggregations. `diffs` is only present
+// when `baseline_id` is supplied; we compute client-side fallback diffs in
+// `useExperimentComparisonQuery` so switching the baseline doesn't refetch.
+// ============================================================================
+
+export const experimentCompareKey = (
+  projectId: string,
+  experimentIds: string[],
+  baselineId: string | undefined,
+) =>
+  [
+    ...experimentsKeys.all,
+    'compare',
+    projectId,
+    [...experimentIds].sort().join(','),
+    baselineId,
+  ] as const
+
+export async function compareExperiments(
+  projectId: string,
+  experimentIds: string[],
+  baselineId: string | undefined,
+): Promise<ExperimentComparisonResponse> {
+  const body: CompareExperimentsRequest = {
+    experiment_ids: experimentIds,
+    ...(baselineId ? { baseline_id: baselineId } : {}),
+  }
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/experiments/compare`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  return (await resp.json()) as ExperimentComparisonResponse
 }

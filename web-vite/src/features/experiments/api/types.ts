@@ -5,10 +5,11 @@
 // `{data, total, page, limit}`.
 
 export type ExperimentStatus =
-  | 'draft'
+  | 'pending'
   | 'running'
   | 'completed'
   | 'failed'
+  | 'partial'
   | 'cancelled'
 
 export type ExperimentSource = 'dataset' | 'trace' | 'manual'
@@ -126,4 +127,56 @@ export interface RerunExperimentRequest {
   name?: string
   description?: string
   metadata?: Record<string, unknown>
+}
+
+// ============================================================================
+// Compare endpoint — POST /api/v1/projects/{projectId}/experiments/compare.
+// Shape mirrors CompareExperimentsResponse in
+// internal/transport/http/handlers/evaluation/experiment_types.go.
+// ============================================================================
+
+export interface CompareExperimentsRequest {
+  experiment_ids: string[]
+  baseline_id?: string
+}
+
+export interface ExperimentScoreStats {
+  mean: number
+  std_dev: number
+  min: number
+  max: number
+  count: number
+}
+
+export interface ExperimentScoreDiff {
+  type: 'NUMERIC' | 'CATEGORICAL'
+  difference?: number
+  direction?: '+' | '-'
+  isDifferent?: boolean
+}
+
+export interface ExperimentComparisonSummary {
+  name: string
+  status: string
+}
+
+export interface ExperimentComparisonResponse {
+  experiments: Record<string, ExperimentComparisonSummary>
+  scores: Record<string, Record<string, ExperimentScoreStats>>
+  diffs?: Record<string, Record<string, ExperimentScoreDiff>>
+}
+
+// Row shape for rendering — keyed by experiment ID with `stats` and
+// optional `diff` relative to the baseline. Built client-side by
+// `useExperimentComparisonQuery` so baseline changes don't require a
+// refetch.
+export interface ScoreComparisonRow {
+  scoreName: string
+  experiments: Record<
+    string,
+    {
+      stats: ExperimentScoreStats
+      diff?: ExperimentScoreDiff
+    }
+  >
 }
