@@ -117,7 +117,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		middleware.LimitByAPIKey(rateLimitD),
 	)...)
 	annotationHandler.RegisterSDKRoutes(sdkAuth, d.AnnotationItem, d.Logger)
-	promptHandler.RegisterSDKRoutes(sdkAuth, d.Prompt, d.Logger)
+	// prompt SDK — migrated to chi; mounted on the chi bridge below.
 	// playground SDK — migrated to chi; mounted on the chi bridge below.
 	observabilityHandler.RegisterSDKRoutes(sdkAuth, d.Observability.SpanQueryService, d.Logger)
 	evaluationHandler.RegisterSDKRoutes(
@@ -145,6 +145,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 			Logger:               d.Logger,
 		})
 		playgroundHandler.RegisterSDKRoutes(r, d.Playground, d.Logger)
+		promptHandler.RegisterSDKRoutes(r, d.Prompt, d.Logger)
 	})
 
 	// -------------------- /api/v1 dashboard plane --------------------
@@ -207,6 +208,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		playgroundHandler.RegisterRoutes(r, d.Playground, d.Project, d.Logger)
 		dashboardHandler.RegisterRoutes(r, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
 		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
+		promptHandler.RegisterRoutes(r, d.Prompt, d.PromptCompiler, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -224,7 +226,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	annotationHandler.RegisterRoutes(dashAuth, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 	billingHandler.RegisterRoutes(dashAuth, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 	organizationHandler.RegisterRoutes(dashAuth, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
-	promptHandler.RegisterRoutes(dashAuth, d.Prompt, d.PromptCompiler, d.Logger)
 	observabilityHandler.RegisterRoutes(
 		dashAuth,
 		d.Observability.TraceService,

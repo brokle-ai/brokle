@@ -36,7 +36,6 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
-	promptDomain "brokle/internal/core/domain/prompt"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
@@ -44,7 +43,6 @@ import (
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
-	promptHandler "brokle/internal/transport/http/handlers/prompt"
 )
 
 // ---- interface stubs -------------------------------------------------
@@ -67,8 +65,6 @@ type dummyBillingContract struct{ billingDomain.ContractService }
 type dummyBillingPricing struct{ billingDomain.PricingService }
 type dummyInvitation struct{ orgDomain.InvitationService }
 type dummyOrgSettings struct{ orgDomain.OrganizationSettingsService }
-type dummyPromptSvc struct{ promptDomain.PromptService }
-type dummyPromptCompiler struct{ promptDomain.CompilerService }
 type dummyEvalScoreConfig struct{ evaluationDomain.ScoreConfigService }
 type dummyEvalDataset struct{ evaluationDomain.DatasetService }
 type dummyEvalDatasetItem struct{ evaluationDomain.DatasetItemService }
@@ -101,7 +97,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
 	billingHandler.RegisterRoutes(api, dummyBillingUsage{}, dummyBillingBudget{}, dummyBillingContract{}, dummyBillingPricing{}, logger)
 	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)
-	promptHandler.RegisterRoutes(api, dummyPromptSvc{}, dummyPromptCompiler{}, logger)
 
 	// Observability takes concrete *TraceService / *ScoreService /
 	// *ScoreAnalyticsService / *FilterPresetService pointers (not
