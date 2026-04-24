@@ -19,9 +19,16 @@ playwright-report
 blob-report
 playwright/.auth
 
-# Generated
+# Generated — routeTree (TanStack Router plugin)
 src/routeTree.gen.ts
-src/lib/api/generated/
+# Generated OpenAPI types; real files emitted by `pnpm gen:api`. Stubs
+# `dashboard.d.ts` and `sdk.d.ts` are committed as a compilation anchor
+# so the client compiles before the first generation run; they are
+# overwritten on generation.
+!src/lib/api/generated/
+!src/lib/api/generated/dashboard.d.ts
+!src/lib/api/generated/sdk.d.ts
+src/lib/api/generated/*.json
 
 # Env
 .env
