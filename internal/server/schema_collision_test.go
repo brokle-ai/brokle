@@ -32,12 +32,10 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/require"
 
-	annotationDomain "brokle/internal/core/domain/annotation"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
-	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
@@ -54,9 +52,6 @@ import (
 
 type dummyOrg struct{ orgDomain.OrganizationService }
 type dummyMember struct{ orgDomain.MemberService }
-type dummyAnnotationQueue struct{ annotationDomain.QueueService }
-type dummyAnnotationItem struct{ annotationDomain.ItemService }
-type dummyAnnotationAssignment struct{ annotationDomain.AssignmentService }
 type dummyInvitation struct{ orgDomain.InvitationService }
 type dummyOrgSettings struct{ orgDomain.OrganizationSettingsService }
 type dummyEvalScoreConfig struct{ evaluationDomain.ScoreConfigService }
@@ -88,7 +83,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// credentialsHandler is chi-native (off Huma); it no longer
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.
-	annotationHandler.RegisterRoutes(api, dummyAnnotationQueue{}, dummyAnnotationItem{}, dummyAnnotationAssignment{}, logger)
 	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)
 
 	// Observability takes concrete *TraceService / *ScoreService /

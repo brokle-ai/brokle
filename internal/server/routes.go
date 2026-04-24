@@ -116,7 +116,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		middleware.RequireSDKAuth(sdkAuthD),
 		middleware.LimitByAPIKey(rateLimitD),
 	)...)
-	annotationHandler.RegisterSDKRoutes(sdkAuth, d.AnnotationItem, d.Logger)
+	// annotation SDK — migrated to chi; mounted on the chi bridge below.
 	// prompt SDK — migrated to chi; mounted on the chi bridge below.
 	// playground SDK — migrated to chi; mounted on the chi bridge below.
 	observabilityHandler.RegisterSDKRoutes(sdkAuth, d.Observability.SpanQueryService, d.Logger)
@@ -146,6 +146,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		})
 		playgroundHandler.RegisterSDKRoutes(r, d.Playground, d.Logger)
 		promptHandler.RegisterSDKRoutes(r, d.Prompt, d.Logger)
+		annotationHandler.RegisterSDKRoutes(r, d.AnnotationItem, d.Logger)
 	})
 
 	// -------------------- /api/v1 dashboard plane --------------------
@@ -210,6 +211,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
 		promptHandler.RegisterRoutes(r, d.Prompt, d.PromptCompiler, d.Logger)
 		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
+		annotationHandler.RegisterRoutes(r, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -224,7 +226,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	// user, apikey — migrated to chi; mounted on the chi bridge group above.
 	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
-	annotationHandler.RegisterRoutes(dashAuth, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
 	organizationHandler.RegisterRoutes(dashAuth, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
 	observabilityHandler.RegisterRoutes(
 		dashAuth,
