@@ -35,7 +35,6 @@ import (
 	annotationDomain "brokle/internal/core/domain/annotation"
 	authDomain "brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
-	commentDomain "brokle/internal/core/domain/comment"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
@@ -45,7 +44,6 @@ import (
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	billingHandler "brokle/internal/transport/http/handlers/billing"
-	commentHandler "brokle/internal/transport/http/handlers/comment"
 	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
@@ -65,7 +63,6 @@ import (
 // signal we want if a handler dereferences a service at registration
 // time.
 
-type dummyComment struct{ commentDomain.Service }
 type dummyOrg struct{ orgDomain.OrganizationService }
 type dummyProject struct{ orgDomain.ProjectService }
 type dummyMember struct{ orgDomain.MemberService }
@@ -112,7 +109,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	logger := slog.Default()
 
 	// websiteHandler is chi-native (off Huma).
-	commentHandler.RegisterRoutes(api, dummyComment{}, logger)
 	// overviewHandler is chi-native (off Huma).
 	// apikeyHandler, userHandler are chi-native (off Huma).
 	// credentialsHandler is chi-native (off Huma); it no longer

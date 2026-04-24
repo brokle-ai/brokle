@@ -1,20 +1,21 @@
-// Package comment exposes /api/v1/traces/{id}/comments Huma
-// operations — trace-attached discussion threads with reactions.
-// Dashboard plane (apiAdmin); every op requires RequireAuth and
-// takes a project_id query param for tenant scoping.
+// Package comment exposes /api/v1/traces/{id}/comments chi routes —
+// trace-attached discussion threads with reactions. Dashboard plane;
+// every op requires RequireAuth and a project_id query param for
+// tenant scoping.
 package comment
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	commentDomain "brokle/internal/core/domain/comment"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 type handler struct {
@@ -22,219 +23,213 @@ type handler struct {
 	logger *slog.Logger
 }
 
-// RegisterRoutes registers every comment operation on apiAdmin.
-func RegisterRoutes(api huma.API, svc commentDomain.Service, logger *slog.Logger) {
+// RegisterRoutes mounts the comment routes on r. Expected mount
+// context: the authed dashboard chi group (RequireAuth + LimitByUser).
+func RegisterRoutes(r chi.Router, svc commentDomain.Service, logger *slog.Logger) {
 	h := &handler{svc: svc, logger: logger}
 
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-comment",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/traces/{id}/comments",
-		Tags:          []string{"comments"},
-		Summary:       "Create a top-level comment on a trace",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.create)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-comments",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/{id}/comments",
-		Tags:        []string{"comments"},
-		Summary:     "List all comments on a trace",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.list)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-comment-count",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/traces/{id}/comments/count",
-		Tags:        []string{"comments"},
-		Summary:     "Get the comment count for a trace",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.count)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-comment",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/traces/{id}/comments/{comment_id}",
-		Tags:        []string{"comments"},
-		Summary:     "Update a comment (owner only)",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.update)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-comment",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/traces/{id}/comments/{comment_id}",
-		Tags:          []string{"comments"},
-		Summary:       "Delete a comment (owner only)",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.delete)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "toggle-reaction",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/traces/{id}/comments/{comment_id}/reactions",
-		Tags:        []string{"comments"},
-		Summary:     "Toggle an emoji reaction on a comment",
-		Description: "Adds the reaction when the user has not yet reacted with this emoji; removes it when they have. Returns the full summary so clients can re-render counts.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.toggleReaction)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-reply",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/traces/{id}/comments/{comment_id}/replies",
-		Tags:          []string{"comments"},
-		Summary:       "Reply to a top-level comment",
-		Description:   "Threads are one level deep — replies cannot have replies. The service enforces this and returns 400 if the parent is itself a reply.",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createReply)
+	r.Route("/api/v1/traces/{id}/comments", func(r chi.Router) {
+		r.Post("/", h.create)
+		r.Get("/", h.list)
+		r.Get("/count", h.count)
+		r.Put("/{comment_id}", h.update)
+		r.Delete("/{comment_id}", h.delete)
+		r.Post("/{comment_id}/reactions", h.toggleReaction)
+		r.Post("/{comment_id}/replies", h.createReply)
+	})
 }
 
-// Operation Input/Output types and shared scope helpers live in types.go.
-
-func parseScope(traceID, projectIDStr string) (projectID uuid.UUID, err error) {
+// parseScope validates the trace-ID path segment + the project_id
+// query param (tenant scoping). Returns a typed AppError on failure.
+func parseScope(r *http.Request) (traceID string, projectID uuid.UUID, err error) {
+	traceID = chi.URLParam(r, "id")
 	if traceID == "" {
-		return uuid.Nil, appErrors.NewValidationError("Missing trace ID", "id is required")
+		return "", uuid.Nil, appErrors.NewValidationError(
+			"Missing trace ID", "id is required",
+			appErrors.WithParam("id"),
+		)
 	}
-	projectID, err = uuid.Parse(projectIDStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid project ID", "project_id must be a valid UUID")
+	pidStr := r.URL.Query().Get("project_id")
+	projectID, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return "", uuid.Nil, appErrors.NewValidationError(
+			"Invalid project ID",
+			"project_id must be a valid UUID",
+			appErrors.WithParam("project_id"),
+		)
 	}
-	return projectID, nil
+	return traceID, projectID, nil
 }
 
-// ----- create-comment -----------------------------------------------
+// ----- create-comment --------------------------------------------------
 
-func (h *handler) create(ctx context.Context, in *CreateCommentInput) (*CreateCommentOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	c, err := h.svc.CreateComment(ctx, projectID, in.TraceID, userID, &in.Body)
-	if err != nil {
-		h.logger.WarnContext(ctx, "comment: create failed", "user_id", userID, "project_id", projectID, "trace_id", in.TraceID, "error", err)
-		return nil, err
+	var body commentBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateCommentOutput{Body: c}, nil
+
+	c, err := h.svc.CreateComment(r.Context(), projectID, traceID, userID,
+		&commentDomain.CreateCommentRequest{Content: body.Content})
+	if err != nil {
+		h.logger.WarnContext(r.Context(), "comment: create failed",
+			"user_id", userID, "project_id", projectID, "trace_id", traceID, "error", err)
+		response.WriteError(w, err)
+		return
+	}
+	response.Created(w, c)
 }
 
-// ----- list-comments ------------------------------------------------
+// ----- list-comments ---------------------------------------------------
 
-func (h *handler) list(ctx context.Context, in *ListCommentsInput) (*ListCommentsOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) list(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	// Current user — optional, used to decorate reactions with
-	// the hasUser flag. RequireAuth guarantees a user is present,
-	// so MustGetUserID is safe here; passing a pointer keeps the
-	// service layer signature stable with the OptionalAuth-era
-	// gin handler.
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	res, err := h.svc.ListComments(ctx, projectID, in.TraceID, &userID)
+	res, err := h.svc.ListComments(r.Context(), projectID, traceID, &userID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ListCommentsOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-// ----- get-comment-count --------------------------------------------
+// ----- get-comment-count -----------------------------------------------
 
-func (h *handler) count(ctx context.Context, in *GetCommentCountInput) (*GetCommentCountOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) count(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	res, err := h.svc.GetCommentCount(ctx, projectID, in.TraceID)
+	res, err := h.svc.GetCommentCount(r.Context(), projectID, traceID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetCommentCountOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-// ----- update-comment -----------------------------------------------
+// ----- update-comment --------------------------------------------------
 
-func (h *handler) update(ctx context.Context, in *UpdateCommentInput) (*UpdateCommentOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	commentID, err := uuid.Parse(in.CommentID)
+	commentID, err := request.URLParamUUID(r, "comment_id")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid comment ID", "comment_id must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	c, err := h.svc.UpdateComment(ctx, projectID, in.TraceID, commentID, userID, &in.Body)
-	if err != nil {
-		return nil, err
+	var body commentBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateCommentOutput{Body: c}, nil
+
+	c, err := h.svc.UpdateComment(r.Context(), projectID, traceID, commentID, userID,
+		&commentDomain.UpdateCommentRequest{Content: body.Content})
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, c)
 }
 
-// ----- delete-comment -----------------------------------------------
+// ----- delete-comment --------------------------------------------------
 
-func (h *handler) delete(ctx context.Context, in *DeleteCommentInput) (*DeleteCommentOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	commentID, err := uuid.Parse(in.CommentID)
+	commentID, err := request.URLParamUUID(r, "comment_id")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid comment ID", "comment_id must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	if err := h.svc.DeleteComment(ctx, projectID, in.TraceID, commentID, userID); err != nil {
-		return nil, err
+	if err := h.svc.DeleteComment(r.Context(), projectID, traceID, commentID, userID); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &DeleteCommentOutput{}, nil
+	response.NoContent(w)
 }
 
-// ----- toggle-reaction ---------------------------------------------
+// ----- toggle-reaction -------------------------------------------------
 
-func (h *handler) toggleReaction(ctx context.Context, in *ToggleReactionInput) (*ToggleReactionOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) toggleReaction(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	commentID, err := uuid.Parse(in.CommentID)
+	commentID, err := request.URLParamUUID(r, "comment_id")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid comment ID", "comment_id must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	reactions, err := h.svc.ToggleReaction(ctx, projectID, in.TraceID, commentID, userID, &in.Body)
-	if err != nil {
-		return nil, err
+	var body toggleReactionBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &ToggleReactionOutput{Body: reactions}, nil
+
+	reactions, err := h.svc.ToggleReaction(r.Context(), projectID, traceID, commentID, userID,
+		&commentDomain.ToggleReactionRequest{Emoji: body.Emoji})
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, reactions)
 }
 
-// ----- create-reply ------------------------------------------------
+// ----- create-reply ----------------------------------------------------
 
-func (h *handler) createReply(ctx context.Context, in *CreateReplyInput) (*CreateReplyOutput, error) {
-	projectID, err := parseScope(in.TraceID, in.ProjectID)
+func (h *handler) createReply(w http.ResponseWriter, r *http.Request) {
+	traceID, projectID, err := parseScope(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	parentID, err := uuid.Parse(in.CommentID)
+	parentID, err := request.URLParamUUID(r, "comment_id")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid comment ID", "comment_id must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	reply, err := h.svc.CreateReply(ctx, projectID, in.TraceID, parentID, userID, &in.Body)
-	if err != nil {
-		return nil, err
+	var body commentBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateReplyOutput{Body: reply}, nil
+
+	reply, err := h.svc.CreateReply(r.Context(), projectID, traceID, parentID, userID,
+		&commentDomain.CreateCommentRequest{Content: body.Content})
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Created(w, reply)
 }
