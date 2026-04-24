@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // Reactive refresh contract: when access_token is rejected (401) but
 // refresh_token is still valid, the HTTP client's 401 interceptor fires
-// /v1/auth/refresh once and retries the original request. This spec
+// /api/v1/auth/refresh once and retries the original request. This spec
 // forces the condition by deleting the access_token cookie from the
 // authenticated browser context, then making an API call.
 //
@@ -24,10 +24,10 @@ test.describe('reactive refresh', () => {
     // original request ultimately succeeds.
     const refreshHits: string[] = []
     page.on('request', (req) => {
-      if (req.url().includes('/v1/auth/refresh')) refreshHits.push(req.url())
+      if (req.url().includes('/api/v1/auth/refresh')) refreshHits.push(req.url())
     })
 
-    const meResp = await page.request.get('/v1/users/me')
+    const meResp = await page.request.get('/api/v1/users/me')
     // API might return 401 directly via page.request (which doesn't go
     // through the browser interceptor). So instead, navigate to a page
     // that triggers the client's authed fetch and watch for recovery.

@@ -15,7 +15,7 @@ export const currentUserQueryOptions = () =>
   queryOptions({
     queryKey: authKeys.currentUser(),
     queryFn: async () => {
-      const resp = await rawFetch('/v1/users/me', { method: 'GET' })
+      const resp = await rawFetch('/api/v1/users/me', { method: 'GET' })
       return (await resp.json()) as SessionUser
     },
     staleTime: 5 * 60 * 1000,

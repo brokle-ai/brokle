@@ -19,7 +19,7 @@ test.describe('signup', () => {
     const [signupResp] = await Promise.all([
       page.waitForResponse(
         (resp) =>
-          resp.url().includes('/v1/auth/signup') && resp.request().method() === 'POST',
+          resp.url().includes('/api/v1/auth/signup') && resp.request().method() === 'POST',
         { timeout: 15_000 },
       ),
       page.click('button[type="submit"]'),

@@ -9,7 +9,7 @@ test.describe('forgot password', () => {
     const [resp] = await Promise.all([
       page.waitForResponse(
         (r) =>
-          r.url().includes('/v1/auth/forgot-password') && r.request().method() === 'POST',
+          r.url().includes('/api/v1/auth/forgot-password') && r.request().method() === 'POST',
         { timeout: 15_000 },
       ),
       page.click('button[type="submit"]'),

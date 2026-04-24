@@ -23,7 +23,7 @@ async function ensureAccount(
   password: string,
 ): Promise<void> {
   // Try login first (idempotent path for repeated CI runs).
-  const loginResp = await request.post('/v1/auth/login', {
+  const loginResp = await request.post('/api/v1/auth/login', {
     data: { email, password },
   })
   if (loginResp.ok()) return
@@ -36,7 +36,7 @@ async function ensureAccount(
     )
   }
 
-  const signupResp = await request.post('/v1/auth/signup', {
+  const signupResp = await request.post('/api/v1/auth/signup', {
     data: {
       email,
       password,
@@ -63,7 +63,7 @@ async function captureStorageState(
   // Fresh login confirms cookies land on the right origin; visit `/` once
   // so the CSRF cookie is written + the browser context adopts the
   // response Set-Cookie headers before we persist.
-  const loginResp = await request.post('/v1/auth/login', {
+  const loginResp = await request.post('/api/v1/auth/login', {
     data: { email, password },
   })
   expect(loginResp.ok(), `login for ${email} must succeed`).toBeTruthy()

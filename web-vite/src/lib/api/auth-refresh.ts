@@ -30,7 +30,7 @@ export async function refreshWithLock(): Promise<void> {
 
 async function doRefresh(): Promise<void> {
   const cfg = getRuntimeConfig()
-  const url = `${cfg.API_URL}/v1/auth/refresh`
+  const url = `${cfg.API_URL}/api/v1/auth/refresh`
 
   // Fallback for environments without navigator.locks (tests, older
   // browsers). The in-tab promise singleton still guards against

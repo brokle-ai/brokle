@@ -14,7 +14,7 @@ test.describe('logout', () => {
     // Invoke logout via the API to avoid coupling to the current nav menu
     // structure (menu changes have broken many E2E suites). Cookies are
     // cleared by the backend's Set-Cookie; the browser context picks it up.
-    const logoutResp = await page.request.post('/v1/auth/logout')
+    const logoutResp = await page.request.post('/api/v1/auth/logout')
     expect(logoutResp.ok(), `logout status ${logoutResp.status()}`).toBe(true)
 
     // Navigating anywhere now should bounce through the proxy to /signin.

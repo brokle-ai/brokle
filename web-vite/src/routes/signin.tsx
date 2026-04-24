@@ -28,7 +28,7 @@ function SignInPage() {
     setError(null)
     setPending(true)
     try {
-      const resp = await rawFetch('/v1/auth/login', {
+      const resp = await rawFetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

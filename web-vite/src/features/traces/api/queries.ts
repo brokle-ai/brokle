@@ -36,7 +36,7 @@ export const traceListQueryOptions = (
         // the user-facing alias `q` in the URL for familiarity.
         search.set('search', params.q)
       }
-      const resp = await rawFetch(`/v1/traces?${search.toString()}`, {
+      const resp = await rawFetch(`/api/v1/traces?${search.toString()}`, {
         method: 'GET',
       })
       return (await resp.json()) as TraceListResponse

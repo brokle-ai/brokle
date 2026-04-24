@@ -23,7 +23,10 @@ export const projectListQueryOptions = (orgId: string) =>
   queryOptions({
     queryKey: projectKeys.listForOrg(orgId),
     queryFn: async () => {
-      const resp = await rawFetch(`/v1/organizations/${orgId}/projects`, {
+      // Dashboard-plane list endpoint is flat `/api/v1/projects` with an
+      // `organization_id` filter — NOT `/organizations/:id/projects`.
+      const params = new URLSearchParams({ organization_id: orgId, limit: '100' })
+      const resp = await rawFetch(`/api/v1/projects?${params.toString()}`, {
         method: 'GET',
       })
       return (await resp.json()) as ListResponse<Project>
@@ -35,7 +38,7 @@ export const projectMembershipQueryOptions = (projectId: string) =>
   queryOptions({
     queryKey: projectKeys.detail(projectId),
     queryFn: async () => {
-      const resp = await rawFetch(`/v1/projects/${projectId}`, { method: 'GET' })
+      const resp = await rawFetch(`/api/v1/projects/${projectId}`, { method: 'GET' })
       return (await resp.json()) as Project
     },
     staleTime: 5 * 60 * 1000,

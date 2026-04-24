@@ -19,7 +19,7 @@ function authCookies(): Array<[string, string]> {
 }
 
 export const authHandlers = [
-  http.post('*/v1/auth/login', async ({ request }) => {
+  http.post('*/api/v1/auth/login', async ({ request }) => {
     const body = (await request.json()) as { email?: string; password?: string }
     if (!body.email || !body.password) {
       return HttpResponse.json(
@@ -37,7 +37,7 @@ export const authHandlers = [
     )
   }),
 
-  http.post('*/v1/auth/signup', async ({ request }) => {
+  http.post('*/api/v1/auth/signup', async ({ request }) => {
     const body = (await request.json()) as { email?: string; password?: string }
     if (!body.email || !body.password) {
       return HttpResponse.json(
@@ -55,7 +55,7 @@ export const authHandlers = [
     )
   }),
 
-  http.post('*/v1/auth/logout', () => {
+  http.post('*/api/v1/auth/logout', () => {
     return new HttpResponse(null, {
       status: 204,
       headers: [
@@ -66,14 +66,14 @@ export const authHandlers = [
     })
   }),
 
-  http.post('*/v1/auth/refresh', () =>
+  http.post('*/api/v1/auth/refresh', () =>
     HttpResponse.json(
       { expires_at: Date.now() + 15 * 60 * 1000, expires_in: 15 * 60 * 1000 },
       { status: 200, headers: authCookies() },
     ),
   ),
 
-  http.post('*/v1/auth/forgot-password', () => new HttpResponse(null, { status: 204 })),
+  http.post('*/api/v1/auth/forgot-password', () => new HttpResponse(null, { status: 204 })),
 
-  http.get('*/v1/users/me', () => HttpResponse.json(MOCK_USER)),
+  http.get('*/api/v1/users/me', () => HttpResponse.json(MOCK_USER)),
 ]

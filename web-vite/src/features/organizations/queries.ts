@@ -35,7 +35,7 @@ export const organizationListQueryOptions = () =>
   queryOptions({
     queryKey: organizationKeys.list(),
     queryFn: async () => {
-      const resp = await rawFetch('/v1/organizations', { method: 'GET' })
+      const resp = await rawFetch('/api/v1/organizations', { method: 'GET' })
       return (await resp.json()) as ListResponse<Organization>
     },
     staleTime: 5 * 60 * 1000,
@@ -45,7 +45,7 @@ export const organizationMembershipQueryOptions = (orgId: string) =>
   queryOptions({
     queryKey: organizationKeys.detail(orgId),
     queryFn: async () => {
-      const resp = await rawFetch(`/v1/organizations/${orgId}`, { method: 'GET' })
+      const resp = await rawFetch(`/api/v1/organizations/${orgId}`, { method: 'GET' })
       return (await resp.json()) as Organization
     },
     staleTime: 5 * 60 * 1000,

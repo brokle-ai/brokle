@@ -48,7 +48,7 @@ function ProjectCrumb({ projectId }: { projectId: string }) {
 
 async function onSignOut() {
   try {
-    await rawFetch('/v1/auth/logout', { method: 'POST' })
+    await rawFetch('/api/v1/auth/logout', { method: 'POST' })
   } finally {
     useAuthStore.getState().expireSession()
     window.location.href = '/signin'
