@@ -7,6 +7,18 @@ import type {
   ScoreSource,
 } from './types'
 
+// Deletes a single score by trace + score id. Mirrors the backend
+// DELETE /api/v1/traces/{id}/scores/{scoreId} (observability handler,
+// delete-trace-score). Returns nothing on success (204).
+export async function deleteTraceScore(
+  traceId: string,
+  scoreId: string,
+): Promise<void> {
+  await rawFetch(`/api/v1/traces/${traceId}/scores/${scoreId}`, {
+    method: 'DELETE',
+  })
+}
+
 export const scoresKeys = {
   all: ['scores'] as const,
   lists: () => [...scoresKeys.all, 'list'] as const,

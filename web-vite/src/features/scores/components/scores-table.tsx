@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -7,7 +9,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import type { ScoreDataType, ScoreListItem, ScoreSource } from '../api/types'
+import { DeleteScoreDialog } from './delete-score-dialog'
 
 interface ScoresTableProps {
   rows: ScoreListItem[]
@@ -36,7 +40,6 @@ function formatValue(row: ScoreListItem): string {
     return row.value >= 0.5 ? 'true' : 'false'
   }
   if (row.value === undefined || row.value === null) return '—'
-  // Numeric: 4 fractional digits max, but collapse trailing zeros.
   return Number.isInteger(row.value)
     ? row.value.toLocaleString()
     : row.value.toLocaleString(undefined, { maximumFractionDigits: 4 })
@@ -54,8 +57,6 @@ function TypeBadge({ type }: { type: ScoreDataType }) {
 }
 
 function SourceBadge({ source }: { source: ScoreSource }) {
-  // Variants picked for rough provenance intuition — automated (code) vs
-  // learned (llm) vs reviewed (human). No semantic weight beyond that.
   switch (source) {
     case 'code':
       return <Badge variant="secondary">Code</Badge>
@@ -67,6 +68,8 @@ function SourceBadge({ source }: { source: ScoreSource }) {
 }
 
 export function ScoresTable({ rows }: ScoresTableProps) {
+  const [deleteTarget, setDeleteTarget] = useState<ScoreListItem | null>(null)
+
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -80,39 +83,66 @@ export function ScoresTable({ rows }: ScoresTableProps) {
   }
 
   return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Value</TableHead>
-            <TableHead>Trace</TableHead>
-            <TableHead>Timestamp</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell className="font-medium">{row.name}</TableCell>
-              <TableCell>
-                <TypeBadge type={row.type} />
-              </TableCell>
-              <TableCell>
-                <SourceBadge source={row.source} />
-              </TableCell>
-              <TableCell>{formatValue(row)}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {row.trace_id ? `${row.trace_id.slice(0, 12)}…` : '—'}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimestamp(row.timestamp)}
-              </TableCell>
+    <>
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Value</TableHead>
+              <TableHead>Trace</TableHead>
+              <TableHead>Timestamp</TableHead>
+              <TableHead className="w-10" />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell>
+                  <TypeBadge type={row.type} />
+                </TableCell>
+                <TableCell>
+                  <SourceBadge source={row.source} />
+                </TableCell>
+                <TableCell>{formatValue(row)}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {row.trace_id ? `${row.trace_id.slice(0, 12)}…` : '—'}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimestamp(row.timestamp)}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    disabled={!row.trace_id}
+                    onClick={() => setDeleteTarget(row)}
+                    aria-label="Delete score"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {deleteTarget && (
+        <DeleteScoreDialog
+          scoreId={deleteTarget.id}
+          traceId={deleteTarget.trace_id}
+          scoreName={deleteTarget.name}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null)
+          }}
+        />
+      )}
+    </>
   )
 }
