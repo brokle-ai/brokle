@@ -8,29 +8,21 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
-
-	"brokle/internal/version"
-	"brokle/pkg/response"
 )
 
-// Server bundles the chi router, the two Huma API instances, the
-// outer probe dispatcher, the http.Server, and the readyState used
-// by the two-phase drain. Use New to construct one and Start /
-// Shutdown / ServeErr to drive it.
+// Server bundles the chi router, the outer probe dispatcher, the
+// http.Server, and the readyState used by the two-phase drain. Use
+// New to construct one and Start / Shutdown / ServeErr to drive it.
 //
 // The struct is the package's only exported handle; the addRoutes /
-// newAPI* / readyState / probe-dispatch plumbing is intentionally
-// package-private so callers can't accidentally re-wire half the
-// stack.
+// readyState / probe-dispatch plumbing is intentionally package-
+// private so callers can't accidentally re-wire half the stack.
 //
 // Handler architecture (outer → inner):
 //
 //   handler (http.ServeMux: /livez, /readyz, /healthz, /metrics, /*)
 //     └── catch-all /* → mux (chi.Mux: global middleware stack)
-//                         ├── Huma apiPublic meta + domain routes
-//                         ├── Huma apiAdmin meta + domain routes
 //                         └── per-group sub-stacks (auth, CORS, CSRF, …)
 //
 // The outer dispatcher is what http.Server.Handler points at; chi
@@ -39,7 +31,6 @@ type Server struct {
 	deps    Deps
 	mux     *chi.Mux
 	handler http.Handler
-	api     apiPair // {public, admin}
 	http    *http.Server
 	listen  net.Listener
 	ready   *readyState
@@ -63,32 +54,18 @@ func New(deps Deps) (*Server, error) {
 		return nil, errors.New("server: Deps.Config is required")
 	}
 
-	// Install the APIResponse error envelope override before any
-	// huma.API is constructed — newAPIPublic/newAPIAdmin and every
-	// subsequent huma.Register pick up the new huma.NewError factory.
-	// Idempotent; safe if tests or other bootstrappers have installed
-	// it earlier.
-	response.InstallHumaErrorFactory()
-
 	mux := chi.NewRouter()
 
 	// Global middleware MUST be installed before any route is
 	// registered on mux — chi.Mux.Use panics once the mux has any
-	// route (go-chi/chi/v5/mux.go:100-104). The Huma API
-	// construction below registers /openapi, /docs, /schemas routes
-	// immediately, so middleware must be in place first.
+	// route (go-chi/chi/v5/mux.go:100-104).
 	installGlobalMiddleware(mux, deps)
-
-	// Huma APIs — humachi.New registers meta routes on mux; they
-	// inherit the middleware stack installed above.
-	apiPublic := newAPIPublic(mux, version.Get())
-	apiAdmin := newAPIAdmin(mux, version.Get())
 
 	// Domain routes + group-scoped middleware (auth, rate limit,
 	// CORS, CSRF). Sub-routers (r.Route / r.Group) have independent
 	// middleware stacks and can add more layers without violating
 	// chi's mux-level Use invariant.
-	addRoutes(mux, apiPublic, apiAdmin, deps)
+	addRoutes(mux, deps)
 	ready := newReadyState()
 
 	// Outer dispatcher: probe + /metrics paths bypass chi (and its
@@ -102,7 +79,6 @@ func New(deps Deps) (*Server, error) {
 		deps:    deps,
 		mux:     mux,
 		handler: handler,
-		api:     apiPair{Public: apiPublic, Admin: apiAdmin},
 		ready:   ready,
 		errCh:   make(chan error, 1),
 	}
@@ -201,11 +177,3 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // would hit, including the probe-bypass routing.
 func (s *Server) Handler() http.Handler { return s.handler }
 
-// apiPair holds the two huma.API instances side by side. Keeping
-// them in one struct (rather than two separate fields on Server)
-// makes the "two-surface" architecture visible at a glance and lets
-// future code iterate over both with
-// `for _, a := range []huma.API{p.Public, p.Admin}`.
-type apiPair struct {
-	Public, Admin huma.API
-}

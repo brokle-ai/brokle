@@ -88,8 +88,10 @@ func installGlobalMiddleware(mux *chi.Mux, deps Deps) {
 
 	// Dashboard plane (/api/v1/*) — CORS + CSRF only. Rate limiting
 	// is attached per-Huma-group in addRoutes.
-	mux.Use(pathPrefix(adminAPIPrefix, corsAdmin.Wrap))
-	mux.Use(pathPrefix(adminAPIPrefix, csrf.Handler))
+	// Dashboard plane (/api/v1/*) — CORS + CSRF only. Rate limiting
+	// is attached per-chi-group in addRoutes.
+	mux.Use(pathPrefix("/api/v1", corsAdmin.Wrap))
+	mux.Use(pathPrefix("/api/v1", csrf.Handler))
 }
 
 // echoRequestID copies the request ID out of the chi context (set by

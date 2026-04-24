@@ -1,7 +1,6 @@
 package server
 
 import (
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
@@ -22,118 +21,82 @@ import (
 	userHandler "brokle/internal/transport/http/handlers/user"
 	websiteHandler "brokle/internal/transport/http/handlers/website"
 	"brokle/internal/transport/http/middleware"
-	"brokle/internal/transport/http/middleware/humawrap"
 )
 
 // addRoutes wires the full HTTP surface area onto a chi router. Run
-// once at server start; never per-request. The function is a single
+// once at server start; never per-request. The function is the single
 // authoritative dependency map for the service — when a route 404s,
 // this is the file to grep.
 //
 // Architecture:
 //
-//   - Cross-cutting middleware (CORS, CSRF) is applied at the chi mux
-//     level by installGlobalMiddleware, scoped to /api/v1 via
-//     pathPrefix. It runs for every dashboard-plane request, including
-//     OPTIONS preflight and OpenAPI docs paths, before chi even routes
-//     the request.
+//   - Cross-cutting middleware (CORS, CSRF, request ID, logger,
+//     recoverer, metrics) is installed at the chi mux level by
+//     installGlobalMiddleware. CORS + CSRF are path-scoped to
+//     /api/v1 so the SDK plane at /v1 doesn't pay the cookie-domain
+//     tax.
 //
-//   - Auth + rate limiting are applied at the Huma layer via
-//     huma.NewGroup(api).UseMiddleware, with the existing
-//     func(http.Handler) http.Handler middleware adapted via
-//     humawrap.Wrap. This is the load-bearing fix for the original
-//     bug where chi r.Group middleware never reached Huma operations
-//     (humachi binds its adapter to the captured router reference at
-//     construction time; routes registered via huma.Register land on
-//     the mux, not on any subrouter built later via r.Route / r.Group).
+//   - Auth + rate-limit are applied at the chi-group level. Sub-
+//     routers (r.Group, r.Route) have their own middleware stacks;
+//     they don't violate chi's mux-level Use invariant (all top-
+//     level middleware lives in installGlobalMiddleware).
 //
-//   - Rate-limit scoping follows the industry split (GitHub, Stripe,
-//     OpenAI, Anthropic, Cloudflare): IP buckets for pre-auth routes
-//     only, principal buckets (user ID / API key ID) for authed
-//     routes. NEVER layer IP on top of principal — shared-egress
+//   - Rate-limit scoping follows the GitHub/Stripe/OpenAI pattern
+//     (CLAUDE.md gotcha #37a): IP buckets for pre-auth surfaces only,
+//     principal buckets (user ID, API-key ID) for authed surfaces.
+//     NEVER layer IP on top of a principal counter — shared-egress
 //     clients (NAT, CGNAT, BFF/SSR pods, serverless) collapse all
 //     users into one IP bucket and cross-throttle. Concretely:
 //
-//       * dashPublic → LimitByIP (login, signup, OAuth, refresh,
-//         contact form — the pre-auth dashboard surface).
-//       * dashAuth   → LimitByUser only (principal = user ID).
-//       * sdkPublic  → LimitByIP + LimitByKeyPrefix (validate-key;
-//         dual defense: IP for distributed floods, key-prefix for
-//         credential brute force).
-//       * sdkAuth    → LimitByAPIKey only (principal = API key ID).
-//       * OTLP raw   → LimitByAPIKey only (same principal as sdkAuth).
-//
-//   - Raw chi routes (OTLP protobuf ingestion) keep their native chi
-//     middleware chain because Huma cannot model protobuf streams.
-//     They register on a chi r.Group with RequireSDKAuth + LimitByAPIKey
-//     and are unaffected by the Huma binding issue.
+//     * sdkPublic  — LimitByIP + LimitByKeyPrefix  (validate-key;
+//                    IP for flood defence, key-prefix for brute force)
+//     * sdkAuth    — LimitByAPIKey only            (authed SDK)
+//     * dashPublic — LimitByIP only                (login, signup, OAuth, etc.)
+//     * dashAuth   — LimitByUser only              (authed dashboard)
 //
 // Plane layout:
 //
-//	/v1 (apiPublic, SDK plane, X-API-Key auth)
-//	  ├── sdkPublic     huma.Group  → LimitByIP + LimitByKeyPrefix
+//	/v1 (SDK plane, X-API-Key auth)
+//	  ├── sdkPublic  chi.Group  → LimitByIP + LimitByKeyPrefix
 //	  │     └── auth.RegisterSDKRoutes (validate-key)
-//	  ├── sdkAuth       huma.Group  → RequireSDKAuth + LimitByAPIKey
-//	  │     ├── annotation, prompt, playground SDK
-//	  │     ├── observability SDK
-//	  │     └── evaluation SDK
-//	  └── chi r.Group → RequireSDKAuth + LimitByAPIKey
-//	        └── observability OTLP (raw protobuf)
+//	  └── sdkAuth    chi.Group  → RequireSDKAuth + LimitByAPIKey
+//	        ├── observability OTLP (raw protobuf)
+//	        ├── annotation, prompt, playground SDK
+//	        ├── observability SDK (span query)
+//	        └── evaluation SDK
 //
-//	/api/v1 (apiAdmin, dashboard plane, cookie+JWT auth)
-//	  ├── dashPublic    huma.Group  → LimitByIP
+//	/api/v1 (dashboard plane, cookie+JWT auth)
+//	  ├── dashPublic chi.Group  → LimitByIP
 //	  │     ├── auth.RegisterPublicRoutes (login, signup, OAuth, refresh)
 //	  │     └── website.RegisterRoutes (contact form)
-//	  └── dashAuth      huma.Group  → RequireAuth + LimitByUser
+//	  └── dashAuth   chi.Group  → RequireAuth + LimitByUser
 //	        └── auth (protected), user, apikey, comment, overview,
 //	            credentials, project, dashboard, annotation, billing,
 //	            organization, prompt, rbac, playground,
 //	            observability, evaluation
 //
 // NEVER call r.Use(...) on the top-level chi.Mux here — that belongs
-// in installGlobalMiddleware. NEVER attach auth or rate-limit
-// middleware via r.Route / r.Group expecting it to apply to Huma
-// routes — it won't. Use huma.NewGroup + humawrap.Wrap.
-func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
+// in installGlobalMiddleware; chi panics if mux-level middleware is
+// registered after any route has been mounted.
+func addRoutes(r chi.Router, d Deps) {
 	rateLimitD := d.rateLimitMiddlewareDeps()
 	sdkAuthD := d.sdkAuthMiddlewareDeps()
 
 	// -------------------- /v1 SDK plane --------------------
 
-	// validate-key — public, unauthenticated. Dual rate-limit defense:
-	// LimitByIP catches distributed IP floods, LimitByKeyPrefix catches
-	// credential brute-force where the attacker rotates source IPs.
-	sdkPublic := huma.NewGroup(apiPublic)
-	sdkPublic.UseMiddleware(humawrap.WrapMany(
-		middleware.LimitByIP(rateLimitD),
-		middleware.LimitByKeyPrefix(rateLimitD),
-	)...)
-	// SDK validate-key — pre-auth, chi-native.
+	// validate-key — pre-auth, dual rate-limit defence.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.LimitByIP(rateLimitD))
 		r.Use(middleware.LimitByKeyPrefix(rateLimitD))
 		authHandler.RegisterSDKRoutes(r, d.APIKey, d.Logger)
 	})
 
-	// All other SDK Huma routes — RequireSDKAuth + LimitByAPIKey.
-	sdkAuth := huma.NewGroup(apiPublic)
-	sdkAuth.UseMiddleware(humawrap.WrapMany(
-		middleware.RequireSDKAuth(sdkAuthD),
-		middleware.LimitByAPIKey(rateLimitD),
-	)...)
-	// annotation SDK — migrated to chi; mounted on the chi bridge below.
-	// prompt SDK — migrated to chi; mounted on the chi bridge below.
-	// playground SDK — migrated to chi; mounted on the chi bridge below.
-	// observability SDK — migrated to chi; mounted on the chi bridge below.
-	// evaluation SDK — migrated to chi; mounted on the chi bridge below.
-
-	// OTLP ingestion — HUMA-EXEMPT raw chi routes. Register on a chi
-	// r.Group with the same auth + rate-limit chain; this works
-	// natively because the routes register on the chi subrouter, not
-	// via humachi.
+	// Authed SDK surface.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireSDKAuth(sdkAuthD))
 		r.Use(middleware.LimitByAPIKey(rateLimitD))
+
+		// OTLP protobuf ingestion.
 		observabilityHandler.RegisterOTLPChiRoutes(r, observabilityHandler.OTLPDeps{
 			StreamProducer:       d.Observability.StreamProducer,
 			DeduplicationService: d.Observability.DeduplicationService,
@@ -143,6 +106,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 			MetricsConverter:     d.Observability.OTLPMetricsConverterService,
 			Logger:               d.Logger,
 		})
+
 		playgroundHandler.RegisterSDKRoutes(r, d.Playground, d.Logger)
 		promptHandler.RegisterSDKRoutes(r, d.Prompt, d.Logger)
 		annotationHandler.RegisterSDKRoutes(r, d.AnnotationItem, d.Logger)
@@ -157,22 +121,9 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	})
 
 	// -------------------- /api/v1 dashboard plane --------------------
-	// Mux-level middleware (CORS, CSRF) is already in place via
-	// installGlobalMiddleware. Rate limiting lives on the Huma groups:
-	// LimitByIP on the pre-auth surface, LimitByUser on the authed
-	// surface. See the block comment above for the rationale.
 
-	// Public dashboard routes — login, signup, password reset, OAuth,
-	// token refresh, website contact form. No auth required.
-	// LimitByIP defends the pre-auth surface against brute-force
-	// credential stuffing and unauthenticated flood.
-	// auth public — migrated to chi; mounted on the chi dashPublic bridge below.
-
-	// Chi-native sibling of dashPublic. Hosts pre-auth handlers that
-	// have moved off Huma. Shares LimitByIP (the IP-scoped pre-auth
-	// rate-limit bucket); principal-scoped limits are only applied on
-	// the authed surface, never layered on IP (industry pattern —
-	// GitHub/Stripe/OpenAI — and CLAUDE.md gotcha #37a).
+	// Pre-auth dashboard routes — login, signup, password reset, OAuth,
+	// token refresh, website contact form.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.LimitByIP(rateLimitD))
 		authHandler.RegisterPublicRoutes(r, authHandler.PublicDeps{
@@ -187,37 +138,35 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		websiteHandler.RegisterRoutes(r, d.Website, d.Logger)
 	})
 
-	// Authed dashboard routes — RequireAuth + LimitByUser.
-	dashAuth := huma.NewGroup(apiAdmin)
-	dashAuth.UseMiddleware(humawrap.WrapMany(
-		middleware.RequireAuth(d.authMiddlewareDeps()),
-		middleware.LimitByUser(rateLimitD),
-	)...)
-
-	// Chi-native sibling of dashAuth. Hosts handlers that have moved
-	// off Huma during the chi-only migration. Shares the same
-	// middleware chain (RequireAuth + LimitByUser) and mounts at the
-	// mux root — converted handlers own the full `/api/v1/...` path
-	// inside their own RegisterRoutes. Coexists with the Huma group
-	// until the migration completes; at that point Phase 3 collapses
-	// both groups into a single chi topology and this bridge
-	// disappears.
+	// Authed dashboard routes.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAuth(d.authMiddlewareDeps()))
 		r.Use(middleware.LimitByUser(rateLimitD))
-		credentialsHandler.RegisterRoutes(r, d.Credential, d.CredentialModelCatalog, d.Logger)
-		overviewHandler.RegisterRoutes(r, d.Overview, d.Logger)
-		apikeyHandler.RegisterRoutes(r, d.APIKey, d.Logger)
+
+		authHandler.RegisterProtectedRoutes(r, authHandler.ProtectedDeps{
+			Auth:          d.Auth,
+			User:          d.User,
+			Profile:       d.Profile,
+			Registration:  d.Registration,
+			Session:       d.Session,
+			OAuthProvider: d.OAuthProvider,
+			Config:        d.Config,
+			Logger:        d.Logger,
+		})
+
 		userHandler.RegisterRoutes(r, d.User, d.Profile, d.Organization, d.Logger)
+		apikeyHandler.RegisterRoutes(r, d.APIKey, d.Logger)
 		commentHandler.RegisterRoutes(r, d.Comment, d.Logger)
+		overviewHandler.RegisterRoutes(r, d.Overview, d.Logger)
+		credentialsHandler.RegisterRoutes(r, d.Credential, d.CredentialModelCatalog, d.Logger)
 		projectHandler.RegisterRoutes(r, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
-		playgroundHandler.RegisterRoutes(r, d.Playground, d.Project, d.Logger)
 		dashboardHandler.RegisterRoutes(r, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
-		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
-		promptHandler.RegisterRoutes(r, d.Prompt, d.PromptCompiler, d.Logger)
-		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 		annotationHandler.RegisterRoutes(r, d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger)
+		billingHandler.RegisterRoutes(r, d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger)
 		organizationHandler.RegisterRoutes(r, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
+		promptHandler.RegisterRoutes(r, d.Prompt, d.PromptCompiler, d.Logger)
+		rbacHandler.RegisterRoutes(r, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
+		playgroundHandler.RegisterRoutes(r, d.Playground, d.Project, d.Logger)
 		observabilityHandler.RegisterRoutes(
 			r,
 			d.Observability.TraceService,
@@ -233,20 +182,5 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 			d.EvalEvaluator, d.EvalEvaluatorExecution,
 			d.Logger,
 		)
-		authHandler.RegisterProtectedRoutes(r, authHandler.ProtectedDeps{
-			Auth:          d.Auth,
-			User:          d.User,
-			Profile:       d.Profile,
-			Registration:  d.Registration,
-			Session:       d.Session,
-			OAuthProvider: d.OAuthProvider,
-			Config:        d.Config,
-			Logger:        d.Logger,
-		})
 	})
-	// user, apikey — migrated to chi; mounted on the chi bridge group above.
-	// overview — migrated to chi; mounted on the chi bridge group above.
-	// credentials — migrated to chi; mounted on the chi bridge group above.
-	// observability — migrated to chi; mounted on the chi bridge group above.
-	// evaluation — migrated to chi; mounted on the chi bridge group above.
 }
