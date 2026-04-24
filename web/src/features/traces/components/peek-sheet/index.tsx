@@ -118,7 +118,7 @@ function PeekSheetContent({
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: traceQueryKeys.spans(projectId, trace.trace_id),
+    queryKey: traceQueryKeys.traceSpans(projectId, trace.trace_id),
     queryFn: () => getSpansForTrace(projectId, trace.trace_id),
     enabled: !!projectId && !!trace.trace_id,
     staleTime: 30_000,

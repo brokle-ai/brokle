@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { exchangeLoginSession } from '@/features/authentication'
+import { exchangeLoginSession, type User } from '@/features/authentication'
 import { ROUTES } from '@/lib/routes'
 
 // OAuth callback page for handling token exchange after OAuth login
@@ -34,7 +34,7 @@ function OAuthCallbackContent() {
           const { useAuthStore } = await import('@/features/authentication')
 
           // Map user response to User type
-          const user = {
+          const user: User = {
             id: response.user.id,
             email: response.user.email,
             firstName: response.user.first_name,

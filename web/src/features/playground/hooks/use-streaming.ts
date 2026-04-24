@@ -42,9 +42,10 @@ export const useStreaming = (options?: UseStreamingOptions) => {
           ? request.template.messages.map(m => ({ ...m }))
           : [],
         variables: { ...request.variables },
-        config: fullConfig !== undefined
-          ? (fullConfig ? { ...fullConfig } : null)
-          : (request.config_overrides ? { ...request.config_overrides } : null),
+        // Only capture fullConfig (complete UI state) for history replay.
+        // request.config_overrides is an APIModelConfig (API-formatted tools) and is
+        // not safe to replay into the UI config panel.
+        config: fullConfig ? { ...fullConfig } : null,
       }
       setCapturedInputs(inputSnapshot)
 

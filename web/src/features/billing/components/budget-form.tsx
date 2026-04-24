@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { ChevronDown, Loader2, X } from 'lucide-react'
@@ -85,7 +85,7 @@ export function BudgetForm({
       span_limit: budget?.span_limit ?? null,
       bytes_limit: budget?.bytes_limit ?? null,
       score_limit: budget?.score_limit ?? null,
-      cost_limit: budget?.cost_limit ?? null,
+      cost_limit: budget?.cost_limit != null ? Number(budget.cost_limit) : null,
       alert_thresholds: budget?.alert_thresholds ?? DEFAULT_THRESHOLDS,
     },
   })
@@ -99,7 +99,7 @@ export function BudgetForm({
         span_limit: budget?.span_limit ?? null,
         bytes_limit: budget?.bytes_limit ?? null,
         score_limit: budget?.score_limit ?? null,
-        cost_limit: budget?.cost_limit ?? null,
+        cost_limit: budget?.cost_limit != null ? Number(budget.cost_limit) : null,
         alert_thresholds: budget?.alert_thresholds ?? DEFAULT_THRESHOLDS,
       })
       setCustomThreshold('')
@@ -109,7 +109,7 @@ export function BudgetForm({
     }
   }, [open, budget, form])
 
-  const handleSubmit = async (values: BudgetFormValues) => {
+  const handleSubmit: SubmitHandler<BudgetFormValues> = async (values) => {
     const data: CreateBudgetRequest = {
       name: values.name,
       budget_type: values.budget_type as BudgetType,

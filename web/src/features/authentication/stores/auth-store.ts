@@ -416,9 +416,9 @@ export const useAuthStore = create<AuthState>()(
               members: [],
               apiKeys: [],
               usage: {
-                requests_this_month: 0,
-                cost_this_month: 0,
-                models_used: 0,
+                traces_this_month: 0,
+                observed_cost_this_month: 0,
+                models_observed: 0,
               },
               createdAt: firstOrg.created_at,
               updatedAt: firstOrg.updated_at,

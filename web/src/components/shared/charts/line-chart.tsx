@@ -22,7 +22,7 @@ interface LineChartProps {
   showTooltip?: boolean
   showLegend?: boolean
   formatYAxis?: (value: any) => string
-  formatTooltip?: (value: any, name: string) => [string, string]
+  formatTooltip?: (value: unknown, name: string | undefined) => [string, string]
   onDataPointClick?: (data: DataPoint) => void
 }
 
@@ -60,7 +60,14 @@ export function LineChart({
       <ResponsiveContainer width="100%" height="100%">
         <RechartsLineChart
           data={data}
-          onClick={onDataPointClick}
+          onClick={onDataPointClick
+            ? (state) => {
+                const idx = state?.activeTooltipIndex
+                if (typeof idx === 'number' && data[idx]) {
+                  onDataPointClick(data[idx])
+                }
+              }
+            : undefined}
         >
           {showGrid && (
             <CartesianGrid 

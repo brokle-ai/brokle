@@ -277,9 +277,9 @@ export const spanSchema: z.ZodType<Span> = z.lazy(() =>
     level: z.string().optional(),
 
     // Usage & Cost Maps
-    usage_details: z.record(z.number()).optional(),
-    cost_details: z.record(z.string()).optional(),
-    pricing_snapshot: z.record(z.string()).optional(),
+    usage_details: z.record(z.string(), z.number()).optional(),
+    cost_details: z.record(z.string(), z.string()).optional(),
+    pricing_snapshot: z.record(z.string(), z.string()).optional(),
     total_cost: z.number().optional(),
 
     // Timestamps

@@ -298,7 +298,7 @@ test.describe('Dashboard Templates', () => {
         await expect(page).toHaveURL(/\/dashboards\/[^/]+$/, { timeout: 10000 })
 
         // Should have widgets from template
-        await expect(page.locator('[data-testid="widget-card"]')).toHaveCount({ min: 1 })
+        await expect(page.locator('[data-testid="widget-card"]').first()).toBeVisible()
       }
     }
   })

@@ -31,8 +31,13 @@ interface Integration {
   category: 'webhook' | 'database' | 'messaging' | 'analytics' | 'monitoring'
   status: 'connected' | 'disconnected' | 'error'
   enabled: boolean
-  config: Record<string, string | string[]>
+  config: Record<string, string | string[] | Record<string, string>>
   lastSync?: string
+}
+
+// Narrow a heterogeneous config value to a string for form defaults.
+function configString(value: string | string[] | Record<string, string> | undefined): string | undefined {
+  return typeof value === 'string' ? value : undefined
 }
 
 const AVAILABLE_INTEGRATIONS: Integration[] = [
@@ -234,15 +239,15 @@ export function ProjectIntegrationsSection({
                   <Label className="text-sm font-medium">Configuration</Label>
                   {integration.id === 'slack-webhook' && (
                     <div className="text-sm space-y-1">
-                      <div>Channel: <code className="text-xs bg-muted px-1 rounded">{integration.config.channel}</code></div>
-                      <div>Events: {Array.isArray(integration.config.events) ? integration.config.events.join(', ') : integration.config.events}</div>
+                      <div>Channel: <code className="text-xs bg-muted px-1 rounded">{configString(integration.config.channel)}</code></div>
+                      <div>Events: {Array.isArray(integration.config.events) ? integration.config.events.join(', ') : configString(integration.config.events)}</div>
                     </div>
                   )}
                   {integration.id === 'custom-webhook' && (
                     <div className="text-sm space-y-1">
-                      <div>URL: <code className="text-xs bg-muted px-1 rounded">{integration.config.url}</code></div>
-                      <div>Method: {integration.config.method}</div>
-                      <div>Events: {Array.isArray(integration.config.events) ? integration.config.events.join(', ') : integration.config.events}</div>
+                      <div>URL: <code className="text-xs bg-muted px-1 rounded">{configString(integration.config.url)}</code></div>
+                      <div>Method: {configString(integration.config.method)}</div>
+                      <div>Events: {Array.isArray(integration.config.events) ? integration.config.events.join(', ') : configString(integration.config.events)}</div>
                     </div>
                   )}
                   {integration.id === 'postgres-logs' && (
@@ -302,14 +307,14 @@ export function ProjectIntegrationsSection({
                     <Label>Webhook URL</Label>
                     <Input
                       placeholder="https://hooks.slack.com/services/..."
-                      defaultValue={editingIntegration.config.webhook_url}
+                      defaultValue={configString(editingIntegration.config.webhook_url)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Channel</Label>
                     <Input
                       placeholder="#alerts"
-                      defaultValue={editingIntegration.config.channel}
+                      defaultValue={configString(editingIntegration.config.channel)}
                     />
                   </div>
                 </>
@@ -321,12 +326,12 @@ export function ProjectIntegrationsSection({
                     <Label>Webhook URL</Label>
                     <Input
                       placeholder="https://api.example.com/webhooks"
-                      defaultValue={editingIntegration.config.url}
+                      defaultValue={configString(editingIntegration.config.url)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>HTTP Method</Label>
-                    <Select defaultValue={editingIntegration.config.method}>
+                    <Select defaultValue={configString(editingIntegration.config.method)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>

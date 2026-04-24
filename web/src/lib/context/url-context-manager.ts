@@ -68,7 +68,7 @@ export class URLContextManager {
       if (this.DEBUG) console.debug(`[URLContextManager] Getting headers for pathname: ${pathname}, orgSlug: ${orgCompositeSlug}, projectSlug: ${projectCompositeSlug}`)
       
       // Get or resolve context using composite slugs
-      const context = await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug)
+      const context = await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug ?? undefined)
       
       if (!context) {
         console.warn(`[URLContextManager] Could not resolve context for pathname: ${pathname}`)
@@ -302,7 +302,7 @@ export class URLContextManager {
     }
     
     if (orgCompositeSlug) {
-      await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug)
+      await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug ?? undefined)
     }
   }
   

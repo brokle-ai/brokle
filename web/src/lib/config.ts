@@ -12,9 +12,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_ENV: z.enum(['development', 'staging', 'production']).default('development'),
   
   // Features
-  NEXT_PUBLIC_ENABLE_ANALYTICS: z.string().transform(val => val === 'true').default('true'),
-  NEXT_PUBLIC_ENABLE_REALTIME: z.string().transform(val => val === 'true').default('true'),
-  NEXT_PUBLIC_ENABLE_NOTIFICATIONS: z.string().transform(val => val === 'true').default('true'),
+  NEXT_PUBLIC_ENABLE_ANALYTICS: z.string().default('true').transform(val => val === 'true'),
+  NEXT_PUBLIC_ENABLE_REALTIME: z.string().default('true').transform(val => val === 'true'),
+  NEXT_PUBLIC_ENABLE_NOTIFICATIONS: z.string().default('true').transform(val => val === 'true'),
   
   // External Services
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),

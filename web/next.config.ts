@@ -26,12 +26,6 @@ const apiProxyTarget =
 const nextConfig: NextConfig = {
   /* config options here */
   output: 'standalone',
-  typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    ignoreBuildErrors: true,
-  },
 
   // Same-origin proxy: the browser always sees /api/v1/* and /v1/*
   // as paths on the dashboard origin (e.g. http://localhost:3000).
