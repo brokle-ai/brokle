@@ -32,7 +32,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/require"
 
-	analytics "brokle/internal/core/domain/analytics"
 	annotationDomain "brokle/internal/core/domain/annotation"
 	authDomain "brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
@@ -43,7 +42,6 @@ import (
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
 	userDomain "brokle/internal/core/domain/user"
-	websiteDomain "brokle/internal/core/domain/website"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
@@ -54,13 +52,11 @@ import (
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
-	overviewHandler "brokle/internal/transport/http/handlers/overview"
 	playgroundHandler "brokle/internal/transport/http/handlers/playground"
 	projectHandler "brokle/internal/transport/http/handlers/project"
 	promptHandler "brokle/internal/transport/http/handlers/prompt"
 	rbacHandler "brokle/internal/transport/http/handlers/rbac"
 	userHandler "brokle/internal/transport/http/handlers/user"
-	websiteHandler "brokle/internal/transport/http/handlers/website"
 )
 
 // ---- interface stubs -------------------------------------------------
@@ -72,9 +68,7 @@ import (
 // signal we want if a handler dereferences a service at registration
 // time.
 
-type dummyWebsite struct{ websiteDomain.WebsiteService }
 type dummyComment struct{ commentDomain.Service }
-type dummyOverview struct{ analytics.OverviewService }
 type dummyAPIKey struct{ authDomain.APIKeyService }
 type dummyUser struct{ userDomain.UserService }
 type dummyProfile struct{ userDomain.ProfileService }
@@ -123,9 +117,9 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	api := humax.NewAPI(t)
 	logger := slog.Default()
 
-	websiteHandler.RegisterRoutes(api, dummyWebsite{}, logger)
+	// websiteHandler is chi-native (off Huma).
 	commentHandler.RegisterRoutes(api, dummyComment{}, logger)
-	overviewHandler.RegisterRoutes(api, dummyOverview{}, logger)
+	// overviewHandler is chi-native (off Huma).
 	apikeyHandler.RegisterRoutes(api, dummyAPIKey{}, logger)
 	userHandler.RegisterRoutes(api, dummyUser{}, dummyProfile{}, dummyOrg{}, logger)
 	// credentialsHandler is chi-native (off Huma); it no longer

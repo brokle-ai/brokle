@@ -1,102 +1,69 @@
 // Package website wires the marketing-site contact form endpoint
-// onto the dashboard Huma API surface (apiAdmin). The package
-// follows the canonical chi+Huma per-domain registration pattern
-// established for the migration: a RegisterRoutes function takes
-// the API instance plus the explicit services it needs, and each
-// route is registered as a Huma operation with typed input/output
-// structs.
-//
-// This is the first vertical slice of the gin → Huma handler
-// conversion (Step 4 of the chi+Huma migration). Subsequent
-// domains follow the same shape: prefix constant + RegisterRoutes;
-// per-operation files (or a single handler file for small domains
-// like this one) hold the input, output, and handler implementations.
+// onto the dashboard plane. Public route; no auth required. IP-based
+// rate limiting is applied at the route group level in routes.go.
 package website
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/website"
 	"brokle/internal/transport/http/httpctx"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-// prefix is the dashboard-plane base path for website routes. Lives
-// at the package level so every operation in this package shares
-// one mutable point of truth — chi sub-router prefixes are NOT used
-// because they confuse Huma's OpenAPI emission (Huma discussion
-// #589). Operations declare the full path inline.
-const prefix = "/api/v1/website"
-
-// handler bundles the website service + logger so the operation
-// methods don't carry them on every signature. The struct is
-// package-private; the only public surface is RegisterRoutes.
 type handler struct {
 	svc    website.WebsiteService
 	logger *slog.Logger
 }
 
-// RegisterRoutes registers every website operation on the supplied
-// huma.API. Should be called against the apiAdmin instance only —
-// the marketing form submits cross-origin from the public website
-// to the dashboard plane (it is not part of the SDK contract).
-func RegisterRoutes(api huma.API, svc website.WebsiteService, logger *slog.Logger) {
-	h := &handler{
-		svc:    svc,
-		logger: logger,
-	}
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "submit-contact-form",
-		Method:        http.MethodPost,
-		Path:          prefix + "/contact",
-		Tags:          []string{"website"},
-		Summary:       "Submit a contact form",
-		Description:   "Public endpoint accepting a contact form submission from the marketing site. No authentication required; rate-limited by IP at the route-group level.",
-		DefaultStatus: http.StatusCreated,
-	}, h.submitContact)
+// RegisterRoutes mounts the public website routes on r. Expected
+// mount context: the unauthenticated dashPublic chi group (LimitByIP).
+func RegisterRoutes(r chi.Router, svc website.WebsiteService, logger *slog.Logger) {
+	h := &handler{svc: svc, logger: logger}
+	r.Post("/api/v1/website/contact", h.submitContact)
 }
 
-// Operation Input/Output and body types live in types.go.
-
-// submitContact is the Huma operation handler. Receives the typed
-// input pre-validated by Huma, calls the service, and returns the
-// typed output. Errors flow through verbatim — the package-level
-// huma.NewError override (server/api_error.go) maps AppError values
-// to the canonical APIResponse envelope, so service errors carry
-// their Type / Code / Message / Details intact.
+// submitContact accepts a marketing contact submission, logs
+// rejections for the abuse/audit trail, and returns 201 with a
+// human-readable confirmation the browser can render verbatim.
 //
-// IP + User-Agent come from the request context via httpctx —
-// populated by the RequestMetadata middleware in the global chain
-// (internal/server/routes.go). Returns "" for each when the
-// middleware didn't run (tests calling the handler directly
-// without a full HTTP chain); the audit row records the empty
-// value rather than crashing.
-func (h *handler) submitContact(ctx context.Context, in *SubmitContactInput) (*SubmitContactOutput, error) {
-	req := &website.CreateContactSubmissionRequest{
-		Name:        in.Body.Name,
-		Email:       in.Body.Email,
-		Company:     in.Body.Company,
-		Subject:     in.Body.Subject,
-		Message:     in.Body.Message,
-		InquiryType: in.Body.InquiryType,
+// IP + User-Agent are read from the request context populated by the
+// RequestMetadata middleware in the global chain; when that
+// middleware did not run (direct handler tests without the full
+// chain) both return "" and the submission records empty values
+// rather than crashing.
+func (h *handler) submitContact(w http.ResponseWriter, r *http.Request) {
+	var body submitContactBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	if err := h.svc.SubmitContactForm(ctx, req, httpctx.ClientIP(ctx), httpctx.UserAgent(ctx)); err != nil {
-		h.logger.WarnContext(ctx, "contact-form submission rejected",
+	req := &website.CreateContactSubmissionRequest{
+		Name:        body.Name,
+		Email:       body.Email,
+		Company:     body.Company,
+		Subject:     body.Subject,
+		Message:     body.Message,
+		InquiryType: body.InquiryType,
+	}
+
+	if err := h.svc.SubmitContactForm(r.Context(), req,
+		httpctx.ClientIP(r.Context()), httpctx.UserAgent(r.Context())); err != nil {
+		h.logger.WarnContext(r.Context(), "contact-form submission rejected",
 			"error", err,
 			"email", req.Email,
 			"subject", req.Subject,
 		)
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
-	return &SubmitContactOutput{
-		Body: submitContactResponse{
-			Message: "Thank you for your message. We'll get back to you soon.",
-		},
-	}, nil
+	response.Created(w, submitContactResponse{
+		Message: "Thank you for your message. We'll get back to you soon.",
+	})
 }

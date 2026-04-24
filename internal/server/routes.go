@@ -167,7 +167,17 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		Config:        d.Config,
 		Logger:        d.Logger,
 	})
-	websiteHandler.RegisterRoutes(dashPublic, d.Website, d.Logger)
+	// website — migrated to chi; mounted on the chi dashPublic bridge below.
+
+	// Chi-native sibling of dashPublic. Hosts pre-auth handlers that
+	// have moved off Huma. Shares LimitByIP (the IP-scoped pre-auth
+	// rate-limit bucket); principal-scoped limits are only applied on
+	// the authed surface, never layered on IP (industry pattern —
+	// GitHub/Stripe/OpenAI — and CLAUDE.md gotcha #37a).
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.LimitByIP(rateLimitD))
+		websiteHandler.RegisterRoutes(r, d.Website, d.Logger)
+	})
 
 	// Authed dashboard routes — RequireAuth + LimitByUser.
 	dashAuth := huma.NewGroup(apiAdmin)
@@ -188,6 +198,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		r.Use(middleware.RequireAuth(d.authMiddlewareDeps()))
 		r.Use(middleware.LimitByUser(rateLimitD))
 		credentialsHandler.RegisterRoutes(r, d.Credential, d.CredentialModelCatalog, d.Logger)
+		overviewHandler.RegisterRoutes(r, d.Overview, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -202,7 +213,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	userHandler.RegisterRoutes(dashAuth, d.User, d.Profile, d.Organization, d.Logger)
 	apikeyHandler.RegisterRoutes(dashAuth, d.APIKey, d.Logger)
 	commentHandler.RegisterRoutes(dashAuth, d.Comment, d.Logger)
-	overviewHandler.RegisterRoutes(dashAuth, d.Overview, d.Logger)
+	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
 	projectHandler.RegisterRoutes(dashAuth, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
 	dashboardHandler.RegisterRoutes(dashAuth, d.Dashboard, d.DashboardQuery, d.DashboardTemplate, d.Logger)
