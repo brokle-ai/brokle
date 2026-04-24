@@ -1,18 +1,24 @@
-// Package response defines the canonical API response envelope and
+// Package response defines the canonical error-response DTO and
 // supporting machinery:
 //
-//   - APIResponse / APIError / ErrorDetail / Meta / Pagination — wire
-//     types shared by every Brokle HTTP response (success and error).
+//   - APIError / ErrorDetail / Pagination — wire types shared by
+//     every Brokle HTTP response that has an error body or a list
+//     pagination block.
 //   - WriteError — stdlib-http helper used by chi middleware that rejects
 //     a request before it reaches a Huma operation.
 //   - ErrorResponse + InstallHumaErrorFactory — the huma.StatusError
 //     implementation and the explicit installer that wires it into
 //     Huma's global huma.NewError extension point (see humaerror.go).
 //
-// The envelope mirrors Stripe / OpenAI / Anthropic — closed coarse Type,
-// open fine-grained Code, optional Param pointer, and (new) per-field
-// ErrorDetails preserved from Huma's native validation machinery so
-// SDK consumers see the same rich diagnostics Huma exposes by default.
+// Wire contract (Stripe / OpenAI / Anthropic style):
+//
+//   - Success: raw resource body, HTTP status 2xx. No envelope.
+//   - Error:   `{"error":{"type":"...","code":"...","message":"...",...}}`,
+//     HTTP status 4xx/5xx. No `success` boolean — status is the signal.
+//   - List:    `{"data":[...],"pagination":{...}}` inline. No outer meta.
+//
+// Request IDs surface as the `X-Request-Id` response header
+// (chi/middleware.RequestID installs it globally).
 package response
 
 import (
@@ -23,16 +29,6 @@ import (
 
 	appErrors "brokle/pkg/errors"
 )
-
-// APIResponse is the on-wire shape of every Brokle HTTP response —
-// success responses carry Data + optional Meta; error responses carry
-// Error. One envelope keeps the SDK decoder simple.
-type APIResponse struct {
-	Data    any       `json:"data,omitempty" description:"Response data payload"`
-	Error   *APIError `json:"error,omitempty" description:"Error information if request failed"`
-	Meta    *Meta     `json:"meta,omitempty" description:"Response metadata"`
-	Success bool      `json:"success" example:"true" description:"Indicates if the request was successful"`
-}
 
 // APIError mirrors the Stripe / OpenAI / Anthropic shape.
 //
@@ -70,8 +66,12 @@ type ErrorDetail struct {
 	Value    any    `json:"value,omitempty" description:"The value that failed validation, echoed back verbatim to aid debugging"`
 }
 
-// Pagination is the offset-paginated list metadata published inside
-// Meta.Pagination on list-response envelopes.
+// Pagination is the offset-paginated list metadata published inline
+// on list-response bodies: `{"data": [...], "pagination": {...}}`.
+//
+// Cursor-based pagination (Stripe-style `has_more` + `url`) is a
+// deferred migration — see the Option B plan. For now, offset-based
+// is the canonical shape.
 type Pagination struct {
 	Page       int   `json:"page" example:"1" description:"Current page number (1-indexed)"`
 	Limit      int   `json:"limit" example:"50" description:"Items per page"`
@@ -81,18 +81,43 @@ type Pagination struct {
 	HasPrev    bool  `json:"has_prev" example:"false" description:"Whether there are previous pages"`
 }
 
-// Meta is the envelope's response-metadata slot.
-type Meta struct {
-	Pagination *Pagination `json:"pagination,omitempty" description:"Offset pagination information for list responses"`
-	RequestID  string      `json:"request_id,omitempty" example:"req_01h2x3y4z5" description:"Unique request identifier"`
-	Timestamp  string      `json:"timestamp,omitempty" example:"2023-12-01T10:30:00Z" description:"Response timestamp in ISO 8601 format"`
-	Version    string      `json:"version,omitempty" example:"v1" description:"API version"`
+// BuildPagination constructs the canonical Pagination metadata from
+// the raw pagination inputs (page + limit) and the authoritative
+// total count. Used by list handlers so every list endpoint emits
+// the same inline `{data, pagination}` shape with identical field
+// semantics.
+//
+// Edge cases:
+//
+//   - limit == 0: TotalPages is 0 (undefined pagination, e.g. when
+//     the caller passed no limit — the endpoint should have defaulted
+//     already; this branch just keeps Division by Zero at bay).
+//   - total == 0: TotalPages is 0, HasNext/HasPrev both false.
+//   - page > totalPages (client asking beyond the end): HasNext is
+//     false, HasPrev is true when page > 1 — the caller can walk back.
+func BuildPagination(page, limit int, total int64) *Pagination {
+	totalPages := 0
+	if limit > 0 && total > 0 {
+		totalPages = int((total + int64(limit) - 1) / int64(limit))
+	}
+	return &Pagination{
+		Page:       page,
+		Limit:      limit,
+		Total:      total,
+		TotalPages: totalPages,
+		HasNext:    page < totalPages,
+		HasPrev:    page > 1,
+	}
 }
 
-// WriteError writes the canonical APIResponse error envelope directly
-// to a stdlib http.ResponseWriter. Used by chi middleware that rejects
-// a request (auth failure, rate limit, panic) before it reaches a Huma
+// WriteError writes the canonical Brokle error envelope directly to a
+// stdlib http.ResponseWriter. Used by chi middleware that rejects a
+// request (auth failure, rate limit, panic) before it reaches a Huma
 // operation, where there is no Huma Context in scope.
+//
+// Output shape matches the Huma path exactly:
+//
+//	{"error":{"type":"...","code":"...","message":"...",...}}
 //
 // HTTP status derives from AppError.Type via the canonical mapping;
 // non-AppError errors surface as TypeAPIError (HTTP 500). Skips
@@ -105,10 +130,7 @@ func WriteError(w http.ResponseWriter, err error) {
 	if statusCode == http.StatusNoContent {
 		return
 	}
-	_ = json.NewEncoder(w).Encode(APIResponse{
-		Success: false,
-		Error:   apiError,
-	})
+	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: apiError})
 }
 
 // buildAPIError renders an arbitrary error into the wire APIError plus

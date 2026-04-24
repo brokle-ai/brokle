@@ -13,10 +13,11 @@ export * from './services/rbac'
 
 // Core client and types
 export { BrokleAPIClient } from './core/client'
-export type { 
+export type {
   APIClientConfig,
   RequestOptions,
-  APIResponse,
+  APIErrorResponse,
+  APIErrorBody,
   QueryParams,
   PaginatedResponse,
   BrokleAPIError

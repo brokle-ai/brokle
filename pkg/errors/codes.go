@@ -56,6 +56,12 @@ const (
 	CodeMetricsUnavailable    = "metrics_unavailable"
 	CodeAnalyticsQueryFailed  = "analytics_query_failed"
 	CodeDataRetentionExceeded = "data_retention_exceeded"
+	// Span-query filter parser — used by SDKs to discriminate "bad
+	// filter syntax" from generic input validation (invalid limit, page,
+	// etc.) on the same HTTP 422 status. Mirrors Stripe/OpenAI/JSON:API
+	// convention where `error.code` is the machine-readable discriminator
+	// for sub-kinds of a single status.
+	CodeInvalidFilterExpression = "invalid_filter_expression"
 
 	// WebSocket & real-time
 	CodeWebSocketConnectionFailed = "websocket_connection_failed"
@@ -117,9 +123,10 @@ var codeToMessage = map[string]string{
 	CodeModelNotSupported:    "AI model not supported by provider",
 	CodeRoutingConfigInvalid: "Invalid routing configuration",
 
-	CodeMetricsUnavailable:    "Metrics data unavailable",
-	CodeAnalyticsQueryFailed:  "Analytics query failed",
-	CodeDataRetentionExceeded: "Data retention period exceeded",
+	CodeMetricsUnavailable:      "Metrics data unavailable",
+	CodeAnalyticsQueryFailed:    "Analytics query failed",
+	CodeDataRetentionExceeded:   "Data retention period exceeded",
+	CodeInvalidFilterExpression: "Invalid filter expression",
 
 	CodeWebSocketConnectionFailed: "WebSocket connection failed",
 	CodeWebSocketAuthFailed:       "WebSocket authentication failed",

@@ -22,6 +22,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"brokle/internal/config"
 )
 
 // newProbeDispatcherForTest builds a minimal dispatcher + chi stack
@@ -37,7 +39,10 @@ func newProbeDispatcherForTest(t *testing.T) (http.Handler, *bytes.Buffer, *read
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	mux := chi.NewRouter()
-	installGlobalMiddleware(mux, Deps{Logger: logger})
+	installGlobalMiddleware(mux, Deps{
+		Logger: logger,
+		Config: stubProbeConfig(),
+	})
 	// A trivial chi route we use to prove middleware fires on
 	// non-probe paths.
 	mux.Get("/chi/echo", func(w http.ResponseWriter, _ *http.Request) {
@@ -126,6 +131,22 @@ func TestNonProbe_RunsGlobalMiddleware(t *testing.T) {
 	assert.True(t,
 		strings.Contains(log, "/chi/echo") || strings.Contains(log, "chi/echo"),
 		"log line must mention the request path: %q", log)
+}
+
+// stubProbeConfig returns the minimal *config.Config installGlobalMiddleware
+// needs without panicking. The probe tests only exercise paths that
+// fall outside /api/v1 and /v1, so the path-prefix middleware
+// (CORS, CSRF, IP-limit) constructed below is short-circuited per
+// request — the values just need to satisfy jub0bs/cors's validator
+// and rate_limit's nil checks at construction time.
+func stubProbeConfig() *config.Config {
+	return &config.Config{
+		Server: config.ServerConfig{
+			CORSAllowedOrigins: []string{"https://example.com"},
+			CORSAllowedMethods: []string{http.MethodGet, http.MethodPost},
+			CORSAllowedHeaders: []string{"Content-Type"},
+		},
+	}
 }
 
 // Readiness flips to 503 after MarkNotReady — the foundation of the

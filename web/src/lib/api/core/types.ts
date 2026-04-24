@@ -34,31 +34,27 @@ export interface RequestOptions extends Omit<AxiosRequestConfig, 'url' | 'method
   customEnvironmentId?: string
 }
 
-// API Response wrapper (backend format)
-export interface APIResponse<T = any> {
-  success: boolean
-  data: T
-  message?: string
-  meta?: {
-    request_id?: string
-    timestamp?: string
-    [key: string]: any
-  }
+// Error response shape. Matches Stripe/OpenAI: `{"error": {type, code,
+// message, details?, param?, errors?}}`. No `success` field — HTTP
+// status is the success signal (per RFC 9110 §15). The frontend sees
+// this shape ONLY on 4xx/5xx; 2xx bodies are the raw resource.
+//
+// Mirrors pkg/response.APIError on the backend.
+export interface APIErrorBody {
+  type: string
+  code?: string
+  message: string
+  details?: string
+  param?: string
+  errors?: Array<{
+    location?: string
+    message: string
+    value?: unknown
+  }>
 }
 
-// API Error structure (backend format)  
 export interface APIErrorResponse {
-  success: false
-  error: string
-  message: string
-  code?: string
-  details?: Record<string, any>
-  meta?: {
-    request_id?: string
-    timestamp?: string
-    status_code?: number
-    [key: string]: any
-  }
+  error: APIErrorBody
 }
 
 // Custom API Error class that preserves full response data
@@ -73,31 +69,37 @@ export class BrokleAPIError extends Error {
 
   constructor(axiosError: AxiosError) {
     const response = axiosError.response
-    const errorData = response?.data as any
+    const errorData = response?.data as APIErrorResponse | undefined
 
-    // Extract error message - handle both formats
-    let message = 'API request failed'
-    if (errorData?.error?.message) {
-      // New format: { success: false, error: { message: "..." } }
-      message = errorData.error.message
-    } else if (errorData?.message) {
-      // Old format: { success: false, message: "..." }
-      message = errorData.message
-    } else {
-      message = axiosError.message
-    }
+    // Error body is always the Stripe/OpenAI-style `{error: {...}}`
+    // envelope. Falls back to axiosError.message only for network
+    // failures (no response body at all).
+    const message =
+      errorData?.error?.message ??
+      axiosError.message ??
+      'API request failed'
+
     super(message)
 
     this.name = 'BrokleAPIError'
     this.statusCode = response?.status || 0
-    this.code = errorData?.error?.code || errorData?.code || axiosError.code || 'UNKNOWN_ERROR'
-    this.requestId = errorData?.meta?.request_id
-    this.details = errorData?.details
-    this.timestamp = errorData?.meta?.timestamp || new Date().toISOString()
+    this.code = errorData?.error?.code || errorData?.error?.type || axiosError.code || 'UNKNOWN_ERROR'
+    // Request IDs live in the X-Request-Id response header, not the
+    // body. Kept case-insensitive because HTTP headers are; axios
+    // lowercases them but be defensive.
+    this.requestId =
+      (response?.headers?.['x-request-id'] as string | undefined) ??
+      (response?.headers?.['X-Request-Id'] as string | undefined)
+    // `details` is the structured error-body field (string explanation
+    // alongside message). Preserved as the error-body value for
+    // downstream UIs that surface it.
+    this.details = errorData?.error?.details
+      ? { details: errorData.error.details }
+      : undefined
+    this.timestamp = new Date().toISOString()
     this.originalError = axiosError
-    this.response = response  // Preserve full response for downstream error handling
+    this.response = response
 
-    // Maintain proper stack trace
     Object.setPrototypeOf(this, BrokleAPIError.prototype)
   }
 

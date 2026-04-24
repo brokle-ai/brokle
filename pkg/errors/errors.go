@@ -21,6 +21,7 @@
 package errors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -125,13 +126,19 @@ func (t ErrorType) HTTPStatus() int {
 // services return *AppError, the response renderer reads its fields
 // directly, and tests construct literals. There is no setter API; use
 // the variadic Option args on the constructors for the optional fields.
+//
+// JSON tags are for tests and debug logs that inspect the struct as
+// JSON (e.g. slog "error"=err). The on-the-wire shape returned to
+// HTTP clients comes from MarshalJSON below, which emits the
+// canonical {success, error: {...}} envelope — NOT the raw struct.
+// Both paths (tests + wire) therefore use lowercase keys consistently.
 type AppError struct {
-	Type    ErrorType
-	Code    string
-	Message string
-	Details string
-	Param   string
-	Err     error
+	Type    ErrorType `json:"type"`
+	Code    string    `json:"code,omitempty"`
+	Message string    `json:"message"`
+	Details string    `json:"details,omitempty"`
+	Param   string    `json:"param,omitempty"`
+	Err     error     `json:"-"`
 }
 
 // Error formats the error for log output. Includes Type, Message, and
@@ -150,6 +157,63 @@ func (e *AppError) Unwrap() error { return e.Err }
 
 // HTTPStatus returns the canonical HTTP status for the error's Type.
 func (e *AppError) HTTPStatus() int { return e.Type.HTTPStatus() }
+
+// MarshalJSON serializes AppError as the canonical Brokle error
+// envelope: `{"error":{type,code,message,details?,param?}}`.
+//
+// The shape matches Stripe and OpenAI verbatim. There is deliberately
+// NO top-level `success` boolean — HTTP status is the canonical
+// success/failure signal (per RFC 9110 §15), and a redundant body
+// field forces every client to double-check what the status line
+// already told them. Stripe, OpenAI, Anthropic, GitHub, Slack all
+// converge on this shape.
+//
+// Keeps the wire contract consistent across Huma's two error-
+// emission paths:
+//
+//  1. Handler returns *AppError. Huma v2 detects huma.StatusError
+//     via errors.As (huma.go:1100-1105) and writes the error directly
+//     to the response — bypassing the installed NewError factory.
+//     Without this method, Go's default struct marshaller would emit
+//     `{"Type":"...","Code":"",...}` with capitalised Go field names
+//     and the wrapped `Err` leaking as `"Err":null`.
+//
+//  2. Framework pipeline error (415, 422, 405, ...). Huma calls
+//     NewError, which our factory (pkg/response/humaerror.go) wraps
+//     into *statusError whose MarshalJSON emits the same envelope.
+//
+// With both paths producing identical bytes for the same inputs,
+// every consumer (frontend BrokleAPIError, Python SDK, Fern codegen)
+// parses one shape.
+//
+// The envelope mirrors pkg/response.APIError; the shape is inlined
+// here rather than imported to avoid the pkg/errors → pkg/response
+// import cycle. OpenAPI codegen consumers see the APIError component
+// from pkg/response as the single schema-level source of truth.
+func (e *AppError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Error inner `json:"error"`
+	}{
+		Error: inner{
+			Type:    string(e.Type),
+			Code:    e.CodeOrType(),
+			Message: e.Message,
+			Details: e.Details,
+			Param:   e.Param,
+		},
+	})
+}
+
+// inner is the on-the-wire shape of the `error` field in the envelope.
+// Kept package-private; consumers read via the ErrorResponse component
+// in the OpenAPI spec (pkg/response).
+type inner struct {
+	Type    string `json:"type"`
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
+	Param   string `json:"param,omitempty"`
+}
 
 // GetStatus satisfies huma.StatusError so AppError values returned from
 // Huma operation handlers map to the right HTTP status without an

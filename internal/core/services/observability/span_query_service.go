@@ -127,7 +127,15 @@ func (s *SpanQueryService) ValidateFilter(filter string) error {
 	parser := NewFilterParser()
 	_, err := parser.Parse(filter)
 	if err != nil {
-		return appErrors.NewValidationError("invalid filter expression", err.Error())
+		// WithCode sets `error.code = "invalid_filter_expression"` on the
+		// wire envelope. SDKs discriminate filter-syntax 422s from
+		// generic input-validation 422s (invalid limit, page, etc.) on
+		// that code, matching the Stripe/OpenAI/JSON:API convention.
+		return appErrors.NewValidationError(
+			"invalid filter expression",
+			err.Error(),
+			appErrors.WithCode(appErrors.CodeInvalidFilterExpression),
+		)
 	}
 	return nil
 }

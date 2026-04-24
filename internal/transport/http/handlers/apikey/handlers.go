@@ -18,6 +18,7 @@ import (
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/response"
 )
 
 type handler struct {
@@ -102,13 +103,8 @@ type listAPIKeysOutput struct {
 }
 
 type listAPIKeysResponse struct {
-	Data []apiKey          `json:"data"`
-	Meta listAPIKeysMeta   `json:"meta"`
-}
-
-type listAPIKeysMeta struct {
-	Pagination *pagination.Params `json:"pagination,omitempty"`
-	Total      int64              `json:"total"`
+	Data       []apiKey             `json:"data"`
+	Pagination *response.Pagination `json:"pagination"`
 }
 
 func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysOutput, error) {
@@ -160,11 +156,8 @@ func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysO
 
 	return &listAPIKeysOutput{
 		Body: listAPIKeysResponse{
-			Data: out,
-			Meta: listAPIKeysMeta{
-				Pagination: &params,
-				Total:      total,
-			},
+			Data:       out,
+			Pagination: response.BuildPagination(params.Page, params.Limit, total),
 		},
 	}, nil
 }

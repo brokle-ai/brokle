@@ -3,7 +3,6 @@ import { urlContextManager } from '@/lib/context/url-context-manager'
 import type {
   BrokleClientConfig,
   RequestOptions,
-  APIResponse,
   QueryParams,
   PaginatedResponse,
   BackendPagination,
@@ -21,7 +20,17 @@ export class BrokleAPIClient {
     protected config: Partial<BrokleClientConfig> = {}
   ) {
     const defaultConfig: BrokleClientConfig = {
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+      // Default to relative URLs so requests resolve against the
+      // dashboard's own origin (e.g. http://localhost:3000) and are
+      // forwarded by Next.js rewrites in next.config.ts to the real
+      // backend. Same-origin posture matches production and avoids
+      // CORS preflight + CSRF allowlist gymnastics.
+      //
+      // Set NEXT_PUBLIC_API_URL to bypass the rewrites and point at
+      // an absolute backend URL (advanced — local dashboard against
+      // remote API). That path requires the dashboard origin to be
+      // listed in the backend's CORS_ALLOWED_ORIGINS env var.
+      baseURL: process.env.NEXT_PUBLIC_API_URL ?? '',
       timeout: 30000,
       retries: 3,
       retryDelay: 1000,
@@ -59,7 +68,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.get<APIResponse<T>>(endpoint, {
+      const response = await this.axiosInstance.get<T>(endpoint, {
         params,
         ...options,
       })
@@ -73,7 +82,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.post<APIResponse<T>>(endpoint, data, options)
+      const response = await this.axiosInstance.post<T>(endpoint, data, options)
       return this.extractData(response)
     }, options.retries)
   }
@@ -84,7 +93,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.put<APIResponse<T>>(endpoint, data, options)
+      const response = await this.axiosInstance.put<T>(endpoint, data, options)
       return this.extractData(response)
     }, options.retries)
   }
@@ -95,7 +104,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.patch<APIResponse<T>>(endpoint, data, options)
+      const response = await this.axiosInstance.patch<T>(endpoint, data, options)
       return this.extractData(response)
     }, options.retries)
   }
@@ -105,7 +114,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.delete<APIResponse<T>>(endpoint, options)
+      const response = await this.axiosInstance.delete<T>(endpoint, options)
       return this.extractData(response)
     }, options.retries)
   }
@@ -118,7 +127,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<PaginatedResponse<T>> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.get<APIResponse<T[]>>(endpoint, {
+      const response = await this.axiosInstance.get<{ data: T[]; pagination: BackendPagination }>(endpoint, {
         params,
         ...options,
       })
@@ -132,7 +141,7 @@ export class BrokleAPIClient {
     options: RequestOptions = {}
   ): Promise<PaginatedResponse<T>> {
     return this.executeWithRetry(async () => {
-      const response = await this.axiosInstance.post<APIResponse<T[]>>(endpoint, data, options)
+      const response = await this.axiosInstance.post<{ data: T[]; pagination: BackendPagination }>(endpoint, data, options)
       return this.extractPaginatedData(response)
     }, options.retries)
   }
@@ -330,37 +339,16 @@ export class BrokleAPIClient {
     )
   }
 
-  // Extract data from API response wrapper
-  private extractData<T>(response: AxiosResponse<APIResponse<T>>): T {
-    // Handle 204 No Content responses (DELETE endpoints, etc.)
+  // extractData returns the raw response body. The backend emits the
+  // resource directly on 2xx per the Stripe/OpenAI wire contract — no
+  // `{success, data, meta}` envelope. HTTP status alone is the
+  // success signal; 4xx/5xx bodies are intercepted upstream by the
+  // axios error interceptor and never reach this method.
+  private extractData<T>(response: AxiosResponse<T>): T {
     if (response.status === 204) {
       return undefined as T
     }
-
-    const responseData = response.data
-
-    // Defensive validation with helpful error messages
-    if (!responseData) {
-      console.error('[API] Response data is undefined:', response)
-      throw new Error('API response data is undefined')
-    }
-
-    if (responseData.success === undefined) {
-      console.error('[API] Response missing success field:', responseData)
-      throw new Error('API response missing success field')
-    }
-
-    if (!responseData.success) {
-      console.error('[API] Response indicates failure:', responseData)
-      throw new Error('API response indicates failure but was not caught by error interceptor')
-    }
-
-    if (responseData.data === undefined) {
-      console.error('[API] Response missing data field:', responseData)
-      throw new Error('API response missing data field')
-    }
-
-    return responseData.data
+    return response.data
   }
 
   // Convert backend pagination format to frontend format
@@ -375,23 +363,22 @@ export class BrokleAPIClient {
     }
   }
 
-  // Extract paginated data from API response (preserves pagination metadata)
-  private extractPaginatedData<T>(response: AxiosResponse<APIResponse<T[]>>): PaginatedResponse<T> {
-    const { data, success, meta } = response.data
-
-    if (!success) {
-      throw new Error('API response indicates failure but was not caught by error interceptor')
+  // extractPaginatedData pulls the inline `{data, pagination}` list
+  // shape returned by every Brokle list endpoint. No envelope, no
+  // meta wrapper — pagination lives next to data on the response
+  // body itself.
+  private extractPaginatedData<T>(
+    response: AxiosResponse<{ data: T[]; pagination: BackendPagination }>,
+  ): PaginatedResponse<T> {
+    const body = response.data
+    if (!body?.pagination) {
+      throw new Error(
+        'List response missing pagination. Use regular get() for non-paginated endpoints.',
+      )
     }
-
-    // Check if pagination metadata exists
-    const backendPagination = meta?.pagination as BackendPagination
-    if (!backendPagination) {
-      throw new Error('No pagination metadata found in response. Use regular get() method for non-paginated responses.')
-    }
-
     return {
-      data: data ?? [], // Normalize null to empty array (defensive against backend bugs)
-      pagination: this.convertPagination(backendPagination)
+      data: body.data ?? [], // Normalize null → [] (defensive).
+      pagination: this.convertPagination(body.pagination),
     }
   }
 
@@ -424,7 +411,7 @@ export class BrokleAPIClient {
         }
       })
 
-      const response = await this.axiosInstance.post<APIResponse<T>>(endpoint, formData, {
+      const response = await this.axiosInstance.post<T>(endpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

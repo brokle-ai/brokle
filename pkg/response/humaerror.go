@@ -66,16 +66,19 @@ import (
 )
 
 // ErrorResponse is the wire DTO returned on every error path. Pure
-// data type — natural field names, natural JSON tags, no behavioural
-// interfaces attached. Construct and inspect it freely in tests and
-// handler code.
+// data type — one field (`error`) with the canonical APIError shape.
+//
+// Matches Stripe / OpenAI / Anthropic: `{"error": {...}}`. There is
+// deliberately NO top-level `success` boolean — HTTP status is the
+// canonical success/failure signal (RFC 9110 §15), and a redundant
+// body field forces every client to double-check what the status
+// line already told them.
 //
 // The Huma error factory wraps ErrorResponse in an internal
 // huma.StatusError implementation; callers never need to do that
 // themselves.
 type ErrorResponse struct {
-	Success bool      `json:"success" example:"false" description:"Always false on error responses"`
-	Error   *APIError `json:"error" description:"Error detail — always populated on error responses"`
+	Error *APIError `json:"error" description:"Error detail — always populated on error responses"`
 }
 
 // errorResponseType caches the reflect.Type used by Schema() below.
@@ -178,7 +181,6 @@ func wrapAppError(e *appErrors.AppError, details []ErrorDetail) *statusError {
 	return &statusError{
 		status: e.HTTPStatus(),
 		resp: &ErrorResponse{
-			Success: false,
 			Error: &APIError{
 				Type:    string(e.Type),
 				Code:    e.CodeOrType(),

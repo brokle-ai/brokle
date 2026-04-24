@@ -3,7 +3,8 @@
 import { WorkspaceError, WorkspaceErrorCode } from '@/context/workspace-errors'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Home, RefreshCw } from 'lucide-react'
+import { AlertCircle, Home, LogIn, RefreshCw } from 'lucide-react'
+import { ROUTES } from '@/lib/routes'
 
 interface WorkspaceErrorPageProps {
   error: WorkspaceError
@@ -33,6 +34,8 @@ export function WorkspaceErrorPage({ error }: WorkspaceErrorPageProps) {
 
   const getTitle = () => {
     switch (error.code) {
+      case WorkspaceErrorCode.UNAUTHENTICATED:
+        return 'Session Expired'
       case WorkspaceErrorCode.ORG_NOT_FOUND:
         return 'Organization Not Found'
       case WorkspaceErrorCode.PROJECT_NOT_FOUND:
@@ -53,6 +56,9 @@ export function WorkspaceErrorPage({ error }: WorkspaceErrorPageProps) {
   }
 
   const getIcon = () => {
+    if (error.code === WorkspaceErrorCode.UNAUTHENTICATED) {
+      return <LogIn className="h-16 w-16 text-muted-foreground" />
+    }
     if (error.code === WorkspaceErrorCode.NETWORK_ERROR) {
       return <RefreshCw className="h-16 w-16 text-muted-foreground" />
     }
@@ -75,14 +81,25 @@ export function WorkspaceErrorPage({ error }: WorkspaceErrorPageProps) {
         </p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Button
-            onClick={() => router.push('/')}
-            variant="default"
-            className="gap-2"
-          >
-            <Home className="h-4 w-4" />
-            Go to Home
-          </Button>
+          {error.code === WorkspaceErrorCode.UNAUTHENTICATED ? (
+            <Button
+              onClick={() => router.push(ROUTES.SIGNIN)}
+              variant="default"
+              className="gap-2"
+            >
+              <LogIn className="h-4 w-4" />
+              Sign In
+            </Button>
+          ) : (
+            <Button
+              onClick={() => router.push('/')}
+              variant="default"
+              className="gap-2"
+            >
+              <Home className="h-4 w-4" />
+              Go to Home
+            </Button>
+          )}
 
           {error.code === WorkspaceErrorCode.NETWORK_ERROR && (
             <Button

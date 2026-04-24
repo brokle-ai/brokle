@@ -11,7 +11,6 @@ import { IconFacebook, IconGithub } from '@/assets/brand-icons'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/lib/routes'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -34,7 +33,6 @@ const formSchema = z.object({
     .string()
     .min(1, 'Please enter your password')
     .min(7, 'Password must be at least 7 characters long'),
-  rememberMe: z.boolean().default(false),
 })
 
 export function SignInForm({ className, ...props }: SignInFormProps) {
@@ -49,7 +47,6 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
     defaultValues: {
       email: '',
       password: '',
-      rememberMe: false,
     },
   })
 
@@ -61,7 +58,6 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
       await loginMutation.mutateAsync({
         email: data.email,
         password: data.password,
-        rememberMe: data.rememberMe,
       })
 
       setIsRedirecting(true)
@@ -162,27 +158,7 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name='rememberMe'
-          render={({ field }) => (
-            <FormItem className='flex flex-row items-start space-x-3 space-y-0'>
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <div className='space-y-1 leading-none'>
-                <FormLabel className='text-sm font-normal'>
-                  Remember me for 30 days
-                </FormLabel>
-              </div>
-            </FormItem>
-          )}
-        />
-        
-        <Button 
+        <Button
           className='mt-2' 
           disabled={loginMutation.isPending || isRedirecting} 
           type='submit'

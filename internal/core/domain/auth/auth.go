@@ -294,7 +294,6 @@ type LoginRequest struct {
 	DeviceInfo map[string]any `json:"device_info,omitempty"`
 	Email      string         `json:"email" validate:"required,email"`
 	Password   string         `json:"password" validate:"required"`
-	Remember   bool           `json:"remember"`
 }
 
 type LoginResponse struct {

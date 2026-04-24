@@ -12,6 +12,12 @@ export enum WorkspaceErrorCode {
   ORG_NOT_FOUND = 'ORG_NOT_FOUND',
   PROJECT_NOT_FOUND = 'PROJECT_NOT_FOUND',
 
+  // Auth errors
+  // Distinct from ORG_NO_ACCESS / PROJECT_NO_ACCESS (which are 403
+  // permission denials). UNAUTHENTICATED is a 401 — the user has no
+  // valid session at all and must sign in again.
+  UNAUTHENTICATED = 'UNAUTHENTICATED',
+
   // Access errors
   ORG_NO_ACCESS = 'ORG_NO_ACCESS',
   PROJECT_NO_ACCESS = 'PROJECT_NO_ACCESS',
@@ -70,6 +76,10 @@ export function createWorkspaceError(
     [WorkspaceErrorCode.PROJECT_NOT_FOUND]: {
       message: 'Project not found in organization',
       userMessage: "This project doesn't exist or has been deleted.",
+    },
+    [WorkspaceErrorCode.UNAUTHENTICATED]: {
+      message: 'No valid session — user must sign in again',
+      userMessage: 'Your session has expired. Please sign in again to continue.',
     },
     [WorkspaceErrorCode.ORG_NO_ACCESS]: {
       message: 'User does not have access to organization',
@@ -132,6 +142,9 @@ export function classifyAPIError(error: unknown): WorkspaceError {
 
   // Check if it's a BrokleAPIError
   if (hasStatusCode(error)) {
+    if (error.statusCode === 401) {
+      return createWorkspaceError(WorkspaceErrorCode.UNAUTHENTICATED, {}, error)
+    }
     if (error.statusCode === 404) {
       return createWorkspaceError(WorkspaceErrorCode.ORG_NOT_FOUND, {}, error)
     }

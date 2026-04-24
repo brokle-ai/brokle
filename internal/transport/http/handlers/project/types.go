@@ -1,10 +1,11 @@
 package project
 
 import (
-	"brokle/pkg/pagination"
 	"time"
 
 	"github.com/google/uuid"
+
+	"brokle/pkg/response"
 )
 
 // Huma operation types for the project package.
@@ -31,17 +32,14 @@ type ListProjectsInput struct {
 }
 
 type ListProjectsOutput struct {
-	Body listResponse
+	Body projectListBody
 }
 
-type listResponse struct {
-	Data []project `json:"data"`
-	Meta listMeta  `json:"meta"`
-}
-
-type listMeta struct {
-	Pagination *pagination.Params `json:"pagination,omitempty"`
-	Total      int                `json:"total"`
+// projectListBody is the inline `{data, pagination}` list-response
+// shape shared by every Brokle list endpoint.
+type projectListBody struct {
+	Data       []project            `json:"data"`
+	Pagination *response.Pagination `json:"pagination"`
 }
 
 type CreateProjectInput struct {

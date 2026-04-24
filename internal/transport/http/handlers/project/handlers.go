@@ -22,6 +22,7 @@ import (
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/response"
 )
 
 type handler struct {
@@ -214,12 +215,9 @@ func (h *handler) list(ctx context.Context, in *ListProjectsInput) (*ListProject
 	}
 
 	return &ListProjectsOutput{
-		Body: listResponse{
-			Data: out,
-			Meta: listMeta{
-				Pagination: &params,
-				Total:      total,
-			},
+		Body: projectListBody{
+			Data:       out,
+			Pagination: response.BuildPagination(params.Page, params.Limit, int64(total)),
 		},
 	}, nil
 }

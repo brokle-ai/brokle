@@ -5,6 +5,25 @@ import * as authApi from '../api/auth-api'
 import { BrokleAPIError } from '@/lib/api/core/types'
 import { BrokleAPIClient } from '@/lib/api/core/client'
 
+/**
+ * Payload accepted by `hydrate()` — the Phase 2 bootstrap path that
+ * receives server-fetched user data and skips the legacy
+ * client-side `initializeAuth()` round-trip.
+ *
+ * `expiresAt`/`expiresIn` are optional: server-side bootstrap from
+ * the rich /v1/users/me endpoint does not include token expiry
+ * metadata. The proactive refresh timer starts after the first
+ * reactive refresh completes (which sets these fields). Until then
+ * refresh is reactive on 401 — no functional regression, just one
+ * extra round-trip per token-expiry.
+ */
+export interface HydratePayload {
+  user: User
+  organization?: Organization | null
+  expiresAt?: number | null
+  expiresIn?: number | null
+}
+
 // Create dedicated client instance for auth operations
 const client = new BrokleAPIClient('/api')
 
@@ -36,6 +55,7 @@ export interface AuthState {
   logout: () => Promise<void>
   refreshToken: () => Promise<void>
   initializeAuth: () => Promise<void>
+  hydrate: (payload: HydratePayload) => void
   startRefreshTimer: () => void
   stopRefreshTimer: () => void
   clearAuth: () => void
@@ -203,16 +223,30 @@ export const useAuthStore = create<AuthState>()(
               refreshPromise: null
             })
 
-            // Check if refresh token expired
-            if (error instanceof BrokleAPIError && error.code === 'REFRESH_EXPIRED') {
-              console.debug('[Auth] Refresh token expired, clearing session')
+            // Any 401 from /v1/auth/refresh means the refresh path is
+            // no longer viable — cookie missing, invalid, expired, or
+            // revoked. Cleanup is identical regardless of which: clear
+            // local auth state and signal the providers-level handler
+            // to redirect to /signin.
+            //
+            // Previously this only fired for `error.code === 'REFRESH_EXPIRED'`,
+            // which missed the missing-cookie case (the most common
+            // first-load scenario) and left the dashboard wedged on
+            // "Loading workspace…" because no event was dispatched.
+            const isAuthFailure =
+              error instanceof BrokleAPIError && error.statusCode === 401
+
+            if (isAuthFailure) {
+              if (process.env.NODE_ENV === 'development') {
+                console.debug('[Auth] Refresh failed, clearing session', {
+                  code: error.code,
+                  statusCode: error.statusCode,
+                })
+              }
               get().clearAuth()
 
-              // Dispatch session expiry event
               if (typeof window !== 'undefined') {
-                window.dispatchEvent(
-                  new CustomEvent('auth:session-expired')
-                )
+                window.dispatchEvent(new CustomEvent('auth:session-expired'))
               }
             }
 
@@ -273,6 +307,40 @@ export const useAuthStore = create<AuthState>()(
         if (refreshTimerId) {
           clearTimeout(refreshTimerId)
           set({ refreshTimerId: null })
+        }
+      },
+
+      // Hydrate from server-fetched bootstrap data (Phase 2 path).
+      //
+      // Called once per cold load from DashboardLayoutClient with the
+      // payload the Server Component DAL fetched. Idempotent:
+      // re-calling with the same user is a no-op (the lazy useState
+      // initializer in DashboardLayoutClient guarantees this anyway,
+      // but the guard makes the function safe to call from elsewhere).
+      //
+      // Replaces the legacy initializeAuth() round-trip. If
+      // expiresAt is provided, starts the proactive refresh timer;
+      // otherwise the timer kicks in after the first reactive refresh.
+      hydrate: (payload) => {
+        const current = get()
+        if (current.isAuthenticated && current.user?.id === payload.user.id) {
+          // Already hydrated for this user (StrictMode double-render,
+          // hot reload, etc.). No-op.
+          return
+        }
+
+        set({
+          user: payload.user,
+          organization: payload.organization ?? null,
+          expiresAt: payload.expiresAt ?? null,
+          expiresIn: payload.expiresIn ?? null,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        })
+
+        if (payload.expiresAt) {
+          get().startRefreshTimer()
         }
       },
 

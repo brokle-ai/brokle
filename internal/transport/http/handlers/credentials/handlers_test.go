@@ -148,7 +148,6 @@ func TestListCredentials_InvalidOrgID_EmitsErrorEnvelope(t *testing.T) {
 
 	var env response.ErrorResponse
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &env))
-	assert.False(t, env.Success, "ErrorResponse.success must be false on error paths")
 	require.NotNil(t, env.Error, "ErrorResponse.error must be populated on error paths")
 	assert.NotEmpty(t, env.Error.Type, "error.type must be set (closed enum)")
 	assert.NotEmpty(t, env.Error.Message, "error.message must be set (human-readable)")

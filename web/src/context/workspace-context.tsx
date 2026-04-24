@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import { extractIdFromCompositeSlug, isValidCompositeSlug } from '@/lib/utils/slug-utils'
 import { setDefaultOrganization } from '@/features/authentication/api/auth-api'
+import { mapEnhancedUserProfile } from '@/lib/auth/profile-mapper'
 import {
   createWorkspaceError,
   classifySlugError,
@@ -24,8 +25,6 @@ import type {
 } from '@/features/authentication'
 import type {
   EnhancedUserProfileResponse,
-  BackendOrganizationWithProjects,
-  BackendProjectSummary
 } from '@/types/api-responses'
 
 const client = new BrokleAPIClient('/api')
@@ -85,94 +84,66 @@ interface WorkspaceData {
   organizations: OrganizationWithProjects[]
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+interface WorkspaceProviderProps {
+  children: ReactNode
+  /**
+   * Server-fetched workspace data. When provided, the React Query
+   * cache is seeded with this payload and no client-side fetch fires
+   * on mount — the dashboard renders fully populated from the
+   * Server Component DAL bootstrap (lib/auth/dal.ts).
+   *
+   * Optional only to keep this component reusable for non-dashboard
+   * mount points (Storybook, isolated tests). Production dashboard
+   * paths always pass it.
+   */
+  initialData?: WorkspaceData
+}
+
+export function WorkspaceProvider({ children, initialData }: WorkspaceProviderProps) {
   const pathname = usePathname()
   const queryClient = useQueryClient()
   const [urlError, setUrlError] = useState<WorkspaceError | null>(null)
 
-  // Centralized loading state
+  // Centralized loading state. Initialised from server-fetched data
+  // when present (no spinner on cold load); otherwise `isInitializing`
+  // starts true until the first useQuery fetch resolves.
   const [loadingState, setLoadingState] = useState({
-    isInitializing: true,
+    isInitializing: !initialData,
     isRefreshing: false,
     isSwitchingOrg: false,
     isSwitchingProject: false,
   })
 
-  // Fetch workspace data with React Query
+  // Fetch workspace data with React Query.
+  //
+  // When `initialData` is provided (production dashboard path), the
+  // query is seeded with the server-fetched payload and treated as
+  // fresh for `staleTime`, so no fetch fires on mount. Refetches
+  // (window focus, reconnect, manual `refresh()`) still go through
+  // the queryFn for stale revalidation. The mapping logic uses the
+  // shared profile-mapper module so server and client stay in lockstep.
   const { data, isLoading, error: queryError } = useQuery<WorkspaceData>({
     queryKey: ['workspace'],
     queryFn: async () => {
       const response = await client.get<EnhancedUserProfileResponse>('/v1/users/me')
-
-      // Map user (all existing fields preserved)
-      const user: User = {
-        id: response.id,
-        email: response.email,
-        firstName: response.first_name,
-        lastName: response.last_name,
-        name: `${response.first_name} ${response.last_name}`.trim(),
-        role: 'user',
-        organizationId: '',
-        defaultOrganizationId: response.default_organization_id ?? undefined,
-        projects: [],
-        createdAt: response.created_at,
-        updatedAt: response.updated_at,
-        isEmailVerified: response.is_email_verified,
-        organizations: [], // Will be set below
-      }
-
-      // Map organizations with nested projects
-      const organizations: OrganizationWithProjects[] = (response.organizations || []).map((org: BackendOrganizationWithProjects) => ({
-        id: org.id,
-        name: org.name,
-        compositeSlug: org.composite_slug,
-        plan: org.plan as SubscriptionPlan,
-        role: org.role as OrganizationRole,
-        createdAt: org.created_at,
-        updatedAt: org.updated_at,
-        projects: (org.projects || []).map((proj: BackendProjectSummary) => ({
-          id: proj.id,
-          name: proj.name,
-          compositeSlug: proj.composite_slug,
-          description: proj.description || '',
-          organizationId: proj.organization_id,
-          status: proj.status as ProjectStatus,
-          createdAt: proj.created_at,
-          updatedAt: proj.updated_at,
-          metrics: {
-            traces_collected: 0,
-            observed_cost: 0,
-            active_rules: 0,
-            running_experiments: 0,
-          },
-        })),
-        members: [] as OrganizationMember[], // Will be populated from API when needed
-        usage: {
-          traces_this_month: 0,
-          observed_cost_this_month: 0,
-          models_observed: 0,
-        },
-      }))
-
-      user.organizations = organizations
-
-      // Development logging only
+      const mapped = mapEnhancedUserProfile(response)
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Workspace] Loaded data:', {
-          user: user.email,
-          orgCount: organizations.length,
-          projectCount: organizations.reduce((sum, org) => sum + org.projects.length, 0),
+        console.log('[Workspace] Refetched data:', {
+          user: mapped.user.email,
+          orgCount: mapped.organizations.length,
+          projectCount: mapped.organizations.reduce((sum, org) => sum + org.projects.length, 0),
         })
       }
-
-      return { user, organizations }
+      return mapped
     },
+    initialData,
+    initialDataUpdatedAt: initialData ? Date.now() : undefined,
     staleTime: 5 * 60 * 1000,       // 5 minutes
     gcTime: 10 * 60 * 1000,         // 10 minutes
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    retry: 3,                       // Retry failed requests 3 times
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),  // Exponential backoff
+    // Retry policy is inherited from the global QueryClient default in
+    // components/providers.tsx, which correctly skips retries on 4xx.
   })
 
   // Update loading state when query state changes
