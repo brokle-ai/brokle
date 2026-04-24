@@ -1,1 +1,6 @@
 export { TracesTable } from './traces-table'
+export { TracesFilterBar } from './traces-filter-bar'
+export type { TracesFilterValue } from './traces-filter-bar'
+export { SpanTree } from './span-tree'
+export { IoPreview } from './io-preview'
+export { TraceDetail } from './trace-detail'

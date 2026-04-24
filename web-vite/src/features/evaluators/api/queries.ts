@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
-import type { EvaluatorListResponse } from './types'
+import type { EvaluatorDetail, EvaluatorListResponse } from './types'
 
 export const evaluatorsKeys = {
   all: ['evaluators'] as const,
@@ -36,6 +36,22 @@ export const evaluatorListQueryOptions = (
         { method: 'GET' },
       )
       return (await resp.json()) as EvaluatorListResponse
+    },
+    staleTime: 30 * 1000,
+  })
+
+export const evaluatorDetailQueryOptions = (
+  projectId: string,
+  evaluatorId: string,
+) =>
+  queryOptions({
+    queryKey: evaluatorsKeys.detail(evaluatorId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/evaluators/${evaluatorId}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as EvaluatorDetail
     },
     staleTime: 30 * 1000,
   })

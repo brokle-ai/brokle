@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableBody,
@@ -11,6 +12,8 @@ import type { QueueStatus, QueueWithStats } from '../api/types'
 
 interface AnnotationQueuesTableProps {
   rows: QueueWithStats[]
+  orgId: string
+  projectId: string
 }
 
 function StatusBadge({ status }: { status: QueueStatus }) {
@@ -24,7 +27,11 @@ function StatusBadge({ status }: { status: QueueStatus }) {
   }
 }
 
-export function AnnotationQueuesTable({ rows }: AnnotationQueuesTableProps) {
+export function AnnotationQueuesTable({
+  rows,
+  orgId,
+  projectId,
+}: AnnotationQueuesTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -57,7 +64,16 @@ export function AnnotationQueuesTable({ rows }: AnnotationQueuesTableProps) {
             const { queue, stats } = row
             return (
               <TableRow key={queue.id}>
-                <TableCell className="font-medium">{queue.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    to="/o/$orgId/p/$projectId/annotation-queues/$queueId"
+                    params={{ orgId, projectId, queueId: queue.id }}
+                    search={{ page: 1, limit: 20, itemStatus: undefined }}
+                    className="hover:underline"
+                  >
+                    {queue.name}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   <StatusBadge status={queue.status} />
                 </TableCell>

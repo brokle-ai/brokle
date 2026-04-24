@@ -1,6 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
-import type { ExperimentListResponse } from './types'
+import type {
+  ExperimentDetail,
+  ExperimentItemListResponse,
+  ExperimentListResponse,
+  ExperimentMetricsResponse,
+} from './types'
 
 export const experimentsKeys = {
   all: ['experiments'] as const,
@@ -40,4 +45,74 @@ export const experimentListQueryOptions = (
     // Experiments transition (running → completed) — keep window short
     // so the list reflects progress without aggressive refetch.
     staleTime: 15 * 1000,
+  })
+
+export const experimentDetailQueryOptions = (
+  projectId: string,
+  experimentId: string,
+) =>
+  queryOptions({
+    queryKey: experimentsKeys.detail(experimentId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/experiments/${experimentId}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ExperimentDetail
+    },
+    staleTime: 15 * 1000,
+  })
+
+// Metrics endpoint — separate query key so periodic refetch on progress
+// doesn't bust the detail-card cache.
+export const experimentMetricsKey = (experimentId: string) =>
+  [...experimentsKeys.detail(experimentId), 'metrics'] as const
+
+export const experimentMetricsQueryOptions = (
+  projectId: string,
+  experimentId: string,
+) =>
+  queryOptions({
+    queryKey: experimentMetricsKey(experimentId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/experiments/${experimentId}/metrics`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ExperimentMetricsResponse
+    },
+    staleTime: 10 * 1000,
+  })
+
+export interface ExperimentItemsListParams {
+  limit: number
+  offset: number
+}
+
+// Experiment items use limit/offset (predates the pageList wrapper used
+// elsewhere in evaluation). Derive page-boundary state at the render
+// layer the same way.
+export const experimentItemsKey = (
+  experimentId: string,
+  params: ExperimentItemsListParams,
+) => [...experimentsKeys.detail(experimentId), 'items', params] as const
+
+export const experimentItemsListQueryOptions = (
+  projectId: string,
+  experimentId: string,
+  params: ExperimentItemsListParams,
+) =>
+  queryOptions({
+    queryKey: experimentItemsKey(experimentId, params),
+    queryFn: async () => {
+      const search = new URLSearchParams()
+      search.set('limit', String(params.limit))
+      search.set('offset', String(params.offset))
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/experiments/${experimentId}/items?${search.toString()}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ExperimentItemListResponse
+    },
+    staleTime: 10 * 1000,
   })

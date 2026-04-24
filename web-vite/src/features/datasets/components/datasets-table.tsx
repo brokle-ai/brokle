@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableBody,
@@ -10,6 +11,8 @@ import type { DatasetListItem } from '../api/types'
 
 interface DatasetsTableProps {
   rows: DatasetListItem[]
+  orgId: string
+  projectId: string
 }
 
 function formatTimestamp(iso: string): string {
@@ -18,7 +21,7 @@ function formatTimestamp(iso: string): string {
   return d.toLocaleString()
 }
 
-export function DatasetsTable({ rows }: DatasetsTableProps) {
+export function DatasetsTable({ rows, orgId, projectId }: DatasetsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -46,7 +49,16 @@ export function DatasetsTable({ rows }: DatasetsTableProps) {
         <TableBody>
           {rows.map((dataset) => (
             <TableRow key={dataset.id}>
-              <TableCell className="font-medium">{dataset.name}</TableCell>
+              <TableCell className="font-medium">
+                <Link
+                  to="/o/$orgId/p/$projectId/datasets/$datasetId"
+                  params={{ orgId, projectId, datasetId: dataset.id }}
+                  search={{ page: 1, limit: 20 }}
+                  className="hover:underline"
+                >
+                  {dataset.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-muted-foreground max-w-md truncate">
                 {dataset.description ?? '—'}
               </TableCell>

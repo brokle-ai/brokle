@@ -1,6 +1,10 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
-import type { DatasetListResponse } from './types'
+import type {
+  DatasetDetail,
+  DatasetItemsListResponse,
+  DatasetListResponse,
+} from './types'
 
 // TkDodo-style hierarchical query keys. `list(projectId, params)`
 // invalidates cleanly via `lists()` once the detail-view port adds
@@ -44,4 +48,50 @@ export const datasetListQueryOptions = (
     // Datasets change infrequently (manual create/edit) — 30s keeps
     // in-tab navigation snappy without masking fresh changes.
     staleTime: 30 * 1000,
+  })
+
+export const datasetDetailQueryOptions = (
+  projectId: string,
+  datasetId: string,
+) =>
+  queryOptions({
+    queryKey: datasetsKeys.detail(datasetId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/datasets/${datasetId}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as DatasetDetail
+    },
+    staleTime: 30 * 1000,
+  })
+
+export interface DatasetItemsListParams {
+  page: number
+  limit: number
+}
+
+// Dataset items sub-key — nested under `detail(datasetId)` so cache
+// invalidation on a dataset also buckets items alongside the detail.
+export const datasetItemsKey = (datasetId: string, params: DatasetItemsListParams) =>
+  [...datasetsKeys.detail(datasetId), 'items', params] as const
+
+export const datasetItemsListQueryOptions = (
+  projectId: string,
+  datasetId: string,
+  params: DatasetItemsListParams,
+) =>
+  queryOptions({
+    queryKey: datasetItemsKey(datasetId, params),
+    queryFn: async () => {
+      const search = new URLSearchParams()
+      search.set('page', String(params.page))
+      search.set('limit', String(params.limit))
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/datasets/${datasetId}/items?${search.toString()}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as DatasetItemsListResponse
+    },
+    staleTime: 15 * 1000,
   })

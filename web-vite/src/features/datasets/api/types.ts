@@ -34,3 +34,40 @@ export interface EvaluationPageList<T> {
 }
 
 export type DatasetListResponse = EvaluationPageList<DatasetListItem>
+
+// Detail response at GET /api/v1/projects/{projectId}/datasets/{datasetId}.
+// Shape is `evaluationDomain.DatasetResponse` — no item_count (that's a
+// list-side rollup), no `updated_at` is omitted here since the endpoint
+// always returns it.
+export interface DatasetDetail {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  metadata?: Record<string, unknown>
+  current_version_id?: string
+  created_at: string
+  updated_at: string
+}
+
+// Dataset item source — matches the backend enum. `sdk` appears in
+// ingestion paths but the list handler preserves whatever the repo
+// persisted, so keep the union open-enough.
+export type DatasetItemSource = 'manual' | 'trace' | 'span' | 'csv' | 'json' | 'sdk'
+
+// Dataset item as emitted by the handler DTO in
+// internal/transport/http/handlers/evaluation/types.go. `source` is
+// pre-stringified server-side.
+export interface DatasetItem {
+  id: string
+  dataset_id: string
+  input: Record<string, unknown>
+  expected?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+  source: DatasetItemSource
+  source_trace_id?: string
+  source_span_id?: string
+  created_at: string
+}
+
+export type DatasetItemsListResponse = EvaluationPageList<DatasetItem>

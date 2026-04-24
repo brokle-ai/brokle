@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   Table,
   TableBody,
@@ -11,6 +12,10 @@ import type { TraceListItem } from '../api/types'
 
 interface TracesTableProps {
   rows: TraceListItem[]
+  // Render a link for the trace name column. The parent owns routing
+  // (TanStack Router `<Link>` with typed params), the table stays
+  // framework-agnostic.
+  renderNameLink?: (trace: TraceListItem, children: ReactNode) => ReactNode
 }
 
 // Duration arrives in nanoseconds (OTLP spec). Format into the biggest
@@ -26,11 +31,15 @@ function formatDuration(ns: number | undefined): string {
   return `${s.toFixed(2)}s`
 }
 
-function formatCost(cost: number | undefined): string {
-  if (cost === undefined || cost === null) return '—'
-  if (cost === 0) return '$0.00'
-  if (cost < 0.01) return `$${cost.toFixed(6)}`
-  return `$${cost.toFixed(4)}`
+// Cost arrives as a shopspring/decimal string (e.g. "0.000123"). Parse
+// defensively — a bad string renders as "—" rather than "NaN".
+function formatCost(costStr: string | undefined): string {
+  if (!costStr) return '—'
+  const n = Number(costStr)
+  if (!Number.isFinite(n)) return '—'
+  if (n === 0) return '$0.00'
+  if (n < 0.01) return `$${n.toFixed(6)}`
+  return `$${n.toFixed(4)}`
 }
 
 function formatTokens(tokens: number | undefined): string {
@@ -54,7 +63,7 @@ function StatusBadge({ trace }: { trace: TraceListItem }) {
   return <Badge variant="outline">Unset</Badge>
 }
 
-export function TracesTable({ rows }: TracesTableProps) {
+export function TracesTable({ rows, renderNameLink }: TracesTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -84,29 +93,34 @@ export function TracesTable({ rows }: TracesTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((trace) => (
-            <TableRow key={trace.trace_id}>
-              <TableCell>
-                <StatusBadge trace={trace} />
-              </TableCell>
-              <TableCell className="font-medium">{trace.name}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {trace.model_name ?? '—'}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {trace.provider_name ?? '—'}
-              </TableCell>
-              <TableCell>{formatDuration(trace.duration)}</TableCell>
-              <TableCell>{formatTokens(trace.tokens)}</TableCell>
-              <TableCell>{formatCost(trace.cost)}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimestamp(trace.start_time)}
-              </TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {trace.trace_id.slice(0, 12)}…
-              </TableCell>
-            </TableRow>
-          ))}
+          {rows.map((trace) => {
+            const nameCell = renderNameLink
+              ? renderNameLink(trace, trace.name)
+              : trace.name
+            return (
+              <TableRow key={trace.trace_id}>
+                <TableCell>
+                  <StatusBadge trace={trace} />
+                </TableCell>
+                <TableCell className="font-medium">{nameCell}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {trace.model_name ?? '—'}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {trace.provider_name ?? '—'}
+                </TableCell>
+                <TableCell>{formatDuration(trace.duration)}</TableCell>
+                <TableCell>{formatTokens(trace.total_tokens)}</TableCell>
+                <TableCell>{formatCost(trace.total_cost)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimestamp(trace.start_time)}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {trace.trace_id.slice(0, 12)}…
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>

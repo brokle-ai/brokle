@@ -3,12 +3,11 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
-import { DatasetsTable } from '@/features/datasets/components'
-import { datasetListQueryOptions } from '@/features/datasets/api/queries'
+import { PromptsTable } from '@/features/prompts/components'
+import { promptListQueryOptions } from '@/features/prompts/api/queries'
 
 // Zod-validated search params. `.catch` keeps a hostile URL from
 // throwing the whole route — invalid values fall back to the default.
-// Backend honours a 1–100 limit band on the pageList endpoints.
 const searchSchema = z.object({
   page: z.number().int().min(1).catch(1),
   limit: z.number().int().min(1).max(100).catch(20),
@@ -16,7 +15,7 @@ const searchSchema = z.object({
 })
 
 export const Route = createFileRoute(
-  '/_authenticated/o/$orgId/p/$projectId/datasets',
+  '/_authenticated/o/$orgId/p/$projectId/prompts/',
 )({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({
@@ -26,23 +25,23 @@ export const Route = createFileRoute(
   }),
   loader: ({ params, context, deps }) =>
     context.queryClient.ensureQueryData(
-      datasetListQueryOptions(params.projectId, {
+      promptListQueryOptions(params.projectId, {
         page: deps.page,
         limit: deps.limit,
         q: deps.q,
       }),
     ),
-  errorComponent: DatasetsErrorBoundary,
-  component: DatasetsPage,
+  errorComponent: PromptsErrorBoundary,
+  component: PromptsPage,
 })
 
-function DatasetsErrorBoundary({ error }: { error: Error }) {
+function PromptsErrorBoundary({ error }: { error: Error }) {
   if (error instanceof BrokleError && error.status >= 400 && error.status < 500) {
     return (
       <main className="mx-auto max-w-5xl p-6">
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-6">
           <p className="text-sm font-medium text-destructive">
-            Unable to load datasets
+            Unable to load prompts
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
         </div>
@@ -52,11 +51,11 @@ function DatasetsErrorBoundary({ error }: { error: Error }) {
   throw error
 }
 
-function DatasetsPage() {
+function PromptsPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
   const { data } = useSuspenseQuery(
-    datasetListQueryOptions(projectId, {
+    promptListQueryOptions(projectId, {
       page: search.page,
       limit: search.limit,
       q: search.q,
@@ -64,9 +63,7 @@ function DatasetsPage() {
   )
 
   const { data: rows, total, page, limit } = data
-  // Evaluation list envelope is flat `{data, total, page, limit}` — unlike
-  // observability's `pagination: {...}`. Derive page-boundary state here.
-  const totalPages = Math.max(1, Math.ceil(total / Math.max(1, limit)))
+  const totalPages = Math.max(1, Math.ceil(total / limit))
   const hasPrev = page > 1
   const hasNext = page < totalPages
 
@@ -74,14 +71,22 @@ function DatasetsPage() {
     <main className="mx-auto max-w-7xl p-6 space-y-4">
       <header className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Datasets</h1>
+          <h1 className="text-2xl font-semibold">Prompts</h1>
           <p className="text-sm text-muted-foreground">
             {total.toLocaleString()} total
           </p>
         </div>
+        <Button asChild size="sm">
+          <Link
+            to="/o/$orgId/p/$projectId/prompts/new"
+            params={{ orgId, projectId }}
+          >
+            New prompt
+          </Link>
+        </Button>
       </header>
 
-      <DatasetsTable rows={rows} orgId={orgId} projectId={projectId} />
+      <PromptsTable rows={rows} />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
@@ -90,7 +95,7 @@ function DatasetsPage() {
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm" disabled={!hasPrev}>
             <Link
-              to="/o/$orgId/p/$projectId/datasets"
+              to="/o/$orgId/p/$projectId/prompts"
               params={{ orgId, projectId }}
               search={{
                 page: Math.max(1, search.page - 1),
@@ -103,7 +108,7 @@ function DatasetsPage() {
           </Button>
           <Button asChild variant="outline" size="sm" disabled={!hasNext}>
             <Link
-              to="/o/$orgId/p/$projectId/datasets"
+              to="/o/$orgId/p/$projectId/prompts"
               params={{ orgId, projectId }}
               search={{
                 page: search.page + 1,

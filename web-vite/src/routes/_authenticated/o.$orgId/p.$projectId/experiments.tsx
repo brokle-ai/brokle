@@ -76,7 +76,7 @@ function ExperimentsPage() {
         </div>
       </header>
 
-      <ExperimentsTable rows={rows} />
+      <ExperimentsTable rows={rows} orgId={orgId} projectId={projectId} />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">

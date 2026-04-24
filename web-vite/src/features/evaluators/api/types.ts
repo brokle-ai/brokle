@@ -38,3 +38,38 @@ export interface EvaluationPageList<T> {
 }
 
 export type EvaluatorListResponse = EvaluationPageList<EvaluatorListItem>
+
+// Detail response — GET /api/v1/projects/{projectId}/evaluators/{evaluatorId}.
+// Matches `evaluationDomain.EvaluatorResponse` exactly; the backend list
+// endpoint emits the same struct, so detail and list share the shape.
+// Scorer config is a provider-agnostic map because it's one of three
+// discriminated union variants (LLM / builtin / regex) and the backend
+// decodes per `scorer_type` at write time.
+export type EvaluatorDetail = EvaluatorListItem
+
+// LLM scorer config shape — only populated when `scorer_type === 'llm'`.
+// We keep the cast fully at the read site (not a runtime validator) and
+// document the wire fields here so the detail view's prompt-render
+// panel has a typed target.
+export interface LLMScorerMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface LLMScorerOutputField {
+  name: string
+  type: 'numeric' | 'categorical' | 'boolean'
+  description?: string
+  min_value?: number
+  max_value?: number
+  categories?: string[]
+}
+
+export interface LLMScorerConfigShape {
+  credential_id: string
+  model: string
+  messages: LLMScorerMessage[]
+  temperature: number
+  response_format: 'json' | 'text'
+  output_schema: LLMScorerOutputField[]
+}

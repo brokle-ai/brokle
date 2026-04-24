@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableBody,
@@ -11,6 +12,8 @@ import type { ExperimentListItem, ExperimentStatus } from '../api/types'
 
 interface ExperimentsTableProps {
   rows: ExperimentListItem[]
+  orgId: string
+  projectId: string
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -34,7 +37,7 @@ function progressLabel(item: ExperimentListItem): string {
   return `${item.completed_items} / ${item.total_items} (${pct}%)`
 }
 
-export function ExperimentsTable({ rows }: ExperimentsTableProps) {
+export function ExperimentsTable({ rows, orgId, projectId }: ExperimentsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -67,7 +70,16 @@ export function ExperimentsTable({ rows }: ExperimentsTableProps) {
               <TableCell>
                 <StatusBadge status={experiment.status} />
               </TableCell>
-              <TableCell className="font-medium">{experiment.name}</TableCell>
+              <TableCell className="font-medium">
+                <Link
+                  to="/o/$orgId/p/$projectId/experiments/$experimentId"
+                  params={{ orgId, projectId, experimentId: experiment.id }}
+                  search={{ page: 1, limit: 20, offset: 0, q: undefined }}
+                  className="hover:underline"
+                >
+                  {experiment.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {experiment.source}
               </TableCell>

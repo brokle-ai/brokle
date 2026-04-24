@@ -1,1 +1,5 @@
 export { StatsRow } from './stats-row'
+export { TraceVolumeChart } from './trace-volume-chart'
+export { CostByModelChart } from './cost-by-model-chart'
+export { TopErrorsTable } from './top-errors-table'
+export { RecentTracesTable } from './recent-traces-table'

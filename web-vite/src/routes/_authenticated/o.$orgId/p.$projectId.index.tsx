@@ -4,7 +4,13 @@ import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import { projectMembershipQueryOptions } from '@/features/projects/queries'
 import { organizationMembershipQueryOptions } from '@/features/organizations/queries'
-import { StatsRow } from '@/features/overview/components'
+import {
+  CostByModelChart,
+  RecentTracesTable,
+  StatsRow,
+  TopErrorsTable,
+  TraceVolumeChart,
+} from '@/features/overview/components'
 import { overviewQueryOptions } from '@/features/overview/api/queries'
 
 // Project home. Phase 1.5 ships the stats row + a link through to
@@ -59,7 +65,14 @@ function ProjectHome() {
           <Link
             to="/o/$orgId/p/$projectId/traces"
             params={{ orgId, projectId }}
-            search={{ page: 1, limit: 20, q: undefined }}
+            search={{
+              page: 1,
+              limit: 20,
+              q: undefined,
+              status: undefined,
+              range: 'all',
+              model: undefined,
+            }}
           >
             View traces →
           </Link>
@@ -67,6 +80,20 @@ function ProjectHome() {
       </header>
 
       <StatsRow stats={overview.stats} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TraceVolumeChart data={overview.trace_volume} />
+        <CostByModelChart data={overview.cost_by_model} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TopErrorsTable data={overview.top_errors} />
+        <RecentTracesTable
+          orgId={orgId}
+          projectId={projectId}
+          data={overview.recent_traces}
+        />
+      </div>
     </main>
   )
 }

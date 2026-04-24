@@ -40,3 +40,66 @@ export interface EvaluationPageList<T> {
 }
 
 export type ExperimentListResponse = EvaluationPageList<ExperimentListItem>
+
+// Detail response — GET /api/v1/projects/{projectId}/experiments/{experimentId}
+// returns the same `evaluationDomain.ExperimentResponse` as the list.
+export type ExperimentDetail = ExperimentListItem
+
+// Experiment items live under `.../experiments/{id}/items` and return
+// `{items, total}` (flat — this endpoint predates the pageList wrapper).
+// `limit` / `offset` drive pagination on this endpoint, unlike the
+// page/limit convention everywhere else in evaluation.
+export interface ExperimentItem {
+  id: string
+  experiment_id: string
+  dataset_item_id?: string
+  trace_id?: string
+  input: Record<string, unknown>
+  output?: unknown
+  expected?: unknown
+  trial_number: number
+  metadata?: Record<string, unknown>
+  error?: string
+  created_at: string
+}
+
+export interface ExperimentItemListResponse {
+  items: ExperimentItem[]
+  total: number
+}
+
+// Metrics response — GET .../experiments/{id}/metrics. Provides progress
+// rollups (success/error rate) and per-score aggregations we surface on
+// the detail summary row.
+export interface ExperimentProgressMetrics {
+  total_items: number
+  completed_items: number
+  failed_items: number
+  pending_items: number
+  progress_pct: number
+  success_rate: number
+  error_rate: number
+}
+
+export interface ExperimentPerformanceMetrics {
+  started_at?: string
+  completed_at?: string
+  elapsed_seconds?: number
+  eta_seconds?: number
+}
+
+export interface ScoreMetrics {
+  mean: number
+  std_dev: number
+  min: number
+  max: number
+  count: number
+}
+
+export interface ExperimentMetricsResponse {
+  experiment_id: string
+  status: ExperimentStatus
+  progress: ExperimentProgressMetrics
+  performance: ExperimentPerformanceMetrics
+  scores?: Record<string, ScoreMetrics>
+}

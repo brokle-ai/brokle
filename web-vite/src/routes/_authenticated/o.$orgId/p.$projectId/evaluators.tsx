@@ -76,7 +76,7 @@ function EvaluatorsPage() {
         </div>
       </header>
 
-      <EvaluatorsTable rows={rows} />
+      <EvaluatorsTable rows={rows} orgId={orgId} projectId={projectId} />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">

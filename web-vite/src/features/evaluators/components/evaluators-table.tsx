@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableBody,
@@ -11,6 +12,8 @@ import type { EvaluatorListItem } from '../api/types'
 
 interface EvaluatorsTableProps {
   rows: EvaluatorListItem[]
+  orgId: string
+  projectId: string
 }
 
 function formatTimestamp(iso: string): string {
@@ -25,7 +28,7 @@ function StatusBadge({ status }: { status: EvaluatorListItem['status'] }) {
   return <Badge variant="outline">Inactive</Badge>
 }
 
-export function EvaluatorsTable({ rows }: EvaluatorsTableProps) {
+export function EvaluatorsTable({ rows, orgId, projectId }: EvaluatorsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border p-12 text-center">
@@ -58,7 +61,16 @@ export function EvaluatorsTable({ rows }: EvaluatorsTableProps) {
               <TableCell>
                 <StatusBadge status={evaluator.status} />
               </TableCell>
-              <TableCell className="font-medium">{evaluator.name}</TableCell>
+              <TableCell className="font-medium">
+                <Link
+                  to="/o/$orgId/p/$projectId/evaluators/$evaluatorId"
+                  params={{ orgId, projectId, evaluatorId: evaluator.id }}
+                  search={{ page: 1, limit: 20, q: undefined }}
+                  className="hover:underline"
+                >
+                  {evaluator.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {evaluator.trigger_type}
               </TableCell>

@@ -41,3 +41,40 @@ export interface QueueListResponse {
   page: number
   limit: number
 }
+
+// Detail endpoint — GET /api/v1/projects/{projectId}/annotation-queues/{queueId}/stats.
+// Returns `QueueWithStatsResponse` per the annotation handler. The plain
+// `/...{queueId}` endpoint exists too but returns only the queue; we
+// prefer the /stats variant so detail and list share the same aggregate
+// shape.
+export type QueueDetail = QueueWithStats
+
+// Items endpoint — GET /api/v1/projects/{projectId}/annotation-queues/{queueId}/items.
+// Returns a flat pageList envelope `{data, total, page, limit}`. `status`
+// is a server-side filter (pending|completed|skipped per the backend
+// enum) — enforce at the route search-schema layer.
+export type QueueItemStatus = 'pending' | 'completed' | 'skipped'
+
+export interface QueueItem {
+  id: string
+  queue_id: string
+  // W3C hex trace/span ID — NOT a uuid.
+  object_id: string
+  object_type: 'trace' | 'span'
+  status: string
+  priority: number
+  locked_at?: string
+  locked_by_user_id?: string
+  annotator_user_id?: string
+  completed_at?: string
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface QueueItemsListResponse {
+  data: QueueItem[]
+  total: number
+  page: number
+  limit: number
+}

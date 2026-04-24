@@ -87,7 +87,7 @@ function QueuesPage() {
         </div>
       </header>
 
-      <AnnotationQueuesTable rows={rows} />
+      <AnnotationQueuesTable rows={rows} orgId={orgId} projectId={projectId} />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
