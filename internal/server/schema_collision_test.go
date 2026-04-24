@@ -38,7 +38,6 @@ import (
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	orgDomain "brokle/internal/core/domain/organization"
-	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
@@ -48,7 +47,6 @@ import (
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	observabilityHandler "brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
-	playgroundHandler "brokle/internal/transport/http/handlers/playground"
 	promptHandler "brokle/internal/transport/http/handlers/prompt"
 	rbacHandler "brokle/internal/transport/http/handlers/rbac"
 )
@@ -63,7 +61,6 @@ import (
 // time.
 
 type dummyOrg struct{ orgDomain.OrganizationService }
-type dummyProject struct{ orgDomain.ProjectService }
 type dummyMember struct{ orgDomain.MemberService }
 type dummyDashboard struct{ dashboardDomain.DashboardService }
 type dummyWidgetQuery struct{ dashboardDomain.WidgetQueryService }
@@ -83,7 +80,6 @@ type dummyRole struct{ authDomain.RoleService }
 type dummyPermission struct{ authDomain.PermissionService }
 type dummyAuthOrgMember struct{ authDomain.OrganizationMemberService }
 type dummyScope struct{ authDomain.ScopeService }
-type dummyPlayground struct{ playgroundDomain.PlaygroundService }
 type dummyEvalScoreConfig struct{ evaluationDomain.ScoreConfigService }
 type dummyEvalDataset struct{ evaluationDomain.DatasetService }
 type dummyEvalDatasetItem struct{ evaluationDomain.DatasetItemService }
@@ -119,7 +115,6 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	organizationHandler.RegisterRoutes(api, dummyOrg{}, dummyMember{}, dummyInvitation{}, dummyOrgSettings{}, logger)
 	promptHandler.RegisterRoutes(api, dummyPromptSvc{}, dummyPromptCompiler{}, logger)
 	rbacHandler.RegisterRoutes(api, dummyRole{}, dummyPermission{}, dummyAuthOrgMember{}, dummyScope{}, logger)
-	playgroundHandler.RegisterRoutes(api, dummyPlayground{}, dummyProject{}, logger)
 
 	// Observability takes concrete *TraceService / *ScoreService /
 	// *ScoreAnalyticsService / *FilterPresetService pointers (not

@@ -118,7 +118,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	)...)
 	annotationHandler.RegisterSDKRoutes(sdkAuth, d.AnnotationItem, d.Logger)
 	promptHandler.RegisterSDKRoutes(sdkAuth, d.Prompt, d.Logger)
-	playgroundHandler.RegisterSDKRoutes(sdkAuth, d.Playground, d.Logger)
+	// playground SDK — migrated to chi; mounted on the chi bridge below.
 	observabilityHandler.RegisterSDKRoutes(sdkAuth, d.Observability.SpanQueryService, d.Logger)
 	evaluationHandler.RegisterSDKRoutes(
 		sdkAuth,
@@ -144,6 +144,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 			MetricsConverter:     d.Observability.OTLPMetricsConverterService,
 			Logger:               d.Logger,
 		})
+		playgroundHandler.RegisterSDKRoutes(r, d.Playground, d.Logger)
 	})
 
 	// -------------------- /api/v1 dashboard plane --------------------
@@ -203,6 +204,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		userHandler.RegisterRoutes(r, d.User, d.Profile, d.Organization, d.Logger)
 		commentHandler.RegisterRoutes(r, d.Comment, d.Logger)
 		projectHandler.RegisterRoutes(r, d.Project, d.Organization, d.OrgMemberOrg, d.Logger)
+		playgroundHandler.RegisterRoutes(r, d.Playground, d.Project, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -223,7 +225,6 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 	organizationHandler.RegisterRoutes(dashAuth, d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger)
 	promptHandler.RegisterRoutes(dashAuth, d.Prompt, d.PromptCompiler, d.Logger)
 	rbacHandler.RegisterRoutes(dashAuth, d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger)
-	playgroundHandler.RegisterRoutes(dashAuth, d.Playground, d.Project, d.Logger)
 	observabilityHandler.RegisterRoutes(
 		dashAuth,
 		d.Observability.TraceService,
