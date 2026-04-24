@@ -2,7 +2,9 @@ import { defineConfig, loadEnv } from 'vite'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import csp from 'vite-plugin-csp-guard'
 import path from 'node:path'
+import { cspPolicy } from './src/csp-policy'
 
 // Vite 8 + Rolldown (default). `advancedChunks.groups` replaces Rollup's
 // `manualChunks` — priority-based: higher wins on overlap.
@@ -15,6 +17,11 @@ export default defineConfig(({ mode }) => {
       TanStackRouterVite({ target: 'react', autoCodeSplitting: true }),
       react(),
       tailwindcss(),
+      csp({
+        dev: { run: false },
+        build: { sri: true },
+        policy: cspPolicy,
+      }),
     ],
     resolve: {
       alias: {

@@ -20,6 +20,7 @@ RUN apk add --no-cache brotli \
 FROM cgr.dev/chainguard/nginx:latest
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY public/config.js.template /etc/nginx/templates/config.js.template
 COPY docker-entrypoint.d/ /docker-entrypoint.d/
 # distroless nginx runs envsubst on /etc/nginx/templates/*.template at
