@@ -41,11 +41,9 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
-	userDomain "brokle/internal/core/domain/user"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/testing/humax"
 	annotationHandler "brokle/internal/transport/http/handlers/annotation"
-	apikeyHandler "brokle/internal/transport/http/handlers/apikey"
 	billingHandler "brokle/internal/transport/http/handlers/billing"
 	commentHandler "brokle/internal/transport/http/handlers/comment"
 	dashboardHandler "brokle/internal/transport/http/handlers/dashboard"
@@ -56,7 +54,6 @@ import (
 	projectHandler "brokle/internal/transport/http/handlers/project"
 	promptHandler "brokle/internal/transport/http/handlers/prompt"
 	rbacHandler "brokle/internal/transport/http/handlers/rbac"
-	userHandler "brokle/internal/transport/http/handlers/user"
 )
 
 // ---- interface stubs -------------------------------------------------
@@ -69,9 +66,6 @@ import (
 // time.
 
 type dummyComment struct{ commentDomain.Service }
-type dummyAPIKey struct{ authDomain.APIKeyService }
-type dummyUser struct{ userDomain.UserService }
-type dummyProfile struct{ userDomain.ProfileService }
 type dummyOrg struct{ orgDomain.OrganizationService }
 type dummyProject struct{ orgDomain.ProjectService }
 type dummyMember struct{ orgDomain.MemberService }
@@ -120,8 +114,7 @@ func TestHandlers_NoSchemaOrOperationIDCollisions(t *testing.T) {
 	// websiteHandler is chi-native (off Huma).
 	commentHandler.RegisterRoutes(api, dummyComment{}, logger)
 	// overviewHandler is chi-native (off Huma).
-	apikeyHandler.RegisterRoutes(api, dummyAPIKey{}, logger)
-	userHandler.RegisterRoutes(api, dummyUser{}, dummyProfile{}, dummyOrg{}, logger)
+	// apikeyHandler, userHandler are chi-native (off Huma).
 	// credentialsHandler is chi-native (off Huma); it no longer
 	// shares the Huma schema registry and is excluded here. Chi has
 	// no schema namespace, so collisions are structurally impossible.

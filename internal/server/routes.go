@@ -199,6 +199,8 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		r.Use(middleware.LimitByUser(rateLimitD))
 		credentialsHandler.RegisterRoutes(r, d.Credential, d.CredentialModelCatalog, d.Logger)
 		overviewHandler.RegisterRoutes(r, d.Overview, d.Logger)
+		apikeyHandler.RegisterRoutes(r, d.APIKey, d.Logger)
+		userHandler.RegisterRoutes(r, d.User, d.Profile, d.Organization, d.Logger)
 	})
 	authHandler.RegisterProtectedRoutes(dashAuth, authHandler.ProtectedDeps{
 		Auth:          d.Auth,
@@ -210,8 +212,7 @@ func addRoutes(r chi.Router, apiPublic, apiAdmin huma.API, d Deps) {
 		Config:        d.Config,
 		Logger:        d.Logger,
 	})
-	userHandler.RegisterRoutes(dashAuth, d.User, d.Profile, d.Organization, d.Logger)
-	apikeyHandler.RegisterRoutes(dashAuth, d.APIKey, d.Logger)
+	// user, apikey — migrated to chi; mounted on the chi bridge group above.
 	commentHandler.RegisterRoutes(dashAuth, d.Comment, d.Logger)
 	// overview — migrated to chi; mounted on the chi bridge group above.
 	// credentials — migrated to chi; mounted on the chi bridge group above.
