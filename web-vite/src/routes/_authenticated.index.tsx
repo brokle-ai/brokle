@@ -1,31 +1,48 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useCurrentUser } from '@/features/auth/hooks'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { organizationListQueryOptions } from '@/features/organizations/queries'
+import { projectListQueryOptions } from '@/features/projects/queries'
+import { useAuthStore } from '@/stores/auth-store'
 
-// Pilot route. The full dashboard home lives under the tenancy path
-// `/o/$orgId/p/$projectId/` (Phase 1.3c); this index lands a
-// signed-in user here if they haven't picked an org/project yet.
+// Authenticated root. Every dashboard URL lives under /o/$orgId/p/$projectId/
+// (Linear/Vercel precedent — see plan §Re-architecture). This index
+// resolves the right default for the current user and forwards them;
+// callers that deliberately want a picker screen can navigate to /o
+// directly.
 export const Route = createFileRoute('/_authenticated/')({
-  component: AuthenticatedHome,
+  loader: async ({ context }) => {
+    const defaultOrgId = useAuthStore.getState().user?.default_organization_id
+    const targetOrgId = defaultOrgId ?? (await resolveFirstOrg(context.queryClient))
+    if (!targetOrgId) {
+      throw redirect({ to: '/o' })
+    }
+
+    const targetProjectId = await resolveFirstProject(context.queryClient, targetOrgId)
+    if (!targetProjectId) {
+      throw redirect({
+        to: '/o/$orgId',
+        params: { orgId: targetOrgId },
+      })
+    }
+
+    throw redirect({
+      to: '/o/$orgId/p/$projectId',
+      params: { orgId: targetOrgId, projectId: targetProjectId },
+    })
+  },
+  component: () => null,
 })
 
-function AuthenticatedHome() {
-  const { data: user, isPending } = useCurrentUser()
-  if (isPending) return <p className="p-6">Loading…</p>
+async function resolveFirstOrg(
+  qc: import('@tanstack/react-query').QueryClient,
+): Promise<string | null> {
+  const list = await qc.ensureQueryData(organizationListQueryOptions())
+  return list.data[0]?.id ?? null
+}
 
-  return (
-    <main className="p-6 space-y-4">
-      <h1 className="text-xl font-semibold">
-        Welcome {user?.first_name ?? 'back'}
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Phase 1.3a scaffold — tenancy routes arrive in 1.3c.
-      </p>
-      <Link
-        to="/"
-        className="underline text-sm"
-      >
-        back to public landing
-      </Link>
-    </main>
-  )
+async function resolveFirstProject(
+  qc: import('@tanstack/react-query').QueryClient,
+  orgId: string,
+): Promise<string | null> {
+  const list = await qc.ensureQueryData(projectListQueryOptions(orgId))
+  return list.data[0]?.id ?? null
 }
