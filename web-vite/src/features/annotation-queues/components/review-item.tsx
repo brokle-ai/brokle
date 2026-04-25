@@ -40,7 +40,11 @@ import type {
   QueueItem,
   ScoreSubmission,
 } from '../api/types'
+import { useAnnotationKeyboard } from '../hooks/use-annotation-keyboard'
+import { KeyboardShortcutHint } from './keyboard-shortcut-hint'
+import { ProgressIndicator } from './progress-indicator'
 import { ScoreInput, type ScoreInputValue } from './score-input'
+import { SkipReasonDialog } from './skip-reason-dialog'
 
 interface ReviewItemProps {
   orgId: string
@@ -92,6 +96,7 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
   const [seenItemIds, setSeenItemIds] = useState<string[]>([])
   const [scores, setScores] = useState<ScoresState>({})
   const [noMoreItems, setNoMoreItems] = useState(false)
+  const [skipDialogOpen, setSkipDialogOpen] = useState(false)
 
   // Reset per-item form state whenever a new item is claimed.
   const resetScoresFor = useCallback((configs: ScoreConfig[]) => {
@@ -142,9 +147,11 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
   })
 
   const skipMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (reason: string | undefined) => {
       if (!currentItem) throw new Error('No active item to skip')
-      return skipItem(projectId, queueId, currentItem.id, {})
+      return skipItem(projectId, queueId, currentItem.id, {
+        reason: reason && reason.length > 0 ? reason : undefined,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -204,22 +211,31 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
     seenItemIds,
   ])
 
-  const handleSkip = useCallback(async () => {
+  const handleSkipConfirmed = useCallback(
+    async (reason: string) => {
+      if (!currentItem) return
+      try {
+        await skipMutation.mutateAsync(reason)
+        const skippedId = currentItem.id
+        const nextSeen = [...seenItemIds, skippedId]
+        setSeenItemIds(nextSeen)
+        setSkipDialogOpen(false)
+        setCurrentItem(null)
+        claimMutation.mutate(nextSeen)
+      } catch (err) {
+        toast.error('Failed to skip item', {
+          description:
+            err instanceof Error ? err.message : 'Please try again.',
+        })
+      }
+    },
+    [claimMutation, currentItem, seenItemIds, skipMutation],
+  )
+
+  const handleOpenSkipDialog = useCallback(() => {
     if (!currentItem) return
-    try {
-      await skipMutation.mutateAsync()
-      const skippedId = currentItem.id
-      const nextSeen = [...seenItemIds, skippedId]
-      setSeenItemIds(nextSeen)
-      setCurrentItem(null)
-      claimMutation.mutate(nextSeen)
-    } catch (err) {
-      toast.error('Failed to skip item', {
-        description:
-          err instanceof Error ? err.message : 'Please try again.',
-      })
-    }
-  }, [claimMutation, currentItem, seenItemIds, skipMutation])
+    setSkipDialogOpen(true)
+  }, [currentItem])
 
   const handleExit = useCallback(() => {
     navigate({
@@ -239,6 +255,15 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
     // signal; reviewers who want to pass without scoring should skip.
     return buildSubmissions().length > 0 && !busy
   }, [buildSubmissions, busy])
+
+  // Keyboard shortcuts — disabled while the skip-reason dialog is open
+  // to avoid double-fires (Esc closes the dialog instead of releasing).
+  useAnnotationKeyboard({
+    onSubmit: handleSubmitAndNext,
+    onSkip: handleOpenSkipDialog,
+    onRelease: handleExit,
+    enabled: !!currentItem && !skipDialogOpen,
+  })
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
@@ -378,7 +403,7 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleSkip}
+                  onClick={handleOpenSkipDialog}
                   disabled={busy}
                 >
                   {skipMutation.isPending ? (
@@ -389,10 +414,25 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
                   Skip
                 </Button>
               </div>
+
+              <ProgressIndicator
+                stats={detail.stats}
+                compact
+                showBreakdown={false}
+                className="mt-4"
+              />
+              <KeyboardShortcutHint className="mt-2" />
             </CardContent>
           </Card>
         </div>
       )}
+
+      <SkipReasonDialog
+        open={skipDialogOpen}
+        onOpenChange={setSkipDialogOpen}
+        onConfirm={handleSkipConfirmed}
+        isLoading={skipMutation.isPending}
+      />
     </main>
   )
 }

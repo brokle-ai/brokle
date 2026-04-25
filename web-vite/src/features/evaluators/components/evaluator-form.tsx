@@ -21,14 +21,18 @@ import { PromptEditor } from '@/editors/prompt-editor'
 import type {
   EvaluatorStatus,
   EvaluatorTrigger,
+  FilterClause,
   ScorerType,
   TargetScope,
 } from '../api/types'
+import { EvaluatorFilterBuilder } from './evaluator-filter-builder'
 
-// Form state is intentionally string-heavy: JSON fields are edited as
-// raw text and parsed at submit time. The alternative — piecewise
-// editors for `filter`, `scorer_config`, and `variable_mapping` — is a
-// v2 port. For v1 we trust the JSON editor + backend validation.
+// Form state mixes structured editors and raw JSON. The structured
+// path covers `filter` (visual builder) + the basics; raw JSON
+// remains for `scorer_config` and `variable_mapping` because
+// scorer schemas are scorer-type-discriminated and the variable
+// mapping is a v2 port. The backend validates the JSON shapes so we
+// trust submit-time syntax + server response.
 export interface EvaluatorFormState {
   name: string
   description: string
@@ -36,10 +40,10 @@ export interface EvaluatorFormState {
   targetScope: TargetScope
   triggerType: EvaluatorTrigger
   status: EvaluatorStatus
-  samplingRate: string // 0..1 decimal entered as text
+  samplingRate: string
   spanNamesCsv: string
   scorerConfigJson: string
-  filterJson: string
+  filter: FilterClause[]
   variableMappingJson: string
 }
 
@@ -53,7 +57,7 @@ export const EMPTY_EVALUATOR_FORM: EvaluatorFormState = {
   samplingRate: '1.0',
   spanNamesCsv: '',
   scorerConfigJson: '{\n  \n}\n',
-  filterJson: '[]',
+  filter: [],
   variableMappingJson: '[]',
 }
 
@@ -76,13 +80,10 @@ export interface ParsedEvaluatorForm {
   samplingRate: number
   spanNames: string[]
   scorerConfig: Record<string, unknown>
-  filter: unknown[]
+  filter: FilterClause[]
   variableMapping: unknown[]
 }
 
-// Attempted parse — returns either `{ ok: true, value }` or an error
-// message tagged with the field that failed. Keeps the form render
-// agnostic to JSON syntax errors (user sees them inline).
 export function parseEvaluatorForm(
   state: EvaluatorFormState,
 ): { ok: true; value: ParsedEvaluatorForm } | { ok: false; message: string } {
@@ -112,21 +113,6 @@ export function parseEvaluatorForm(
     Array.isArray(scorerConfig)
   ) {
     return { ok: false, message: 'Scorer config must be a JSON object.' }
-  }
-
-  let filter: unknown
-  try {
-    filter = JSON.parse(state.filterJson || '[]')
-  } catch (err) {
-    return {
-      ok: false,
-      message: `Filter JSON is invalid: ${
-        err instanceof Error ? err.message : 'parse error'
-      }`,
-    }
-  }
-  if (!Array.isArray(filter)) {
-    return { ok: false, message: 'Filter must be a JSON array.' }
   }
 
   let variableMapping: unknown
@@ -161,7 +147,7 @@ export function parseEvaluatorForm(
       samplingRate: sampling,
       spanNames,
       scorerConfig: scorerConfig as Record<string, unknown>,
-      filter: filter as unknown[],
+      filter: state.filter,
       variableMapping: variableMapping as unknown[],
     },
   }
@@ -185,10 +171,10 @@ export function EvaluatorForm({
     setState((prev) => ({ ...prev, [key]: value }))
   }
 
-  const displayError = useMemo(() => clientError ?? error ?? null, [
-    clientError,
-    error,
-  ])
+  const displayError = useMemo(
+    () => clientError ?? error ?? null,
+    [clientError, error],
+  )
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -337,18 +323,15 @@ export function EvaluatorForm({
         <CardHeader>
           <CardTitle className="text-base">Filter</CardTitle>
           <CardDescription>
-            JSON array of filter clauses. Empty array matches every
+            Build clause-by-clause targeting rules. Empty matches every
             span/trace in scope.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Textarea
-            value={state.filterJson}
-            onChange={(e) => update('filterJson', e.target.value)}
+          <EvaluatorFilterBuilder
+            value={state.filter}
+            onChange={(next) => update('filter', next)}
             disabled={isSubmitting}
-            rows={6}
-            className="font-mono text-xs"
-            aria-label="Filter JSON"
           />
         </CardContent>
       </Card>

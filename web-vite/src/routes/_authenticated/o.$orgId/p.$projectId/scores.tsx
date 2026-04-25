@@ -1,14 +1,17 @@
+import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import {
+  ScoreDetailSheet,
   ScoresFilterBar,
   ScoresTable,
   type ScoresFilterValue,
 } from '@/features/scores/components'
 import { scoreListQueryOptions } from '@/features/scores/api/queries'
+import type { ScoreListItem } from '@/features/scores/api/types'
 
 // Zod-validated search params. `.catch` keeps a hostile URL from
 // throwing the whole route — invalid values fall back to the default.
@@ -84,6 +87,7 @@ function ScoresPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
+  const [selectedScore, setSelectedScore] = useState<ScoreListItem | null>(null)
 
   const { data } = useSuspenseQuery(
     scoreListQueryOptions(projectId, {
@@ -127,7 +131,7 @@ function ScoresPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 space-y-4">
+    <main className="mx-auto max-w-7xl space-y-4 p-6">
       <header className="flex items-baseline justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Scores</h1>
@@ -135,11 +139,57 @@ function ScoresPage() {
             {pagination.total.toLocaleString()} total
           </p>
         </div>
+        <nav className="flex gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to="/o/$orgId/p/$projectId/scores/analytics"
+              params={{ orgId, projectId }}
+              search={{
+                page: 1,
+                limit: 20,
+                name: undefined,
+                source: undefined,
+                type: undefined,
+                traceId: undefined,
+                spanId: undefined,
+              }}
+            >
+              Analytics
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to="/o/$orgId/p/$projectId/scores/configs"
+              params={{ orgId, projectId }}
+              search={{
+                page: 1,
+                limit: 20,
+                name: undefined,
+                source: undefined,
+                type: undefined,
+                traceId: undefined,
+                spanId: undefined,
+              }}
+            >
+              Configs
+            </Link>
+          </Button>
+        </nav>
       </header>
 
       <ScoresFilterBar value={filterValue} onChange={handleFilterChange} />
 
-      <ScoresTable rows={rows} />
+      <ScoresTable rows={rows} onRowClick={setSelectedScore} />
+
+      <ScoreDetailSheet
+        score={selectedScore}
+        orgId={orgId}
+        projectId={projectId}
+        open={selectedScore !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedScore(null)
+        }}
+      />
 
       <nav className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">

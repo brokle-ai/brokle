@@ -1,13 +1,19 @@
 // Wire types for the annotation-queues list endpoint at
 // GET /api/v1/projects/{projectId}/annotation-queues. The list view
 // returns queue+stats pairs so we can show item counts without a
-// per-row stats roundtrip. Assignments are a separate endpoint; we
-// surface assignee count only when a follow-up port wires that in.
+// per-row stats roundtrip. Assignments are a separate endpoint.
 //
 // Envelope: flat page-based — `{data, total, page, limit}`. No
 // has_next/has_prev; derive at the render layer.
 
 export type QueueStatus = 'active' | 'paused' | 'archived'
+export type ObjectType = 'trace' | 'span'
+export type AssignmentRole = 'annotator' | 'reviewer' | 'admin'
+
+export interface QueueSettings {
+  lock_timeout_seconds?: number
+  auto_assignment?: boolean
+}
 
 export interface AnnotationQueue {
   id: string
@@ -17,6 +23,7 @@ export interface AnnotationQueue {
   instructions?: string
   score_config_ids: string[]
   status: QueueStatus
+  settings?: QueueSettings
   created_by?: string
   created_at: string
   updated_at: string
@@ -43,16 +50,9 @@ export interface QueueListResponse {
 }
 
 // Detail endpoint — GET /api/v1/projects/{projectId}/annotation-queues/{queueId}/stats.
-// Returns `QueueWithStatsResponse` per the annotation handler. The plain
-// `/...{queueId}` endpoint exists too but returns only the queue; we
-// prefer the /stats variant so detail and list share the same aggregate
-// shape.
 export type QueueDetail = QueueWithStats
 
-// Items endpoint — GET /api/v1/projects/{projectId}/annotation-queues/{queueId}/items.
-// Returns a flat pageList envelope `{data, total, page, limit}`. `status`
-// is a server-side filter (pending|completed|skipped per the backend
-// enum) — enforce at the route search-schema layer.
+// Items endpoint — GET .../items. Flat page envelope.
 export type QueueItemStatus = 'pending' | 'completed' | 'skipped'
 
 export interface QueueItem {
@@ -60,7 +60,7 @@ export interface QueueItem {
   queue_id: string
   // W3C hex trace/span ID — NOT a uuid.
   object_id: string
-  object_type: 'trace' | 'span'
+  object_type: ObjectType
   status: string
   priority: number
   locked_at?: string
@@ -79,24 +79,11 @@ export interface QueueItemsListResponse {
   limit: number
 }
 
-// Claim / complete / skip — item lifecycle during review.
-// Endpoints:
-//   POST /api/v1/projects/{projectId}/annotation-queues/{queueId}/items/claim
-//   POST .../items/{itemId}/complete
-//   POST .../items/{itemId}/skip
-//
-// ClaimNextRequest.seen_item_ids carries IDs the reviewer has already
-// touched in this session so the server picks a different one. Empty
-// array on first claim, grows as the reviewer progresses.
+// Item lifecycle requests.
 export interface ClaimNextRequest {
   seen_item_ids?: string[]
 }
 
-// Polymorphic value per the backend — number for NUMERIC/BOOLEAN
-// (BOOLEAN encodes true=1/false=0 at the server; we pass the raw
-// boolean here and let the wire serializer honour the polymorphism),
-// string for CATEGORICAL. Validated server-side against the referenced
-// score config's data type.
 export interface ScoreSubmission {
   score_config_id: string
   value: number | string | boolean
@@ -109,4 +96,53 @@ export interface CompleteItemRequest {
 
 export interface SkipItemRequest {
   reason?: string
+}
+
+// Queue CRUD requests.
+export interface CreateQueueRequest {
+  name: string
+  description?: string
+  instructions?: string
+  score_config_ids?: string[]
+  settings?: QueueSettings
+}
+
+export interface UpdateQueueRequest {
+  name?: string
+  description?: string
+  instructions?: string
+  score_config_ids?: string[]
+  status?: QueueStatus
+  settings?: QueueSettings
+}
+
+// Bulk add — POST /items with a `{items}` body.
+export interface AddQueueItemRequest {
+  object_id: string
+  object_type: ObjectType
+  priority?: number
+  metadata?: Record<string, unknown>
+}
+
+export interface AddItemsBatchRequest {
+  items: AddQueueItemRequest[]
+}
+
+export interface BatchAddItemsResponse {
+  created: number
+}
+
+// Assignments.
+export interface QueueAssignment {
+  id: string
+  queue_id: string
+  user_id: string
+  role: AssignmentRole
+  assigned_at: string
+  assigned_by?: string
+}
+
+export interface AssignUserRequest {
+  user_id: string
+  role: AssignmentRole
 }

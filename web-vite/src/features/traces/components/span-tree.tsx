@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ScoreTagList } from '@/features/scores'
+import type { Score } from '@/features/scores/types'
 import type { Span } from '../api/types'
 
 interface SpanNode extends Span {
@@ -75,12 +77,20 @@ interface SpanTreeProps {
   spans: Span[]
   selectedSpanId?: string
   onSpanSelect: (span: Span) => void
+  /**
+   * Scores keyed by span_id — drives the inline `<ScoreTagList>` chip
+   * row on each span. Optional: when omitted, no score badges render
+   * (used by callers that don't yet have scores fetched, e.g. the
+   * peek sheet's collapsed view).
+   */
+  scoresBySpanId?: Map<string, Score[]>
 }
 
 export function SpanTree({
   spans,
   selectedSpanId,
   onSpanSelect,
+  scoresBySpanId,
 }: SpanTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -180,6 +190,18 @@ export function SpanTree({
             <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
               {formatDuration(node.duration)}
             </span>
+
+            {scoresBySpanId && scoresBySpanId.get(node.span_id)?.length ? (
+              <div
+                className="ml-2 max-w-[160px] shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ScoreTagList
+                  scores={scoresBySpanId.get(node.span_id) ?? []}
+                  maxVisible={2}
+                />
+              </div>
+            ) : null}
           </div>
         )
       })}

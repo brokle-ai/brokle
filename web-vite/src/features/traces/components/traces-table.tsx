@@ -74,6 +74,12 @@ export interface TracesTableProps {
    * the sessions detail page), the table renders rows-only.
    */
   server?: TracesTableServerControl
+  /**
+   * Project scope for bulk-mutation actions (e.g. add-to-queue). Only
+   * read inside the bulk-actions branch — the embedded sessions-detail
+   * caller has no bulk surface and can omit it.
+   */
+  projectId?: string
 }
 
 /**
@@ -84,7 +90,12 @@ export interface TracesTableProps {
  * client-side — they're narrowing the current page of results — while
  * pagination + sort round-trip to the server.
  */
-export function TracesTable({ rows, renderNameLink, server }: TracesTableProps) {
+export function TracesTable({
+  rows,
+  renderNameLink,
+  server,
+  projectId,
+}: TracesTableProps) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -218,7 +229,7 @@ export function TracesTable({ rows, renderNameLink, server }: TracesTableProps) 
         }}
         pageSizes={server.pageSizes}
       />
-      <TracesBulkActions table={table} />
+      {projectId ? <TracesBulkActions table={table} projectId={projectId} /> : null}
     </div>
   )
 }

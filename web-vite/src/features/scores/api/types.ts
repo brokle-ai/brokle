@@ -73,3 +73,106 @@ export interface ScoreConfigListResponse {
   page: number
   limit: number
 }
+
+// Score-config CRUD requests. PATCH only sends populated fields.
+// `type` is intentionally absent from the update shape — the backend
+// rejects type changes once a config has scores attached, and the
+// dashboard form locks the data-type selector after creation.
+export interface CreateScoreConfigRequest {
+  name: string
+  description?: string
+  type: ScoreDataType
+  min_value?: number
+  max_value?: number
+  categories?: string[]
+  metadata?: Record<string, unknown>
+}
+
+export interface UpdateScoreConfigRequest {
+  name?: string
+  description?: string
+  min_value?: number
+  max_value?: number
+  categories?: string[]
+  metadata?: Record<string, unknown>
+}
+
+// Score analytics surface — GET /api/v1/projects/{projectId}/scores/analytics.
+// The backend computes statistics, time-series, distribution, heatmap,
+// and (optionally) a paired comparison set when `compare_score_name`
+// is supplied. Mirrors the `ScoreAnalyticsData` Go struct in
+// internal/core/domain/observability/repository.go.
+export interface ScoreAnalyticsParams {
+  score_name: string
+  compare_score_name?: string
+  from_timestamp?: string
+  to_timestamp?: string
+  interval?: 'hour' | 'day' | 'week'
+}
+
+export interface ScoreStatistics {
+  count: number
+  mean: number
+  std_dev: number
+  min: number
+  max: number
+  median: number
+  mode?: string
+  mode_percent?: number
+}
+
+export interface TimeSeriesPoint {
+  timestamp: string
+  avg_value: number
+  count: number
+}
+
+export interface DistributionBin {
+  bin_start: number
+  bin_end: number
+  count: number
+}
+
+export interface HeatmapCell {
+  row: number
+  col: number
+  value: number
+  row_label: string
+  col_label: string
+}
+
+export interface ComparisonMetrics {
+  matched_count: number
+  pearson_correlation: number
+  spearman_correlation: number
+  mae: number
+  rmse: number
+  cohens_kappa?: number
+  overall_agreement?: number
+}
+
+export interface ScoreAnalyticsData {
+  statistics: ScoreStatistics
+  time_series: TimeSeriesPoint[]
+  distribution: DistributionBin[]
+  heatmap?: HeatmapCell[]
+  comparison?: ComparisonMetrics
+  compare_statistics?: ScoreStatistics
+  compare_time_series?: TimeSeriesPoint[]
+  compare_distribution?: DistributionBin[]
+}
+
+// UI helper type for statistics-utils.ts. The interpretation functions
+// translate a numeric metric into a (strength, color, description)
+// triple driving badge coloring and tooltip copy.
+export interface InterpretationResult {
+  strength:
+    | 'Very Strong'
+    | 'Strong'
+    | 'Moderate'
+    | 'Weak'
+    | 'Very Weak'
+    | 'None'
+  color: 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'gray'
+  description: string
+}

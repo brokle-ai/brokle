@@ -1,10 +1,15 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  CreateScoreConfigRequest,
+  ScoreAnalyticsData,
+  ScoreAnalyticsParams,
+  ScoreConfig,
   ScoreConfigListResponse,
   ScoreDataType,
   ScoreListResponse,
   ScoreSource,
+  UpdateScoreConfigRequest,
 } from './types'
 
 // Deletes a single score by trace + score id. Mirrors the backend
@@ -29,6 +34,13 @@ export const scoresKeys = {
   configs: () => [...scoresKeys.all, 'configs'] as const,
   configsList: (projectId: string) =>
     [...scoresKeys.configs(), projectId] as const,
+  configsListPaged: (projectId: string, page: number, limit: number) =>
+    [...scoresKeys.configs(), projectId, page, limit] as const,
+  analytics: () => [...scoresKeys.all, 'analytics'] as const,
+  analyticsData: (projectId: string, params: ScoreAnalyticsParams) =>
+    [...scoresKeys.analytics(), 'data', projectId, params] as const,
+  analyticsNames: (projectId: string) =>
+    [...scoresKeys.analytics(), 'names', projectId] as const,
 } as const
 
 export interface ScoreListParams {
@@ -81,6 +93,109 @@ export const scoreConfigsQueryOptions = (projectId: string) =>
         { method: 'GET' },
       )
       return (await resp.json()) as ScoreConfigListResponse
+    },
+    staleTime: 60 * 1000,
+  })
+
+// Paginated score-configs query for the configs management surface.
+// `scoreConfigsQueryOptions` deliberately fetches a high cap for
+// embedded annotation widgets; the configs CRUD page wants real
+// pagination so we keep a separate keyed query.
+export const scoreConfigsPagedQueryOptions = (
+  projectId: string,
+  page: number,
+  limit: number,
+) =>
+  queryOptions({
+    queryKey: scoresKeys.configsListPaged(projectId, page, limit),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/score-configs?page=${page}&limit=${limit}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ScoreConfigListResponse
+    },
+    staleTime: 30 * 1000,
+  })
+
+export async function createScoreConfig(
+  projectId: string,
+  data: CreateScoreConfigRequest,
+): Promise<ScoreConfig> {
+  const resp = await rawFetch(`/api/v1/projects/${projectId}/score-configs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as ScoreConfig
+}
+
+export async function updateScoreConfig(
+  projectId: string,
+  configId: string,
+  data: UpdateScoreConfigRequest,
+): Promise<ScoreConfig> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/score-configs/${configId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as ScoreConfig
+}
+
+export async function deleteScoreConfig(
+  projectId: string,
+  configId: string,
+): Promise<void> {
+  await rawFetch(`/api/v1/projects/${projectId}/score-configs/${configId}`, {
+    method: 'DELETE',
+  })
+}
+
+// Score analytics — primary aggregation surface for the analytics
+// dashboard. The handler computes statistics, time series, and (when
+// `compare_score_name` is supplied) a paired heatmap + comparison
+// metrics in one round trip; we mirror that single-call shape.
+export const scoreAnalyticsQueryOptions = (
+  projectId: string,
+  params: ScoreAnalyticsParams,
+) =>
+  queryOptions({
+    queryKey: scoresKeys.analyticsData(projectId, params),
+    queryFn: async () => {
+      const search = new URLSearchParams()
+      search.set('score_name', params.score_name)
+      if (params.compare_score_name)
+        search.set('compare_score_name', params.compare_score_name)
+      if (params.from_timestamp)
+        search.set('from_timestamp', params.from_timestamp)
+      if (params.to_timestamp) search.set('to_timestamp', params.to_timestamp)
+      if (params.interval) search.set('interval', params.interval)
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/scores/analytics?${search.toString()}`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ScoreAnalyticsData
+    },
+    staleTime: 60 * 1000,
+  })
+
+// The names endpoint feeds the score selector on the analytics page.
+// Returns a flat string array of distinct score names recorded in the
+// project. Cached longer than analytics — the catalog churns less than
+// the underlying values.
+export const scoreNamesQueryOptions = (projectId: string) =>
+  queryOptions({
+    queryKey: scoresKeys.analyticsNames(projectId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/scores/names`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as string[]
     },
     staleTime: 60 * 1000,
   })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import { type Table } from '@tanstack/react-table'
 import { toast } from 'sonner'
@@ -9,11 +9,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { BulkActionsToolbar } from '@/components/bulk-actions-toolbar'
+import { BulkAddToQueueButton } from '@/features/annotation-queues/components/bulk-add-to-queue-button'
 import { TracesMultiDeleteDialog } from './traces-multi-delete-dialog'
 import type { TraceListItem } from '../api/types'
 
 type TracesBulkActionsProps = {
   table: Table<TraceListItem>
+  projectId: string
 }
 
 /**
@@ -21,8 +23,23 @@ type TracesBulkActionsProps = {
  * disabled until the backend exposes bulk endpoints — the button shapes
  * exist so UI parity is preserved and enabling them is a one-line flip.
  */
-export function TracesBulkActions({ table }: TracesBulkActionsProps) {
+export function TracesBulkActions({
+  table,
+  projectId,
+}: TracesBulkActionsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // Trace IDs for the currently-selected rows. Memoized so the
+  // BulkAddToQueueButton's mutation closure doesn't get a fresh array
+  // identity on unrelated re-renders.
+  const selectedTraceIds = useMemo(
+    () =>
+      table
+        .getSelectedRowModel()
+        .rows.map((r) => r.original.trace_id)
+        .filter((id): id is string => Boolean(id)),
+    [table],
+  )
 
   const handleBulkExport = () => {
     toast.error('Export functionality is not yet available', {
@@ -41,6 +58,11 @@ export function TracesBulkActions({ table }: TracesBulkActionsProps) {
   return (
     <>
       <BulkActionsToolbar table={table} entityName="trace">
+        <BulkAddToQueueButton
+          projectId={projectId}
+          objectIds={selectedTraceIds}
+          objectType="trace"
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

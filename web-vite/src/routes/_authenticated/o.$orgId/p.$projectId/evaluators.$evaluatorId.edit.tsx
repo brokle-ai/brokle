@@ -20,6 +20,7 @@ import {
 import type {
   EvaluatorDetail,
   UpdateEvaluatorRequest,
+  VariableMap,
 } from '@/features/evaluators/api/types'
 
 // TanStack Router merges sibling-route search schemas along the URL
@@ -70,7 +71,7 @@ function seedFormState(evaluator: EvaluatorDetail): EvaluatorFormState {
     samplingRate: String(evaluator.sampling_rate),
     spanNamesCsv: evaluator.span_names.join(', '),
     scorerConfigJson: JSON.stringify(evaluator.scorer_config ?? {}, null, 2),
-    filterJson: JSON.stringify(evaluator.filter ?? [], null, 2),
+    filter: evaluator.filter ?? [],
     variableMappingJson: JSON.stringify(
       evaluator.variable_mapping ?? [],
       null,
@@ -107,7 +108,7 @@ function EditEvaluatorPage() {
         sampling_rate: v.samplingRate,
         scorer_type: v.scorerType,
         scorer_config: v.scorerConfig,
-        variable_mapping: v.variableMapping,
+        variable_mapping: v.variableMapping as VariableMap[],
       }
       return updateEvaluator(projectId, evaluatorId, body)
     },

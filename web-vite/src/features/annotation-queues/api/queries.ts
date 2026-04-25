@@ -1,8 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
+  AddItemsBatchRequest,
+  AssignUserRequest,
+  BatchAddItemsResponse,
   ClaimNextRequest,
   CompleteItemRequest,
+  QueueAssignment,
   QueueDetail,
   QueueItem,
   QueueItemStatus,
@@ -10,6 +14,7 @@ import type {
   QueueListResponse,
   QueueStatus,
   SkipItemRequest,
+  UpdateQueueRequest,
 } from './types'
 
 export const queuesKeys = {
@@ -19,6 +24,8 @@ export const queuesKeys = {
     [...queuesKeys.lists(), projectId, params] as const,
   details: () => [...queuesKeys.all, 'detail'] as const,
   detail: (queueId: string) => [...queuesKeys.details(), queueId] as const,
+  assignments: (queueId: string) =>
+    [...queuesKeys.detail(queueId), 'assignments'] as const,
 } as const
 
 export interface QueueListParams {
@@ -146,4 +153,100 @@ export async function skipItem(
     },
   )
   return (await resp.json()) as QueueItem
+}
+
+export async function releaseItem(
+  projectId: string,
+  queueId: string,
+  itemId: string,
+): Promise<void> {
+  await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/items/${itemId}/release`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  )
+}
+
+// Bulk-add items. Backend POST .../items accepts `{items: [...]}` and
+// returns `{created}`. Used by the queue-detail "Add items" dialog and
+// the traces bulk-actions strip.
+export async function addQueueItems(
+  projectId: string,
+  queueId: string,
+  data: AddItemsBatchRequest,
+): Promise<BatchAddItemsResponse> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/items`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as BatchAddItemsResponse
+}
+
+// Update queue — PUT (NOT PATCH). Body fields are all optional; backend
+// performs a partial update.
+export async function updateQueue(
+  projectId: string,
+  queueId: string,
+  data: UpdateQueueRequest,
+): Promise<unknown> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return resp.json()
+}
+
+// Assignments.
+export const queueAssignmentsQueryOptions = (
+  projectId: string,
+  queueId: string,
+) =>
+  queryOptions({
+    queryKey: queuesKeys.assignments(queueId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/annotation-queues/${queueId}/assignments`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as QueueAssignment[]
+    },
+    staleTime: 30 * 1000,
+  })
+
+export async function assignQueueUser(
+  projectId: string,
+  queueId: string,
+  data: AssignUserRequest,
+): Promise<QueueAssignment> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/assignments`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  return (await resp.json()) as QueueAssignment
+}
+
+export async function unassignQueueUser(
+  projectId: string,
+  queueId: string,
+  userId: string,
+): Promise<void> {
+  await rawFetch(
+    `/api/v1/projects/${projectId}/annotation-queues/${queueId}/assignments/${userId}`,
+    { method: 'DELETE' },
+  )
 }

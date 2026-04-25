@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import {
   ResizableHandle,
@@ -7,7 +9,15 @@ import {
 } from '@/components/ui/resizable'
 import { Network, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { Score } from '@/features/scores/types'
 import type { Span, TraceDetail } from '../api/types'
+import {
+  traceListQueryOptions,
+  traceScoresQueryOptions,
+  type TraceScoreItem,
+} from '../api/queries'
+import { useSessionGrouping } from '../hooks/use-session-grouping'
+import { SessionTimeline } from './session-timeline'
 import { SpanTree } from './span-tree'
 import { SpanDetailPanel } from './span-detail-panel'
 import { IoPreview } from './io-preview'
@@ -20,6 +30,34 @@ interface TraceDetailLayoutProps {
   orgId: string
   projectId: string
   className?: string
+}
+
+/**
+ * Adapt the trace-scoped score wire shape to the scores feature's
+ * `Score` (widens `source: string` → the typed `'code' | 'llm' |
+ * 'human'` enum). The backend currently returns a free-form source
+ * string; unknown values default to `'human'` so the badge palette
+ * still resolves.
+ */
+function toScore(item: TraceScoreItem): Score {
+  const known: Score['source'][] = ['code', 'llm', 'human']
+  const source = (known as string[]).includes(item.source)
+    ? (item.source as Score['source'])
+    : 'human'
+  return {
+    id: item.id,
+    project_id: item.project_id,
+    trace_id: item.trace_id,
+    span_id: item.span_id,
+    name: item.name,
+    value: item.value,
+    string_value: item.string_value,
+    type: item.type,
+    source,
+    reason: item.reason,
+    created_by: item.created_by,
+    timestamp: item.timestamp,
+  }
 }
 
 type MiddleView = 'graph' | 'io'
@@ -69,6 +107,53 @@ export function TraceDetailLayout({
     setSelectedSpanId(span.span_id)
   }, [])
 
+  // Multi-turn navigation: when the trace carries a session_id, pull
+  // the session's full trace list and feed the SessionTimeline. Skipped
+  // entirely for standalone traces so we don't fire a redundant query.
+  const navigate = useNavigate()
+  const sessionId = trace.session_id ?? ''
+  const { data: sessionData } = useQuery({
+    ...traceListQueryOptions(projectId, {
+      page: 1,
+      limit: 100,
+      range: 'all',
+      sessionId,
+    }),
+    enabled: sessionId.length > 0,
+  })
+  const { currentSession } = useSessionGrouping(
+    sessionData?.data ?? [],
+    trace.trace_id,
+  )
+  const handleTurnSelect = React.useCallback(
+    (traceId: string) => {
+      void navigate({
+        to: '/o/$orgId/p/$projectId/traces/$traceId',
+        params: { orgId, projectId, traceId },
+      })
+    },
+    [navigate, orgId, projectId],
+  )
+
+  // Pull all scores for this trace once and memoise a span_id-keyed
+  // index. The list is small (per-trace) so an in-memory lookup beats
+  // a per-row request, and the data also hydrates the future scores
+  // tab without an additional fetch.
+  const { data: traceScores = [] } = useQuery(
+    traceScoresQueryOptions(projectId, trace.trace_id),
+  )
+  const scoresBySpanId = React.useMemo(() => {
+    const map = new Map<string, Score[]>()
+    for (const score of traceScores) {
+      if (!score.span_id) continue
+      const widened = toScore(score)
+      const bucket = map.get(score.span_id)
+      if (bucket) bucket.push(widened)
+      else map.set(score.span_id, [widened])
+    }
+    return map
+  }, [traceScores])
+
   return (
     <div className={cn('flex h-full flex-col', className)}>
       <TraceDetailHeader
@@ -76,7 +161,16 @@ export function TraceDetailLayout({
         spans={spans}
         orgId={orgId}
         projectId={projectId}
+        selectedSpanId={selectedSpanId}
       />
+
+      {currentSession && (
+        <SessionTimeline
+          session={currentSession}
+          currentTraceId={trace.trace_id}
+          onTraceSelect={handleTurnSelect}
+        />
+      )}
 
       <div className="min-h-0 flex-1">
         {spans.length === 0 ? (
@@ -103,6 +197,7 @@ export function TraceDetailLayout({
                     spans={spans}
                     selectedSpanId={selectedSpanId}
                     onSpanSelect={handleSpanSelect}
+                    scoresBySpanId={scoresBySpanId}
                   />
                 </div>
               </div>

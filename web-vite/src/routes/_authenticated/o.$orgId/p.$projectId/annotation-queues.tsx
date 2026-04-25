@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { BrokleError } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import { AnnotationQueuesTable } from '@/features/annotation-queues/components'
+import { QueuesToolbar } from '@/features/annotation-queues/components/queues-toolbar'
 import { queueListQueryOptions } from '@/features/annotation-queues/api/queries'
+import type { QueueStatus } from '@/features/annotation-queues/api/types'
 
 const searchSchema = z.object({
   page: z.number().int().min(1).catch(1),
@@ -59,6 +61,7 @@ function QueuesErrorBoundary({ error }: { error: Error }) {
 function QueuesPage() {
   const { orgId, projectId } = Route.useParams()
   const search = Route.useSearch()
+  const navigate = useNavigate()
   const { data } = useSuspenseQuery(
     queueListQueryOptions(projectId, {
       page: search.page,
@@ -76,6 +79,42 @@ function QueuesPage() {
   const hasPrev = page > 1
   const hasNext = page < totalPages
 
+  // Toolbar dispatches to URL-driven search params — single source of
+  // truth for filters lives in the route's search schema, not local
+  // state. Resetting `page` to 1 on filter change avoids landing on
+  // an empty page after a status flip narrows the result set.
+  const handleSearchChange = (q: string) => {
+    void navigate({
+      to: '/o/$orgId/p/$projectId/annotation-queues',
+      params: { orgId, projectId },
+      search: {
+        page: 1,
+        limit: search.limit,
+        status: search.status,
+        q: q.length > 0 ? q : undefined,
+      },
+    })
+  }
+  const handleStatusChange = (next: QueueStatus | null) => {
+    void navigate({
+      to: '/o/$orgId/p/$projectId/annotation-queues',
+      params: { orgId, projectId },
+      search: {
+        page: 1,
+        limit: search.limit,
+        status: next ?? undefined,
+        q: search.q,
+      },
+    })
+  }
+  const handleReset = () => {
+    void navigate({
+      to: '/o/$orgId/p/$projectId/annotation-queues',
+      params: { orgId, projectId },
+      search: { page: 1, limit: search.limit, status: undefined, q: undefined },
+    })
+  }
+
   return (
     <main className="mx-auto max-w-7xl p-6 space-y-4">
       <header className="flex items-baseline justify-between">
@@ -86,6 +125,14 @@ function QueuesPage() {
           </p>
         </div>
       </header>
+
+      <QueuesToolbar
+        search={search.q ?? null}
+        status={search.status ?? null}
+        onSearchChange={handleSearchChange}
+        onStatusChange={handleStatusChange}
+        onReset={handleReset}
+      />
 
       <AnnotationQueuesTable rows={rows} orgId={orgId} projectId={projectId} />
 

@@ -15,6 +15,7 @@ import { DeleteScoreDialog } from './delete-score-dialog'
 
 interface ScoresTableProps {
   rows: ScoreListItem[]
+  onRowClick?: (row: ScoreListItem) => void
 }
 
 function formatTimestamp(iso: string): string {
@@ -67,7 +68,7 @@ function SourceBadge({ source }: { source: ScoreSource }) {
   }
 }
 
-export function ScoresTable({ rows }: ScoresTableProps) {
+export function ScoresTable({ rows, onRowClick }: ScoresTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<ScoreListItem | null>(null)
 
   if (rows.length === 0) {
@@ -99,7 +100,11 @@ export function ScoresTable({ rows }: ScoresTableProps) {
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                className={onRowClick ? 'cursor-pointer' : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell>
                   <TypeBadge type={row.type} />
@@ -120,7 +125,10 @@ export function ScoresTable({ rows }: ScoresTableProps) {
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                     disabled={!row.trace_id}
-                    onClick={() => setDeleteTarget(row)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteTarget(row)
+                    }}
                     aria-label="Delete score"
                   >
                     <Trash2 className="h-4 w-4" />

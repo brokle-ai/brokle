@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { z } from 'zod'
+import { toast } from 'sonner'
 import { BrokleError } from '@/lib/api/errors'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   TracesPeekView,
   TracesTable,
@@ -14,7 +16,11 @@ import {
   useTraces,
 } from '@/features/traces/context/traces-context'
 import { AddTraceToDatasetDialog } from '@/features/datasets'
-import { traceListQueryOptions } from '@/features/traces/api/queries'
+import {
+  deleteTrace,
+  traceListQueryOptions,
+  tracesKeys,
+} from '@/features/traces/api/queries'
 import type { TraceListItem } from '@/features/traces/api/types'
 
 /**
@@ -79,6 +85,8 @@ export const Route = createFileRoute(
         status: deps.status,
         range: deps.range,
         model: deps.model,
+        sortBy: deps.sort_by,
+        sortDir: deps.sort_dir,
       }),
     ),
   errorComponent: TracesErrorBoundary,
@@ -115,6 +123,7 @@ function TracesPageInner() {
   const navigate = useNavigate({ from: Route.fullPath })
   const { setCurrentPageTraceIds, setCurrentPageTraces } = useTraces()
 
+  const queryClient = useQueryClient()
   const { data, isFetching } = useSuspenseQuery(
     traceListQueryOptions(projectId, {
       page: search.page,
@@ -123,6 +132,8 @@ function TracesPageInner() {
       status: search.status,
       range: search.range,
       model: search.model,
+      sortBy: search.sort_by,
+      sortDir: search.sort_dir,
     }),
   )
 
@@ -137,6 +148,21 @@ function TracesPageInner() {
 
   const [addToDatasetTrace, setAddToDatasetTrace] =
     useState<TraceListItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<TraceListItem | null>(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: (traceId: string) => deleteTrace(projectId, traceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: tracesKeys.lists() })
+      toast.success('Trace deleted')
+      setDeleteTarget(null)
+    },
+    onError: (err) => {
+      toast.error('Failed to delete trace', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    },
+  })
 
   const handleFilterChange = (next: TracesFilterValue) => {
     navigate({
@@ -210,6 +236,7 @@ function TracesPageInner() {
 
       <TracesTable
         rows={rows}
+        projectId={projectId}
         renderNameLink={(trace, children) => (
           <Link
             to="/o/$orgId/p/$projectId/traces/$traceId"
@@ -230,7 +257,31 @@ function TracesPageInner() {
           isFetching,
           onViewDetail: handleViewDetail,
           onAddToDataset: setAddToDatasetTrace,
+          onDelete: setDeleteTarget,
           onRowClick: handleOpenPeek,
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        title="Delete trace?"
+        desc={
+          <>
+            This will permanently delete trace{' '}
+            <span className="font-mono text-xs">
+              {deleteTarget?.trace_id.slice(0, 12)}…
+            </span>{' '}
+            and all of its spans. This action cannot be undone.
+          </>
+        }
+        confirmText="Delete"
+        destructive
+        isLoading={deleteMutation.isPending}
+        handleConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.trace_id)
         }}
       />
 

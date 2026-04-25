@@ -13,7 +13,11 @@ import {
   queueDetailQueryOptions,
   queueItemsListQueryOptions,
 } from '../api/queries'
+import { AddItemsDialogStandalone } from './add-items-dialog-standalone'
+import { AssignmentDialog } from './assignment-dialog'
+import { ProgressIndicator } from './progress-indicator'
 import { QueueItemsTable } from './queue-items-table'
+import { SettingsDialog } from './settings-dialog'
 import type { QueueItemStatus, QueueStatus } from '../api/types'
 
 interface AnnotationQueueDetailProps {
@@ -92,30 +96,44 @@ export function AnnotationQueueDetail({
               <CardTitle>{queue.name}</CardTitle>
               <StatusBadge status={queue.status} />
             </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                // TanStack Router cascades parent search schemas into
-                // the leaf's inferred type, so even though the review
-                // route's own `validateSearch` is an open record, the
-                // target search still requires the parent's
-                // page/limit/status/q fields. We supply defaults
-                // here; the route strips them at runtime.
-                void navigate({
-                  to: '/o/$orgId/p/$projectId/annotation-queues/$queueId/review',
-                  params: { orgId, projectId, queueId },
-                  search: {
-                    page: 1,
-                    limit: 20,
-                    itemStatus: undefined,
-                    status: undefined,
-                    q: undefined,
-                  },
-                })
-              }}
-            >
-              Start review
-            </Button>
+            <div className="flex items-center gap-2">
+              <AddItemsDialogStandalone
+                projectId={projectId}
+                queueId={queueId}
+                queueName={queue.name}
+              />
+              <AssignmentDialog
+                orgId={orgId}
+                projectId={projectId}
+                queueId={queueId}
+                queueName={queue.name}
+              />
+              <SettingsDialog projectId={projectId} queue={queue} />
+              <Button
+                size="sm"
+                onClick={() => {
+                  // TanStack Router cascades parent search schemas into
+                  // the leaf's inferred type, so even though the review
+                  // route's own `validateSearch` is an open record, the
+                  // target search still requires the parent's
+                  // page/limit/status/q fields. We supply defaults
+                  // here; the route strips them at runtime.
+                  void navigate({
+                    to: '/o/$orgId/p/$projectId/annotation-queues/$queueId/review',
+                    params: { orgId, projectId, queueId },
+                    search: {
+                      page: 1,
+                      limit: 20,
+                      itemStatus: undefined,
+                      status: undefined,
+                      q: undefined,
+                    },
+                  })
+                }}
+              >
+                Start review
+              </Button>
+            </div>
           </div>
           {queue.description ? (
             <CardDescription>{queue.description}</CardDescription>
@@ -159,6 +177,9 @@ export function AnnotationQueueDetail({
             <p className="font-mono text-xs">{queue.id}</p>
           </div>
         </CardContent>
+        <div className="px-6 pb-4">
+          <ProgressIndicator stats={stats} />
+        </div>
       </Card>
 
       <section className="space-y-4">

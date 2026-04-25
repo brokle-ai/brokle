@@ -2,10 +2,18 @@ import { queryOptions } from '@tanstack/react-query'
 import { rawFetch } from '@/lib/api/client'
 import type {
   CreateEvaluatorRequest,
+  EvaluatorAnalyticsParams,
+  EvaluatorAnalyticsResponse,
   EvaluatorDetail,
+  EvaluatorExecution,
+  EvaluatorExecutionDetail,
   EvaluatorListResponse,
+  ExecutionListParams,
+  ExecutionListResponse,
   TestEvaluatorRequest,
   TestEvaluatorResponse,
+  TriggerOptions,
+  TriggerResponse,
   UpdateEvaluatorRequest,
 } from './types'
 
@@ -17,6 +25,47 @@ export const evaluatorsKeys = {
   details: () => [...evaluatorsKeys.all, 'detail'] as const,
   detail: (evaluatorId: string) =>
     [...evaluatorsKeys.details(), evaluatorId] as const,
+  // Execution sub-namespace lives under the evaluator key so the parent
+  // detail invalidation also drops execution data when desired.
+  executions: () => [...evaluatorsKeys.all, 'executions'] as const,
+  executionList: (
+    projectId: string,
+    evaluatorId: string,
+    params: ExecutionListParams,
+  ) =>
+    [
+      ...evaluatorsKeys.executions(),
+      'list',
+      projectId,
+      evaluatorId,
+      params,
+    ] as const,
+  executionDetail: (
+    projectId: string,
+    evaluatorId: string,
+    executionId: string,
+  ) =>
+    [
+      ...evaluatorsKeys.executions(),
+      'detail',
+      projectId,
+      evaluatorId,
+      executionId,
+    ] as const,
+  executionLatest: (projectId: string, evaluatorId: string) =>
+    [...evaluatorsKeys.executions(), 'latest', projectId, evaluatorId] as const,
+  analytics: (
+    projectId: string,
+    evaluatorId: string,
+    params: EvaluatorAnalyticsParams,
+  ) =>
+    [
+      ...evaluatorsKeys.all,
+      'analytics',
+      projectId,
+      evaluatorId,
+      params,
+    ] as const,
 } as const
 
 export interface EvaluatorListParams {
@@ -103,9 +152,6 @@ export async function deleteEvaluator(
   })
 }
 
-// Activate/deactivate hit dedicated POST endpoints rather than mutating
-// `status` via PUT. The backend emits the updated evaluator in the
-// response envelope just like the update path.
 export async function activateEvaluator(
   projectId: string,
   evaluatorId: string,
@@ -129,8 +175,7 @@ export async function deactivateEvaluator(
 }
 
 // Test runs evaluate the configuration against real spans without
-// writing scores. Request is always POST — the backend accepts an
-// empty body for "use defaults" so the UI can keep the form optional.
+// writing scores.
 export async function testEvaluator(
   projectId: string,
   evaluatorId: string,
@@ -145,4 +190,121 @@ export async function testEvaluator(
     },
   )
   return (await resp.json()) as TestEvaluatorResponse
+}
+
+// ============================================================================
+// Executions
+// ============================================================================
+
+export const executionListQueryOptions = (
+  projectId: string,
+  evaluatorId: string,
+  params: ExecutionListParams,
+  refetchInterval?: number | false,
+) =>
+  queryOptions({
+    queryKey: evaluatorsKeys.executionList(projectId, evaluatorId, params),
+    queryFn: async () => {
+      const search = new URLSearchParams()
+      if (params.page) search.set('page', String(params.page))
+      if (params.limit) search.set('limit', String(params.limit))
+      if (params.status) search.set('status', params.status)
+      if (params.trigger_type) search.set('trigger_type', params.trigger_type)
+      const qs = search.toString()
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/executions${
+          qs ? `?${qs}` : ''
+        }`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as ExecutionListResponse
+    },
+    staleTime: 10 * 1000,
+    refetchInterval,
+  })
+
+export const executionDetailQueryOptions = (
+  projectId: string,
+  evaluatorId: string,
+  executionId: string,
+) =>
+  queryOptions({
+    queryKey: evaluatorsKeys.executionDetail(
+      projectId,
+      evaluatorId,
+      executionId,
+    ),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/executions/${executionId}/detail`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as EvaluatorExecutionDetail
+    },
+    staleTime: 60 * 1000,
+  })
+
+export const executionLatestQueryOptions = (
+  projectId: string,
+  evaluatorId: string,
+) =>
+  queryOptions({
+    queryKey: evaluatorsKeys.executionLatest(projectId, evaluatorId),
+    queryFn: async () => {
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/executions/latest`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as EvaluatorExecution
+    },
+    staleTime: 10 * 1000,
+  })
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+export const evaluatorAnalyticsQueryOptions = (
+  projectId: string,
+  evaluatorId: string,
+  params: EvaluatorAnalyticsParams,
+) =>
+  queryOptions({
+    queryKey: evaluatorsKeys.analytics(projectId, evaluatorId, params),
+    queryFn: async () => {
+      const search = new URLSearchParams()
+      if (params.period) search.set('period', params.period)
+      if (params.from_timestamp)
+        search.set('from_timestamp', params.from_timestamp)
+      if (params.to_timestamp) search.set('to_timestamp', params.to_timestamp)
+      const qs = search.toString()
+      const resp = await rawFetch(
+        `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/analytics${
+          qs ? `?${qs}` : ''
+        }`,
+        { method: 'GET' },
+      )
+      return (await resp.json()) as EvaluatorAnalyticsResponse
+    },
+    staleTime: 30 * 1000,
+  })
+
+// ============================================================================
+// Manual trigger
+// ============================================================================
+
+export async function triggerEvaluator(
+  projectId: string,
+  evaluatorId: string,
+  options: TriggerOptions = {},
+): Promise<TriggerResponse> {
+  const resp = await rawFetch(
+    `/api/v1/projects/${projectId}/evaluators/${evaluatorId}/trigger`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    },
+  )
+  return (await resp.json()) as TriggerResponse
 }

@@ -13,7 +13,10 @@ import {
   createEvaluator,
   evaluatorsKeys,
 } from '@/features/evaluators/api/queries'
-import type { CreateEvaluatorRequest } from '@/features/evaluators/api/types'
+import type {
+  CreateEvaluatorRequest,
+  VariableMap,
+} from '@/features/evaluators/api/types'
 
 // TanStack Router merges sibling-route search schemas along the URL
 // path — `/evaluators/new` inherits `evaluators.tsx`'s page/limit/q
@@ -56,7 +59,9 @@ function NewEvaluatorPage() {
         sampling_rate: v.samplingRate,
         scorer_type: v.scorerType,
         scorer_config: v.scorerConfig,
-        variable_mapping: v.variableMapping,
+        // The form ships `unknown[]` from the JSON textarea; the backend
+        // owns shape validation, so we narrow to the wire type here.
+        variable_mapping: v.variableMapping as VariableMap[],
       }
       return createEvaluator(projectId, body)
     },

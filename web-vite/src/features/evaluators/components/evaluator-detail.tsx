@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ReadonlyCode } from '@/editors/readonly-code'
 import { BrokleError } from '@/lib/api/errors'
 import {
@@ -22,12 +23,12 @@ import {
   evaluatorDetailQueryOptions,
   evaluatorsKeys,
 } from '../api/queries'
-import type {
-  EvaluatorDetail as EvaluatorDetailType,
-  LLMScorerConfigShape,
-} from '../api/types'
+import type { EvaluatorDetail as EvaluatorDetailType } from '../api/types'
 import { EvaluatorDeleteButton } from './evaluator-delete-button'
 import { TestEvaluatorDialog } from './test-evaluator-dialog'
+import { ScorerConfigDisplay } from './scorer-config-display'
+import { EvaluatorExecutionsTable } from './evaluator-executions-table'
+import { EvaluatorAnalyticsTab } from './evaluator-analytics-tab'
 
 interface EvaluatorDetailProps {
   orgId: string
@@ -45,17 +46,6 @@ function StatusBadge({ status }: { status: EvaluatorDetailType['status'] }) {
   if (status === 'active') return <Badge variant="secondary">Active</Badge>
   if (status === 'paused') return <Badge variant="outline">Paused</Badge>
   return <Badge variant="outline">Inactive</Badge>
-}
-
-// Narrow the `unknown` scorer_config at the read site. `scorer_type`
-// on the evaluator is the discriminator — we only treat the map as an
-// LLM config when the type agrees. No runtime zod — the backend owns
-// the schema and we're a trusted consumer.
-function asLLMConfig(
-  evaluator: EvaluatorDetailType,
-): LLMScorerConfigShape | null {
-  if (evaluator.scorer_type !== 'llm') return null
-  return evaluator.scorer_config as unknown as LLMScorerConfigShape
 }
 
 function prettyJSON(value: unknown): string {
@@ -103,10 +93,13 @@ export function EvaluatorDetail({
     },
   })
 
-  const llm = asLLMConfig(evaluator)
+  const llmModel =
+    evaluator.scorer_type === 'llm'
+      ? (evaluator.scorer_config as { model?: string }).model
+      : undefined
 
   return (
-    <main className="mx-auto max-w-7xl p-6 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-6">
       <nav className="text-sm text-muted-foreground">
         <Link
           to="/o/$orgId/p/$projectId/evaluators"
@@ -181,10 +174,10 @@ export function EvaluatorDetail({
             <p className="text-xs text-muted-foreground">Kind</p>
             <p className="font-medium">{evaluator.scorer_type}</p>
           </div>
-          {llm ? (
+          {llmModel ? (
             <div>
               <p className="text-xs text-muted-foreground">Model</p>
-              <p className="font-medium">{llm.model}</p>
+              <p className="font-medium">{llmModel}</p>
             </div>
           ) : null}
           <div>
@@ -220,80 +213,100 @@ export function EvaluatorDetail({
         </div>
       ) : null}
 
-      {llm ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Prompt template</CardTitle>
-            <CardDescription>
-              Rendered with Jinja-style variable substitution at evaluation
-              time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {llm.messages.map((msg, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{msg.role}</Badge>
-                </div>
-                <ReadonlyCode code={msg.content} language="jinja" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
+      <Tabs defaultValue="config" className="w-full">
+        <TabsList>
+          <TabsTrigger value="config">Configuration</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Scorer config</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ReadonlyCode
-            code={prettyJSON(evaluator.scorer_config)}
-            language="json"
+        <TabsContent value="config" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Scorer config</CardTitle>
+              <CardDescription>
+                Visualised configuration for the {evaluator.scorer_type}{' '}
+                scorer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScorerConfigDisplay
+                scorerType={evaluator.scorer_type}
+                config={evaluator.scorer_config}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Filter rules</CardTitle>
+              <CardDescription>
+                Incoming traces/spans must match every clause to be scored.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {evaluator.filter && evaluator.filter.length > 0 ? (
+                <ReadonlyCode
+                  code={prettyJSON(evaluator.filter)}
+                  language="json"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No filters — every span/trace in scope is evaluated.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Variable mapping</CardTitle>
+              <CardDescription>
+                Pulls template variables from span input/output/metadata.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {evaluator.variable_mapping &&
+              evaluator.variable_mapping.length > 0 ? (
+                <ReadonlyCode
+                  code={prettyJSON(evaluator.variable_mapping)}
+                  language="json"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No variable mappings configured.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="runs" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Execution history</CardTitle>
+              <CardDescription>
+                Recent automatic and manual evaluator runs. Click a row to
+                inspect span-level scores and prompt/response data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EvaluatorExecutionsTable
+                orgId={orgId}
+                projectId={projectId}
+                evaluatorId={evaluatorId}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-6">
+          <EvaluatorAnalyticsTab
+            projectId={projectId}
+            evaluatorId={evaluatorId}
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filter rules</CardTitle>
-          <CardDescription>
-            Incoming traces/spans must match every clause to be scored.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ReadonlyCode
-            code={prettyJSON(evaluator.filter)}
-            language="json"
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Variable mapping</CardTitle>
-          <CardDescription>
-            Pulls template variables from span input/output/metadata.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ReadonlyCode
-            code={prettyJSON(evaluator.variable_mapping)}
-            language="json"
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Runs</CardTitle>
-          <CardDescription>
-            Execution history endpoint not shipped yet — runs will show
-            here once the dashboard plane exposes them. Use the Test
-            button above to preview evaluations in the meantime.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+        </TabsContent>
+      </Tabs>
 
       <TestEvaluatorDialog
         projectId={projectId}

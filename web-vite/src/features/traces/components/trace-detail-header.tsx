@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,13 +17,21 @@ import {
   ListTree,
   Star,
   ExternalLink,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import type { Span, TraceDetail } from '../api/types'
-import { tracesKeys, updateTraceBookmark } from '../api/queries'
+import {
+  deleteTrace,
+  tracesKeys,
+  updateTraceBookmark,
+} from '../api/queries'
 import { TraceTagsEditor } from './trace-tags-editor'
 import { AnnotationsDrawer } from './annotations-drawer'
 import { CommentsDrawer } from './comments-drawer'
+import { CopyIdsDropdown } from './copy-ids-dropdown'
+import { ExportTraceButton } from './export-trace-button'
 import {
   formatCost,
   formatDuration,
@@ -35,6 +43,7 @@ interface TraceDetailHeaderProps {
   spans: Span[]
   orgId: string
   projectId: string
+  selectedSpanId?: string
   className?: string
 }
 
@@ -99,12 +108,43 @@ function MetaPair({ label, value }: { label: string; value: React.ReactNode }) {
  */
 export function TraceDetailHeader({
   trace,
-  spans: _spans,
+  spans,
   orgId,
   projectId,
+  selectedSpanId,
   className,
 }: TraceDetailHeaderProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTrace(projectId, trace.trace_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: tracesKeys.lists() })
+      queryClient.removeQueries({
+        queryKey: tracesKeys.detail(trace.trace_id),
+      })
+      toast.success('Trace deleted')
+      void navigate({
+        to: '/o/$orgId/p/$projectId/traces',
+        params: { orgId, projectId },
+        search: {
+          page: 1,
+          limit: 20,
+          q: undefined,
+          status: undefined,
+          range: 'all',
+          model: undefined,
+        },
+      })
+    },
+    onError: (err) => {
+      toast.error('Failed to delete trace', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    },
+  })
 
   const bookmarkMutation = useMutation({
     mutationFn: (bookmarked: boolean) =>
@@ -169,12 +209,20 @@ export function TraceDetailHeader({
             {trace.trace_id}
           </span>
           <CopyButton value={trace.trace_id} />
+          <CopyIdsDropdown
+            trace={trace}
+            orgId={orgId}
+            projectId={projectId}
+            selectedSpanId={selectedSpanId}
+          />
 
           <h1 className="ml-3 truncate text-lg font-semibold">{trace.name}</h1>
           <StatusBadge trace={trace} />
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <ExportTraceButton trace={trace} spans={spans} />
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -223,8 +271,45 @@ export function TraceDetailHeader({
               <TooltipContent>Open in new tab</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleteMutation.isPending}
+                  aria-label="Delete trace"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete trace</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete trace?"
+        desc={
+          <>
+            This will permanently delete trace{' '}
+            <span className="font-mono text-xs">
+              {trace.trace_id.slice(0, 12)}…
+            </span>{' '}
+            and all of its spans. This action cannot be undone.
+          </>
+        }
+        confirmText="Delete"
+        destructive
+        isLoading={deleteMutation.isPending}
+        handleConfirm={() => deleteMutation.mutate()}
+      />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 pb-3 text-sm">
         <MetaPair label="Duration" value={formatDuration(trace.duration)} />
