@@ -40,7 +40,7 @@ describe('SignInForm', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
   })
 
-  it('submits the login payload and updates the auth store on success', async () => {
+  it('submits the login payload and leaves the store empty for the route guard to validate', async () => {
     let capturedBody: { email?: string; password?: string } | undefined
     server.use(
       http.post('*/api/v1/auth/login', async ({ request }) => {
@@ -79,8 +79,14 @@ describe('SignInForm', () => {
     await waitFor(() => {
       expect(capturedBody).toEqual({ email: 'a@b.test', password: 'sup3rsecret' })
     })
+
+    // The form must NOT eagerly seed the store from the login response
+    // body. Client-side user state is hydrated by the destination
+    // route's `/me` round-trip, which is what proves the Set-Cookie
+    // persisted. Asserting null guards against re-introducing the
+    // body-priming optimisation.
     await waitFor(() => {
-      expect(useAuthStore.getState().user?.email).toBe('a@b.test')
+      expect(useAuthStore.getState().user).toBeNull()
     })
   })
 

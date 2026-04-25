@@ -1,10 +1,15 @@
-import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  useNavigate,
+  useRouter,
+  useSearch,
+} from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { z } from 'zod'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { exchangeLoginSession } from '@/features/authentication'
-import { useAuthStore } from '@/stores/auth-store'
+import { resetSession } from '@/lib/auth/session'
 
 const searchSchema = z.object({
   session: z.string().optional().catch(undefined),
@@ -19,8 +24,8 @@ export const Route = createFileRoute('/callback')({
 
 function OAuthCallbackPage() {
   const navigate = useNavigate()
+  const router = useRouter()
   const { session, error: queryError } = useSearch({ from: '/callback' })
-  const setUser = useAuthStore((s) => s.setUser)
   const [error, setError] = useState<string | null>(queryError ?? null)
 
   useEffect(() => {
@@ -40,17 +45,23 @@ function OAuthCallbackPage() {
     exchangeLoginSession(session)
       .then((response) => {
         if (cancelled) return
-        if (response && response.user) {
-          setUser(response.user)
-          // Tiny delay so the Zustand set() flushes before we navigate.
-          // Matches web/ callback behaviour.
-          setTimeout(() => {
-            window.location.href = '/'
-          }, 50)
-        } else {
+        if (!response || !response.user) {
           setError('Invalid session data. Please try again.')
           setTimeout(() => navigate({ to: '/signin' }), 2000)
+          return
         }
+        // Trigger the navigation; `_authenticated.beforeLoad` owns the
+        // /me probe and any failure routing from here:
+        //   - happy path: dashboard renders.
+        //   - cookie dropped: beforeLoad redirects to
+        //     /signin?session=expired (toast handled by
+        //     SignInToastHandler).
+        //   - /me 5xx: RootErrorFallback renders.
+        // No try/catch around navigate — TanStack Router resolves the
+        // promise on redirects/errors, so caller-side handling here
+        // would be unreachable for those cases.
+        resetSession(router.options.context.queryClient)
+        void navigate({ to: '/', replace: true })
       })
       .catch(() => {
         if (cancelled) return
@@ -61,7 +72,7 @@ function OAuthCallbackPage() {
     return () => {
       cancelled = true
     }
-  }, [session, queryError, navigate, setUser])
+  }, [session, queryError, navigate, router])
 
   if (error) {
     return (

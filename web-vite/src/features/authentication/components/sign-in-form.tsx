@@ -1,5 +1,5 @@
-import { Link } from '@tanstack/react-router'
-import { type HTMLAttributes, useRef, useState } from 'react'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
+import { type HTMLAttributes, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -21,8 +21,8 @@ import { PasswordInput } from '@/components/ui/password-input'
 import { login } from '@/features/authentication/api/auth-api'
 import { buildOAuthUrl } from '@/features/authentication/utils/oauth'
 import { BrokleError } from '@/lib/api/errors'
+import { resetSession } from '@/lib/auth/session'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
 type SignInFormProps = HTMLAttributes<HTMLFormElement> & {
   redirectTo?: string
@@ -55,13 +55,9 @@ function deriveLoginError(error: unknown): string {
 }
 
 export function SignInForm({ className, redirectTo, ...props }: SignInFormProps) {
-  const setUser = useAuthStore((s) => s.setUser)
-  const [isRedirecting, setIsRedirecting] = useState(false)
+  const navigate = useNavigate()
+  const router = useRouter()
   const [authError, setAuthError] = useState<string | null>(null)
-  // Fire-once guard, same invariant as web/'s SignInForm — blocks any
-  // post-success duplicate submit delivered while the browser is still
-  // tearing down for navigation.
-  const hasSucceededRef = useRef(false)
 
   const loginMutation = useMutation({
     mutationFn: login,
@@ -72,22 +68,31 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
     defaultValues: { email: '', password: '' },
   })
 
+  // The form's only responsibility is "trigger navigation after the
+  // credential POST succeeds." Post-login validation lives in
+  // `_authenticated.beforeLoad` (the /me probe). On failure modes:
+  //   - cookie dropped → beforeLoad redirects to /signin?session=expired,
+  //     this component re-mounts fresh with a toast (handled by
+  //     SignInToastHandler).
+  //   - /me 5xx → RootErrorFallback renders.
+  // No local "isRedirecting" or fire-once latch — those leaked across
+  // redirect-back-to-/signin because TanStack Router reuses the route
+  // component on same-route redirects, and `navigate()` doesn't reject
+  // for redirects/errors so a try/catch would never reset them.
+  // `loginMutation.isPending || form.formState.isSubmitting` is the
+  // correct duplicate-submit guard.
   async function onSubmit(data: FormValues) {
-    if (hasSucceededRef.current) return
     setAuthError(null)
-    setIsRedirecting(false)
-
     try {
-      const resp = await loginMutation.mutateAsync(data)
-      setUser(resp.user)
-      hasSucceededRef.current = true
-      setIsRedirecting(true)
-      window.location.href = redirectTo ?? '/'
+      await loginMutation.mutateAsync(data)
+      resetSession(router.options.context.queryClient)
+      await navigate({ to: redirectTo ?? '/', replace: true })
     } catch (error) {
-      setIsRedirecting(false)
       setAuthError(deriveLoginError(error))
     }
   }
+
+  const isSubmitting = loginMutation.isPending || form.formState.isSubmitting
 
   const handleOAuth = (provider: 'google' | 'github') => () => {
     window.location.href = buildOAuthUrl(provider)
@@ -104,15 +109,6 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{authError}</AlertDescription>
-          </Alert>
-        )}
-
-        {isRedirecting && (
-          <Alert>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertDescription>
-              Welcome back! Taking you to your dashboard...
-            </AlertDescription>
           </Alert>
         )}
 
@@ -152,20 +148,11 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
             </FormItem>
           )}
         />
-        <Button
-          className="mt-2"
-          type="submit"
-          disabled={loginMutation.isPending || isRedirecting}
-        >
-          {loginMutation.isPending ? (
+        <Button className="mt-2" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Signing in...
-            </>
-          ) : isRedirecting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Redirecting...
             </>
           ) : (
             'Sign In'
@@ -187,7 +174,7 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
           <Button
             variant="outline"
             type="button"
-            disabled={loginMutation.isPending || isRedirecting}
+            disabled={isSubmitting}
             onClick={handleOAuth('github')}
           >
             <IconGithub className="h-4 w-4" /> GitHub
@@ -195,7 +182,7 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
           <Button
             variant="outline"
             type="button"
-            disabled={loginMutation.isPending || isRedirecting}
+            disabled={isSubmitting}
             onClick={handleOAuth('google')}
           >
             <IconFacebook className="h-4 w-4" /> Google

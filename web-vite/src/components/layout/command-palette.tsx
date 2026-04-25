@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useParams, useRouter } from '@tanstack/react-router'
 import {
   Activity,
   ArrowRight,
@@ -34,7 +34,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
+import { resetSession } from '@/lib/auth/session'
 import { rawFetch } from '@/lib/api/client'
 
 interface CommandRoute {
@@ -117,25 +117,31 @@ function buildRoutes(orgId: string, projectId: string): CommandRoute[] {
   ]
 }
 
-async function signOut(): Promise<void> {
-  try {
-    await rawFetch('/api/v1/auth/logout', { method: 'POST' })
-  } catch {
-    // Best-effort — local state still clears below.
-  } finally {
-    useAuthStore.getState().expireSession()
-    window.location.href = '/signin'
-  }
-}
-
 function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
   const { setTheme } = useTheme()
   const navigate = useNavigate()
+  const router = useRouter()
   const params = useParams({ strict: false }) as {
     orgId?: string
     projectId?: string
   }
+
+  const signOut = React.useCallback(async () => {
+    try {
+      await rawFetch('/api/v1/auth/logout', { method: 'POST' })
+    } catch {
+      // Backend is authority; cookies will still expire on next
+      // request. Local state still clears below.
+    } finally {
+      resetSession(router.options.context.queryClient)
+      await navigate({
+        to: '/signin',
+        search: { logout: 'success' },
+        replace: true,
+      })
+    }
+  }, [navigate, router])
 
   const routes: CommandRoute[] = React.useMemo(() => {
     if (!params.orgId || !params.projectId) return []

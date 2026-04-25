@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import {
   ChevronsUpDown,
   LogOut,
@@ -25,8 +26,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { useTheme } from '@/context/theme-context'
-import { useAuthStore } from '@/stores/auth-store'
 import { rawFetch } from '@/lib/api/client'
+import { resetSession } from '@/lib/auth/session'
 
 export interface NavUserProfile {
   name: string
@@ -43,28 +44,29 @@ function getInitials(name: string, email: string): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
 }
 
-async function signOut(): Promise<void> {
-  try {
-    await rawFetch('/api/v1/auth/logout', { method: 'POST' })
-  } catch {
-    // Either way, clear local state and redirect — the backend is the
-    // authority; if logout fails the cookie will still be expired on
-    // next request.
-  } finally {
-    useAuthStore.getState().expireSession()
-    window.location.href = '/signin'
-  }
-}
-
 export function NavUser({ user }: { user: NavUserProfile }) {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
+  const navigate = useNavigate()
+  const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const initials = getInitials(user.name, user.email)
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setIsSigningOut(true)
-    void signOut()
+    try {
+      await rawFetch('/api/v1/auth/logout', { method: 'POST' })
+    } catch {
+      // Backend is authority; cookies will still expire on next
+      // request. Local state still clears below.
+    } finally {
+      resetSession(router.options.context.queryClient)
+      await navigate({
+        to: '/signin',
+        search: { logout: 'success' },
+        replace: true,
+      })
+    }
   }
 
   return (
@@ -145,7 +147,7 @@ export function NavUser({ user }: { user: NavUserProfile }) {
               </div>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}>
+            <DropdownMenuItem onClick={() => void handleSignOut()} disabled={isSigningOut}>
               <LogOut />
               {isSigningOut ? 'Logging out...' : 'Log out'}
             </DropdownMenuItem>

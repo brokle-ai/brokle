@@ -50,6 +50,9 @@ export async function renderWithProviders(
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: ['/'] }),
+    // Mirror production wiring (main.tsx) — components reach the
+    // shared QueryClient via `router.options.context.queryClient`.
+    context: { queryClient, auth: { isAuthenticated: false, userId: null } },
   })
 
   // Resolve the initial match before render so the index route's

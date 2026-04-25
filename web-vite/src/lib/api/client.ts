@@ -2,13 +2,42 @@ import createClient, { type Middleware } from 'openapi-fetch'
 import { getRuntimeConfig } from '@/lib/config'
 import { refreshWithLock } from './auth-refresh'
 import { MUTATION_METHODS, readCsrfCookie } from './csrf'
-import { AuthenticationError, throwTypedError } from './errors'
+import { throwTypedError } from './errors'
 import type { paths as DashboardPaths } from './generated/dashboard'
 import type { paths as SdkPaths } from './generated/sdk'
 
 // One-shot retry marker: the first 401 triggers a refresh; if the
 // replayed request ALSO gets 401, we surrender instead of looping.
 const RETRY_HEADER = 'X-Brokle-Retried'
+
+// Paths whose 401 means "the operation failed" (bad credentials,
+// invalid OAuth state, expired reset token, missing refresh cookie),
+// NOT "your session expired." These endpoints establish or manage the
+// session — they have no session to refresh — so the auth-retry-via-
+// refresh path must be skipped, otherwise:
+//   - Login 401 (wrong password) silently fires a /auth/refresh, and
+//     the original "Invalid email or password" message gets replaced
+//     by a synthesized "session expired."
+//   - Refresh 401 would recurse via the same code path until the
+//     RETRY_HEADER short-circuits — wasteful even when bounded.
+//   - Logout 401 (already logged out) triggers a pointless refresh.
+//
+// Mirrors SigNoz's exclusion list at
+// `competitors/signoz/frontend/src/api/index.ts:111-120` and the
+// `shouldRefresh(error)` URL-predicate documented in
+// `axios-auth-refresh` (~2M weekly DLs). 401 is industry-standard
+// for "wrong credentials" (RFC 9110 §15.5.2, OWASP, GitHub, Auth0,
+// Stripe); the backend is correct, the client must distinguish.
+function isAuthBoundaryPath(url: string): boolean {
+  try {
+    const pathname = url.startsWith('http')
+      ? new URL(url).pathname
+      : (url.split('?')[0] ?? '')
+    return pathname.startsWith('/api/v1/auth/')
+  } catch {
+    return false
+  }
+}
 
 const csrfMiddleware: Middleware = {
   async onRequest({ request }) {
@@ -24,6 +53,7 @@ const authRetryMiddleware: Middleware = {
   async onResponse({ request, response }) {
     if (response.status !== 401) return response
     if (request.headers.get(RETRY_HEADER)) return response
+    if (isAuthBoundaryPath(request.url)) return response
 
     try {
       await refreshWithLock()
@@ -87,17 +117,34 @@ export async function rawFetch(input: string, init: RequestInit = {}): Promise<R
 
   const resp = await fetch(url, { ...init, headers, credentials: 'include' })
 
-  if (resp.status === 401 && !headers.get(RETRY_HEADER)) {
+  if (
+    resp.status === 401 &&
+    !headers.get(RETRY_HEADER) &&
+    !isAuthBoundaryPath(url)
+  ) {
     try {
       await refreshWithLock()
     } catch {
-      throw new AuthenticationError(401, {
-        error: { type: 'authentication', message: 'session expired' },
-      })
+      // Refresh failed; surface the ORIGINAL 401 so callers see the
+      // backend's real error message (e.g. "Invalid email or
+      // password" on /auth/login) instead of a synthesized "session
+      // expired" stand-in.
+      await throwTypedError(resp)
     }
     const retryHeaders = new Headers(init.headers)
     retryHeaders.set(RETRY_HEADER, '1')
-    return fetch(url, { ...init, headers: retryHeaders, credentials: 'include' })
+    const retryResp = await fetch(url, {
+      ...init,
+      headers: retryHeaders,
+      credentials: 'include',
+    })
+    // Same 2xx invariant as the non-retry branch. Without this, a
+    // replayed 401 (or any non-ok status after refresh) resolves the
+    // caller's `await resp.json()` with the error envelope and
+    // silently corrupts typed reads (e.g. SessionUser cast in
+    // currentUserQueryOptions).
+    if (!retryResp.ok) await throwTypedError(retryResp)
+    return retryResp
   }
 
   if (!resp.ok) await throwTypedError(resp)
