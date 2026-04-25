@@ -1,7 +1,12 @@
 import { createFileRoute, Link, Outlet, useMatches } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { BrokleError } from '@/lib/api/errors'
-import { BudgetCard, PlanCard } from '@/features/billing/components'
+import {
+  AlertsList,
+  BudgetCard,
+  PaymentMethodCard,
+  PlanCard,
+} from '@/features/billing/components'
 import { planQueryOptions } from '@/features/billing/api/queries'
 
 // The billing surface is three tabs over one layout — plan (this
@@ -59,6 +64,11 @@ function BillingLayout() {
           label="Usage"
         />
         <TabLink
+          to="/o/$orgId/billing/budgets"
+          params={{ orgId }}
+          label="Budgets"
+        />
+        <TabLink
           to="/o/$orgId/billing/invoices"
           params={{ orgId }}
           label="Invoices"
@@ -74,8 +84,18 @@ function PlanLandingContent({ orgId }: { orgId: string }) {
   const { data: pricing } = useSuspenseQuery(planQueryOptions(orgId))
   return (
     <div className="space-y-6">
-      <BudgetCard orgId={orgId} />
       <PlanCard pricing={pricing} />
+      <BudgetCard orgId={orgId} />
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold">Active alerts</h2>
+          <p className="text-sm text-muted-foreground">
+            Threshold breaches that haven&apos;t been acknowledged.
+          </p>
+        </div>
+        <AlertsList orgId={orgId} limit={10} triggeredOnly />
+      </section>
+      <PaymentMethodCard />
     </div>
   )
 }
@@ -84,7 +104,11 @@ function PlanLandingContent({ orgId }: { orgId: string }) {
 // Router's `Link.activeProps` would work too, but this keeps the
 // "exact" match semantics explicit for the parent (/billing) tab.
 interface TabLinkProps {
-  to: '/o/$orgId/billing' | '/o/$orgId/billing/usage' | '/o/$orgId/billing/invoices'
+  to:
+    | '/o/$orgId/billing'
+    | '/o/$orgId/billing/usage'
+    | '/o/$orgId/billing/invoices'
+    | '/o/$orgId/billing/budgets'
   params: { orgId: string }
   label: string
   exact?: boolean

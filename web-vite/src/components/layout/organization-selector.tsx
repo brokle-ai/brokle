@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { ChevronDown, Plus, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,7 +11,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { organizationListQueryOptions } from '@/features/organizations/queries'
+import {
+  organizationKeys,
+  organizationListQueryOptions,
+} from '@/features/organizations/queries'
+import { CreateOrganizationDialog } from '@/features/organizations/components/create-organization-dialog'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 interface OrganizationSelectorProps {
@@ -29,8 +33,10 @@ export function OrganizationSelector({
 }: OrganizationSelectorProps) {
   const { data } = useSuspenseQuery(organizationListQueryOptions())
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const current = data.data.find((o) => o.id === currentOrgId)
 
@@ -91,10 +97,10 @@ export function OrganizationSelector({
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    // Org-level settings landing page not yet wired;
-                    // navigate to the org root and let the picker
-                    // resolve to a project with a settings path.
-                    void navigate({ to: '/o/$orgId', params: { orgId: org.id } })
+                    void navigate({
+                      to: '/o/$orgId/settings',
+                      params: { orgId: org.id },
+                    })
                     setOpen(false)
                   }}
                 >
@@ -108,11 +114,31 @@ export function OrganizationSelector({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            setOpen(false)
+            setCreateOpen(true)
+          }}
+        >
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           New Organization
         </DropdownMenuItem>
       </DropdownMenuContent>
+
+      <CreateOrganizationDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={(newOrgId) => {
+          // Refresh the list cache before navigating so the new org
+          // appears in the switcher on the next render.
+          void qc.invalidateQueries({ queryKey: organizationKeys.lists() })
+          void navigate({
+            to: '/o/$orgId',
+            params: { orgId: newOrgId },
+          })
+        }}
+      />
     </DropdownMenu>
   )
 }

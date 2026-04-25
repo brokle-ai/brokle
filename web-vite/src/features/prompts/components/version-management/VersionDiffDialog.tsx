@@ -11,13 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { DiffViewer } from './DiffViewer'
+import { ChatDiffViewer } from './ChatDiffViewer'
 import type {
   PromptVersion,
   PromptType,
   TextTemplate,
   ChatTemplate,
   ModelConfig,
-  PromptTemplate,
 } from '../../types'
 
 interface VersionDiffDialogProps {
@@ -27,14 +27,6 @@ interface VersionDiffDialogProps {
   toVersion: PromptVersion | null
   promptType: PromptType
   promptName?: string
-}
-
-function formatTemplate(template: PromptTemplate, type: PromptType): string {
-  if (type === 'text') {
-    return (template as TextTemplate).content || ''
-  }
-  const chatTemplate = template as ChatTemplate
-  return JSON.stringify(chatTemplate.messages || [], null, 2)
 }
 
 function formatConfig(config: ModelConfig | null | undefined): string {
@@ -115,13 +107,23 @@ export function VersionDiffDialog({
   promptType,
   promptName,
 }: VersionDiffDialogProps) {
-  const { fromTemplate, toTemplate } = useMemo(() => {
-    if (!fromVersion || !toVersion) {
-      return { fromTemplate: '', toTemplate: '' }
+  const { fromText, toText } = useMemo(() => {
+    if (!fromVersion || !toVersion || promptType !== 'text') {
+      return { fromText: '', toText: '' }
     }
     return {
-      fromTemplate: formatTemplate(fromVersion.template, promptType),
-      toTemplate: formatTemplate(toVersion.template, promptType),
+      fromText: (fromVersion.template as TextTemplate).content ?? '',
+      toText: (toVersion.template as TextTemplate).content ?? '',
+    }
+  }, [fromVersion, toVersion, promptType])
+
+  const { fromMessages, toMessages } = useMemo(() => {
+    if (!fromVersion || !toVersion || promptType !== 'chat') {
+      return { fromMessages: [], toMessages: [] }
+    }
+    return {
+      fromMessages: (fromVersion.template as ChatTemplate).messages ?? [],
+      toMessages: (toVersion.template as ChatTemplate).messages ?? [],
     }
   }, [fromVersion, toVersion, promptType])
 
@@ -170,14 +172,25 @@ export function VersionDiffDialog({
 
             <div className="space-y-3">
               <h4 className="text-base font-semibold">Content</h4>
-              <DiffViewer
-                oldString={fromTemplate}
-                newString={toTemplate}
-                oldLabel={`v${fromVersion.version}`}
-                newLabel={`v${toVersion.version}`}
-                oldSubLabel={fromVersion.commit_message}
-                newSubLabel={toVersion.commit_message}
-              />
+              {promptType === 'chat' ? (
+                <ChatDiffViewer
+                  fromMessages={fromMessages}
+                  toMessages={toMessages}
+                  oldLabel={`v${fromVersion.version}`}
+                  newLabel={`v${toVersion.version}`}
+                  oldSubLabel={fromVersion.commit_message}
+                  newSubLabel={toVersion.commit_message}
+                />
+              ) : (
+                <DiffViewer
+                  oldString={fromText}
+                  newString={toText}
+                  oldLabel={`v${fromVersion.version}`}
+                  newLabel={`v${toVersion.version}`}
+                  oldSubLabel={fromVersion.commit_message}
+                  newSubLabel={toVersion.commit_message}
+                />
+              )}
             </div>
 
             <div className="space-y-3">

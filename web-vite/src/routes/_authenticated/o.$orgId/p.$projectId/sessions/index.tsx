@@ -78,10 +78,32 @@ function SessionsPage() {
 
       <SessionsTable
         rows={rows}
+        projectId={projectId}
         renderSessionLink={(session, children) => (
           <Link
             to="/o/$orgId/p/$projectId/sessions/$sessionId"
             params={{ orgId, projectId, sessionId: session.session_id }}
+            className="hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {children}
+          </Link>
+        )}
+        renderDetailLink={(session, children) => (
+          <Link
+            to="/o/$orgId/p/$projectId/sessions/$sessionId"
+            params={{ orgId, projectId, sessionId: session.session_id }}
+            className="inline-flex"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Open session detail"
+          >
+            {children}
+          </Link>
+        )}
+        renderTraceLink={(traceId, children) => (
+          <Link
+            to="/o/$orgId/p/$projectId/traces/$traceId"
+            params={{ orgId, projectId, traceId }}
             className="hover:underline"
           >
             {children}

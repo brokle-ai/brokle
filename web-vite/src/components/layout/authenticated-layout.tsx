@@ -4,6 +4,10 @@ import { AppSidebar } from '@/components/layout/app-sidebar'
 import { Header } from '@/components/layout/header'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 import { OrganizationSelector } from '@/components/layout/organization-selector'
+import {
+  CommandPaletteProvider,
+  CommandPaletteTrigger,
+} from '@/components/layout/command-palette'
 import { useAuthStore } from '@/stores/auth-store'
 
 // Full dashboard chrome: collapsible sidebar + scroll-aware header with
@@ -31,18 +35,21 @@ export function AuthenticatedLayout() {
     : null
 
   return (
-    <SidebarProvider defaultOpen>
-      <AppSidebar orgId={orgId} projectId={projectId} user={user} />
-      <SidebarInset>
-        <Header>
-          <div className="flex flex-1 items-center gap-3">
-            <OrganizationSelector currentOrgId={orgId} />
-            <span className="text-muted-foreground">/</span>
-            <Breadcrumbs />
-          </div>
-        </Header>
-        <Outlet />
-      </SidebarInset>
-    </SidebarProvider>
+    <CommandPaletteProvider>
+      <SidebarProvider defaultOpen>
+        <AppSidebar orgId={orgId} projectId={projectId} user={user} />
+        <SidebarInset>
+          <Header>
+            <div className="flex flex-1 items-center gap-3">
+              <OrganizationSelector currentOrgId={orgId} />
+              <span className="text-muted-foreground">/</span>
+              <Breadcrumbs />
+            </div>
+            <CommandPaletteTrigger />
+          </Header>
+          <Outlet />
+        </SidebarInset>
+      </SidebarProvider>
+    </CommandPaletteProvider>
   )
 }

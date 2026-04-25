@@ -180,3 +180,44 @@ export interface UpdateBudgetRequest {
   alert_thresholds?: number[]
   is_active?: boolean
 }
+
+// ============================================================================
+// Alert types — wire shape per
+// internal/core/domain/billing/entity.go `UsageAlert`.
+// ============================================================================
+
+export type AlertSeverity = 'info' | 'warning' | 'critical'
+export type AlertStatus = 'triggered' | 'acknowledged' | 'resolved'
+export type AlertDimension = 'spans' | 'bytes' | 'scores' | 'cost'
+
+export interface UsageAlert {
+  id: string
+  budget_id?: string
+  organization_id: string
+  project_id?: string
+  alert_threshold: number
+  dimension: AlertDimension
+  severity: AlertSeverity
+  threshold_value: number
+  actual_value: number
+  percent_used: string // decimal
+  status: AlertStatus
+  triggered_at: string
+  acknowledged_at?: string
+  notification_sent: boolean
+}
+
+// ============================================================================
+// Usage-by-project summary — wire shape per
+// internal/core/domain/billing/entity.go `BillableUsageSummary`.
+// ============================================================================
+
+export interface BillableUsageSummary {
+  organization_id: string
+  project_id?: string
+  project_name?: string
+  total_spans: number
+  total_bytes: number
+  total_scores: number
+  total_ai_provider_cost: number
+}

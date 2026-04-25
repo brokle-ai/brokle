@@ -1,5 +1,13 @@
 // List
 export { DashboardsTable } from './dashboards-table'
+export { DashboardsCardList } from './dashboards-card-list'
+export { DashboardCard } from './dashboard-card'
+export { DashboardsDialogs } from './dashboards-dialogs'
+export {
+  DashboardsProvider,
+  useDashboards,
+  type DashboardsDialogType,
+} from '../context/dashboards-context'
 
 // Detail + editor
 export { DashboardDetail } from './dashboard-detail'

@@ -1,5 +1,9 @@
+import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import type { EffectivePricing } from '../api/types'
+import { PlanComparisonDialog } from './plan-comparison-dialog'
 
 interface PlanCardProps {
   pricing: EffectivePricing
@@ -53,6 +57,7 @@ export function PlanCard({ pricing }: PlanCardProps) {
   const plan = pricing.base_plan
   const contract = pricing.contract
   const currency = contract?.currency ?? 'USD'
+  const [comparisonOpen, setComparisonOpen] = useState(false)
 
   return (
     <div className="rounded-lg border bg-card">
@@ -72,16 +77,26 @@ export function PlanCard({ pricing }: PlanCardProps) {
             )}
           </div>
         </div>
-        {contract?.end_date ? (
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Renews / expires
-            </p>
-            <p className="mt-1 text-sm font-medium">
-              {formatDate(contract.end_date)}
-            </p>
-          </div>
-        ) : null}
+        <div className="flex flex-col items-end gap-2">
+          {contract?.end_date ? (
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Renews / expires
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {formatDate(contract.end_date)}
+              </p>
+            </div>
+          ) : null}
+          <Button
+            size="sm"
+            variant={plan?.name === 'enterprise' ? 'outline' : 'default'}
+            onClick={() => setComparisonOpen(true)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {plan?.name === 'free' ? 'Upgrade plan' : 'Change plan'}
+          </Button>
+        </div>
       </div>
 
       <dl className="grid grid-cols-1 gap-6 p-6 sm:grid-cols-3">
@@ -129,6 +144,12 @@ export function PlanCard({ pricing }: PlanCardProps) {
           {pricing.has_volume_tiers ? ' · volume tiers active' : null}
         </div>
       ) : null}
+
+      <PlanComparisonDialog
+        open={comparisonOpen}
+        onOpenChange={setComparisonOpen}
+        currentPlan={plan?.name}
+      />
     </div>
   )
 }

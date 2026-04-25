@@ -6,7 +6,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
 import type {
   PromptType,
   TextTemplate,
@@ -16,6 +15,7 @@ import type {
 } from '../types'
 import { PromptTemplateInput } from './prompt-editor/PromptTemplateInput'
 import { ChatMessageEditor } from './prompt-editor/ChatMessageEditor'
+import { ChatMessageList } from './prompt-editor/ChatMessageList'
 import { VariableList } from './prompt-editor/VariableExtractor'
 
 interface TextEditorProps {
@@ -77,30 +77,9 @@ export function PromptEditor({
             {(template as TextTemplate).content}
           </pre>
         ) : (
-          <div className="space-y-2">
-            {(template as ChatTemplate).messages?.map((msg, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'rounded-md p-3',
-                  msg.type === 'placeholder'
-                    ? 'bg-amber-100 dark:bg-amber-900/30'
-                    : msg.role === 'system'
-                      ? 'bg-purple-100 dark:bg-purple-900/30'
-                      : msg.role === 'assistant'
-                        ? 'bg-blue-100 dark:bg-blue-900/30'
-                        : 'bg-muted',
-                )}
-              >
-                <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-                  {msg.type === 'placeholder' ? `[${msg.name}]` : msg.role}
-                </div>
-                <pre className="whitespace-pre-wrap font-mono text-sm">
-                  {msg.content}
-                </pre>
-              </div>
-            ))}
-          </div>
+          <ChatMessageList
+            messages={(template as ChatTemplate).messages ?? []}
+          />
         )}
         <div className="space-y-2">
           <Label>Variables</Label>

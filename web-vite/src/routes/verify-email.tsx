@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -45,6 +45,7 @@ type FormValues = z.infer<typeof formSchema>
 
 function VerifyEmailPage() {
   const { email } = Route.useSearch()
+  const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [isVerified, setIsVerified] = useState(false)
   const [canResend, setCanResend] = useState(true)
@@ -54,9 +55,12 @@ function VerifyEmailPage() {
     defaultValues: { otp: '' },
   })
 
-  // NOTE: web/ ships this page as a stubbed OTP flow
-  // (`/verify-email/page.tsx` has a TODO call). Kept at parity — the
-  // backend `/verify-email` wire-up is a future task.
+  // STUB: there is no `POST /api/v1/auth/verify-email` HTTP handler
+  // registered in `internal/server/routes.go` — `authService.VerifyEmail`
+  // exists but is not wired to any HTTP route (verified 2026-04-24).
+  // web/ also stubs this flow. When the backend ships the route, swap
+  // the setTimeout for a `useMutation` against `verifyEmail(token)` and
+  // wire the OTP value from `data.otp`.
   function onSubmit(_data: FormValues) {
     setIsLoading(true)
     setTimeout(() => {
@@ -64,6 +68,13 @@ function VerifyEmailPage() {
       setIsVerified(true)
     }, 1500)
   }
+
+  // Auto-redirect to /signin 2s after success.
+  useEffect(() => {
+    if (!isVerified) return
+    const t = setTimeout(() => navigate({ to: '/signin' }), 2000)
+    return () => clearTimeout(t)
+  }, [isVerified, navigate])
 
   function onResend() {
     setCanResend(false)
@@ -81,11 +92,12 @@ function VerifyEmailPage() {
             <div className="grid gap-2">
               <h3 className="text-lg font-semibold">Email verified!</h3>
               <p className="text-muted-foreground text-sm">
-                Your email has been successfully verified.
+                Your email has been successfully verified. Redirecting to
+                sign in…
               </p>
             </div>
             <Button asChild>
-              <Link to="/">Continue to Dashboard</Link>
+              <Link to="/signin">Continue to sign in</Link>
             </Button>
           </CardContent>
         </Card>

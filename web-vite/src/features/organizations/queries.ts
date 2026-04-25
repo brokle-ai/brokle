@@ -15,6 +15,12 @@ export interface CreateOrganizationRequest {
   name: string
 }
 
+export interface UpdateOrganizationRequest {
+  name?: string
+  slug?: string
+  billing_email?: string
+}
+
 export async function createOrganization(
   data: CreateOrganizationRequest,
 ): Promise<Organization> {
@@ -24,6 +30,22 @@ export async function createOrganization(
     body: JSON.stringify(data),
   })
   return (await resp.json()) as Organization
+}
+
+export async function updateOrganization(
+  orgId: string,
+  data: UpdateOrganizationRequest,
+): Promise<Organization> {
+  const resp = await rawFetch(`/api/v1/organizations/${orgId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as Organization
+}
+
+export async function deleteOrganization(orgId: string): Promise<void> {
+  await rawFetch(`/api/v1/organizations/${orgId}`, { method: 'DELETE' })
 }
 
 export interface ListResponse<T> {
