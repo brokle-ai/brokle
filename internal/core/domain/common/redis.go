@@ -1,3 +1,4 @@
+// Package common contains shared domain primitives (Redis client, transactor) used across domains.
 package common
 
 import (

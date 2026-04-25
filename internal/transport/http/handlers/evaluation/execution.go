@@ -1,145 +1,136 @@
 package evaluation
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-func registerExecutionRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID: "list-evaluator-executions",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/executions",
-		Tags:        []string{"evaluator-executions"},
-		Summary:     "List executions for an evaluator",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listExecutions)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-latest-evaluator-execution",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/executions/latest",
-		Tags:        []string{"evaluator-executions"},
-		Summary:     "Get the most recent evaluator execution",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getLatestExecution)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-evaluator-execution",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/executions/{executionId}",
-		Tags:        []string{"evaluator-executions"},
-		Summary:     "Get an evaluator execution",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getExecution)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-evaluator-execution-detail",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/evaluators/{evaluatorId}/executions/{executionId}/detail",
-		Tags:        []string{"evaluator-executions"},
-		Summary:     "Get detailed execution info including span-level results",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getExecutionDetail)
+func registerExecutionRoutes(r chi.Router, h *handler) {
+	r.Route("/evaluators/{evaluatorId}/executions", func(r chi.Router) {
+		r.Get("/", h.listExecutions)
+		r.Get("/latest", h.getLatestExecution)
+		r.Get("/{executionId}", h.getExecution)
+		r.Get("/{executionId}/detail", h.getExecutionDetail)
+	})
 }
 
-func (h *handler) listExecutions(ctx context.Context, in *ListExecutionsInput) (*ListExecutionsOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) listExecutions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	params := pagination.Params{Page: in.Page, Limit: in.Limit}
+	page, limit, err := readPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	params := pagination.Params{Page: page, Limit: limit}
 	params.SetDefaults("created_at")
 
 	var filter evaluationDomain.ExecutionFilter
-	if in.Status != "" {
-		s := evaluationDomain.ExecutionStatus(in.Status)
+	if v := r.URL.Query().Get("status"); v != "" {
+		s := evaluationDomain.ExecutionStatus(v)
 		filter.Status = &s
 	}
-	if in.TriggerType != "" {
-		t := evaluationDomain.TriggerType(in.TriggerType)
+	if v := r.URL.Query().Get("trigger_type"); v != "" {
+		t := evaluationDomain.TriggerType(v)
 		filter.TriggerType = &t
 	}
 
-	execs, total, err := h.evaluatorExecSvc.ListByEvaluatorID(ctx, evaluatorID, projectID, &filter, params)
+	execs, total, err := h.evaluatorExecSvc.ListByEvaluatorID(r.Context(), evaluatorID, projectID, &filter, params)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*evaluationDomain.EvaluatorExecutionResponse, len(execs))
 	for i, e := range execs {
 		out[i] = e.ToResponse()
 	}
-	return &ListExecutionsOutput{Body: &ExecutionListResponse{
+	response.Success(w, &ExecutionListResponse{
 		Executions: out, Total: total, Page: params.Page, Limit: params.Limit,
-	}}, nil
+	})
 }
 
-func (h *handler) getLatestExecution(ctx context.Context, in *GetLatestExecutionInput) (*ExecutionOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getLatestExecution(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	exec, err := h.evaluatorExecSvc.GetLatestByEvaluatorID(ctx, evaluatorID, projectID)
+	exec, err := h.evaluatorExecSvc.GetLatestByEvaluatorID(r.Context(), evaluatorID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	if exec == nil {
-		return nil, appErrors.NewNotFoundError("no executions found for this evaluator")
+		response.WriteError(w, appErrors.NewNotFoundError("no executions found for this evaluator"))
+		return
 	}
-	return &ExecutionOutput{Body: exec.ToResponse()}, nil
+	response.Success(w, exec.ToResponse())
 }
 
-func (h *handler) getExecution(ctx context.Context, in *GetExecutionInput) (*ExecutionOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getExecution(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	// evaluatorId is parsed for validation only; the service lookup is keyed
-	// by execution ID (which is globally unique).
-	if _, err := parseEvaluatorID(in.EvaluatorID); err != nil {
-		return nil, err
+	// evaluatorId is parsed for validation only.
+	if _, err := request.URLParamUUID(r, "evaluatorId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	executionID, err := parseExecutionID(in.ExecutionID)
+	executionID, err := request.URLParamUUID(r, "executionId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	exec, err := h.evaluatorExecSvc.GetByID(ctx, executionID, projectID)
+	exec, err := h.evaluatorExecSvc.GetByID(r.Context(), executionID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ExecutionOutput{Body: exec.ToResponse()}, nil
+	response.Success(w, exec.ToResponse())
 }
 
-func (h *handler) getExecutionDetail(ctx context.Context, in *GetExecutionInput) (*ExecutionDetailOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) getExecutionDetail(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	evaluatorID, err := parseEvaluatorID(in.EvaluatorID)
+	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	executionID, err := parseExecutionID(in.ExecutionID)
+	executionID, err := request.URLParamUUID(r, "executionId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	detail, err := h.evaluatorExecSvc.GetExecutionDetail(ctx, executionID, projectID, evaluatorID)
+	detail, err := h.evaluatorExecSvc.GetExecutionDetail(r.Context(), executionID, projectID, evaluatorID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ExecutionDetailOutput{Body: detail.ToFlat()}, nil
+	response.Success(w, detail.ToFlat())
 }

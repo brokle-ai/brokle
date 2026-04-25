@@ -1,127 +1,116 @@
 package evaluation
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
+
+	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
-func registerWizardRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-experiment-from-wizard",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/experiments/wizard",
-		Tags:          []string{"experiment-wizard"},
-		Summary:       "Create an experiment from the wizard",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.wizardCreate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "validate-experiment-wizard-step",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/experiments/wizard/validate",
-		Tags:        []string{"experiment-wizard"},
-		Summary:     "Validate a wizard step",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.wizardValidate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "estimate-experiment-cost",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/experiments/wizard/estimate",
-		Tags:        []string{"experiment-wizard"},
-		Summary:     "Estimate experiment cost",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.wizardEstimate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dataset-fields",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/fields",
-		Tags:        []string{"experiment-wizard"},
-		Summary:     "Get dataset field schema for variable mapping",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.wizardDatasetFields)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-experiment-config",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/experiments/{experimentId}/config",
-		Tags:        []string{"experiment-wizard"},
-		Summary:     "Get the wizard config for an experiment",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.wizardGetConfig)
+func registerWizardRoutes(r chi.Router, h *handler) {
+	r.Route("/experiments/wizard", func(r chi.Router) {
+		r.Post("/", h.wizardCreate)
+		r.Post("/validate", h.wizardValidate)
+		r.Post("/estimate", h.wizardEstimate)
+	})
+	r.Get("/datasets/{datasetId}/fields", h.wizardDatasetFields)
+	r.Get("/experiments/{experimentId}/config", h.wizardGetConfig)
 }
 
-func (h *handler) wizardCreate(ctx context.Context, in *WizardCreateInput) (*ExperimentOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) wizardCreate(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	exp, err := h.experimentWizardSvc.CreateFromWizard(ctx, projectID, userIDPtr(ctx), &body)
+	var body evaluationDomain.CreateExperimentFromWizardRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	exp, err := h.experimentWizardSvc.CreateFromWizard(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &ExperimentOutput{Body: exp.ToResponse()}, nil
+	response.Created(w, exp.ToResponse())
 }
 
-func (h *handler) wizardValidate(ctx context.Context, in *WizardValidateInput) (*WizardValidateOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) wizardValidate(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	res, err := h.experimentWizardSvc.ValidateStep(ctx, projectID, &body)
+	var body evaluationDomain.ValidateStepRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	res, err := h.experimentWizardSvc.ValidateStep(r.Context(), projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &WizardValidateOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-func (h *handler) wizardEstimate(ctx context.Context, in *WizardEstimateInput) (*WizardEstimateOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) wizardEstimate(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	res, err := h.experimentWizardSvc.EstimateCost(ctx, projectID, &body)
+	var body evaluationDomain.EstimateCostRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	res, err := h.experimentWizardSvc.EstimateCost(r.Context(), projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &WizardEstimateOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-func (h *handler) wizardDatasetFields(ctx context.Context, in *WizardDatasetFieldsInput) (*WizardDatasetFieldsOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) wizardDatasetFields(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	datasetID, err := parseDatasetID(in.DatasetID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	res, err := h.experimentWizardSvc.GetDatasetFields(ctx, projectID, datasetID)
+	res, err := h.experimentWizardSvc.GetDatasetFields(r.Context(), projectID, datasetID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &WizardDatasetFieldsOutput{Body: res}, nil
+	response.Success(w, res)
 }
 
-func (h *handler) wizardGetConfig(ctx context.Context, in *WizardGetConfigInput) (*WizardGetConfigOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) wizardGetConfig(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	experimentID, err := parseExperimentID(in.ExperimentID)
+	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	cfg, err := h.experimentWizardSvc.GetExperimentConfig(ctx, experimentID, projectID)
+	cfg, err := h.experimentWizardSvc.GetExperimentConfig(r.Context(), experimentID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &WizardGetConfigOutput{Body: cfg.ToResponse()}, nil
+	response.Success(w, cfg.ToResponse())
 }

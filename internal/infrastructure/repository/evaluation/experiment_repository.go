@@ -13,15 +13,15 @@ import (
 	"brokle/internal/infrastructure/db/gen"
 )
 
-type ExperimentRepository struct {
+type experimentRepository struct {
 	tm *db.TxManager
 }
 
-func NewExperimentRepository(tm *db.TxManager) *ExperimentRepository {
-	return &ExperimentRepository{tm: tm}
+func NewExperimentRepository(tm *db.TxManager) evalDomain.ExperimentRepository {
+	return &experimentRepository{tm: tm}
 }
 
-func (r *ExperimentRepository) Create(ctx context.Context, e *evalDomain.Experiment) error {
+func (r *experimentRepository) Create(ctx context.Context, e *evalDomain.Experiment) error {
 	meta, err := marshalEvalJSON(e.Metadata)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (r *ExperimentRepository) Create(ctx context.Context, e *evalDomain.Experim
 	})
 }
 
-func (r *ExperimentRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Experiment, error) {
+func (r *experimentRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Experiment, error) {
 	row, err := r.tm.Queries(ctx).GetExperimentByID(ctx, gen.GetExperimentByIDParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -58,7 +58,7 @@ func (r *ExperimentRepository) GetByID(ctx context.Context, id, projectID uuid.U
 	return experimentFromRow(&row)
 }
 
-func (r *ExperimentRepository) List(ctx context.Context, projectID uuid.UUID, filter *evalDomain.ExperimentFilter, offset, limit int) ([]*evalDomain.Experiment, int64, error) {
+func (r *experimentRepository) List(ctx context.Context, projectID uuid.UUID, filter *evalDomain.ExperimentFilter, offset, limit int) ([]*evalDomain.Experiment, int64, error) {
 	base := sq.Select().From("experiments").Where(sq.Eq{"project_id": projectID})
 	if filter != nil {
 		if filter.DatasetID != nil {
@@ -110,7 +110,7 @@ func (r *ExperimentRepository) List(ctx context.Context, projectID uuid.UUID, fi
 	return out, total, rows.Err()
 }
 
-func (r *ExperimentRepository) Update(ctx context.Context, e *evalDomain.Experiment, projectID uuid.UUID) error {
+func (r *experimentRepository) Update(ctx context.Context, e *evalDomain.Experiment, projectID uuid.UUID) error {
 	meta, err := marshalEvalJSON(e.Metadata)
 	if err != nil {
 		return err
@@ -140,7 +140,7 @@ func (r *ExperimentRepository) Update(ctx context.Context, e *evalDomain.Experim
 	return nil
 }
 
-func (r *ExperimentRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
+func (r *experimentRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteExperiment(ctx, gen.DeleteExperimentParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -154,7 +154,7 @@ func (r *ExperimentRepository) Delete(ctx context.Context, id, projectID uuid.UU
 	return nil
 }
 
-func (r *ExperimentRepository) SetTotalItems(ctx context.Context, id, projectID uuid.UUID, total int) error {
+func (r *experimentRepository) SetTotalItems(ctx context.Context, id, projectID uuid.UUID, total int) error {
 	n, err := r.tm.Queries(ctx).SetExperimentTotalItems(ctx, gen.SetExperimentTotalItemsParams{
 		ID:         id,
 		ProjectID:  projectID,
@@ -169,7 +169,7 @@ func (r *ExperimentRepository) SetTotalItems(ctx context.Context, id, projectID 
 	return nil
 }
 
-func (r *ExperimentRepository) IncrementCounters(ctx context.Context, id, projectID uuid.UUID, completed, failed int) error {
+func (r *experimentRepository) IncrementCounters(ctx context.Context, id, projectID uuid.UUID, completed, failed int) error {
 	n, err := r.tm.Queries(ctx).IncrementExperimentCounters(ctx, gen.IncrementExperimentCountersParams{
 		ID:             id,
 		ProjectID:      projectID,
@@ -188,7 +188,7 @@ func (r *ExperimentRepository) IncrementCounters(ctx context.Context, id, projec
 // IncrementCountersAndUpdateStatus locks the experiment row, applies
 // the delta, and flips status to completed/failed/partial once all
 // items are processed. Returns true when the experiment just finished.
-func (r *ExperimentRepository) IncrementCountersAndUpdateStatus(ctx context.Context, id, projectID uuid.UUID, completed, failed int) (bool, error) {
+func (r *experimentRepository) IncrementCountersAndUpdateStatus(ctx context.Context, id, projectID uuid.UUID, completed, failed int) (bool, error) {
 	var isComplete bool
 	err := r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
 		row, err := r.tm.Queries(ctx).LockExperimentForUpdate(ctx, gen.LockExperimentForUpdateParams{
@@ -238,7 +238,7 @@ func (r *ExperimentRepository) IncrementCountersAndUpdateStatus(ctx context.Cont
 	return isComplete, err
 }
 
-func (r *ExperimentRepository) GetProgress(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Experiment, error) {
+func (r *experimentRepository) GetProgress(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Experiment, error) {
 	row, err := r.tm.Queries(ctx).GetExperimentProgress(ctx, gen.GetExperimentProgressParams{
 		ID:        id,
 		ProjectID: projectID,

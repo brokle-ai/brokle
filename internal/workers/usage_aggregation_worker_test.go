@@ -15,7 +15,7 @@ import (
 
 // createTestPricingService creates a real PricingService for testing
 // This ensures worker tests use the same pricing logic as production
-func createTestPricingService() billing.PricingService {
+func createTestPricingService() *billingService.PricingService {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	// PricingService doesn't use repos for CalculateDimensionWithTiers, so we can pass nil
 	return billingService.NewPricingService(nil, nil, nil, nil, logger)

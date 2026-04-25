@@ -38,15 +38,15 @@ func formatCreatedByString(id *uuid.UUID) *string {
 	return &s
 }
 
-type EvaluatorRepository struct {
+type evaluatorRepository struct {
 	tm *db.TxManager
 }
 
-func NewEvaluatorRepository(tm *db.TxManager) *EvaluatorRepository {
-	return &EvaluatorRepository{tm: tm}
+func NewEvaluatorRepository(tm *db.TxManager) evalDomain.EvaluatorRepository {
+	return &evaluatorRepository{tm: tm}
 }
 
-func (r *EvaluatorRepository) Create(ctx context.Context, e *evalDomain.Evaluator) error {
+func (r *evaluatorRepository) Create(ctx context.Context, e *evalDomain.Evaluator) error {
 	filter, err := marshalEvalJSON(e.Filter)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (r *EvaluatorRepository) Create(ctx context.Context, e *evalDomain.Evaluato
 	return nil
 }
 
-func (r *EvaluatorRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Evaluator, error) {
+func (r *evaluatorRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Evaluator, error) {
 	row, err := r.tm.Queries(ctx).GetEvaluatorByID(ctx, gen.GetEvaluatorByIDParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -97,7 +97,7 @@ func (r *EvaluatorRepository) GetByID(ctx context.Context, id, projectID uuid.UU
 	return evaluatorFromRow(&row)
 }
 
-func (r *EvaluatorRepository) GetByProjectID(
+func (r *evaluatorRepository) GetByProjectID(
 	ctx context.Context,
 	projectID uuid.UUID,
 	filter *evalDomain.EvaluatorFilter,
@@ -148,7 +148,7 @@ func (r *EvaluatorRepository) GetByProjectID(
 	return out, total, rows.Err()
 }
 
-func (r *EvaluatorRepository) GetActiveByProjectID(ctx context.Context, projectID uuid.UUID) ([]*evalDomain.Evaluator, error) {
+func (r *evaluatorRepository) GetActiveByProjectID(ctx context.Context, projectID uuid.UUID) ([]*evalDomain.Evaluator, error) {
 	rows, err := r.tm.Queries(ctx).ListActiveEvaluatorsByProject(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (r *EvaluatorRepository) GetActiveByProjectID(ctx context.Context, projectI
 	return out, nil
 }
 
-func (r *EvaluatorRepository) Update(ctx context.Context, e *evalDomain.Evaluator) error {
+func (r *evaluatorRepository) Update(ctx context.Context, e *evalDomain.Evaluator) error {
 	filter, err := marshalEvalJSON(e.Filter)
 	if err != nil {
 		return err
@@ -204,7 +204,7 @@ func (r *EvaluatorRepository) Update(ctx context.Context, e *evalDomain.Evaluato
 	return nil
 }
 
-func (r *EvaluatorRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
+func (r *evaluatorRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteEvaluator(ctx, gen.DeleteEvaluatorParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -218,7 +218,7 @@ func (r *EvaluatorRepository) Delete(ctx context.Context, id, projectID uuid.UUI
 	return nil
 }
 
-func (r *EvaluatorRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
+func (r *evaluatorRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
 	return r.tm.Queries(ctx).EvaluatorExistsByName(ctx, gen.EvaluatorExistsByNameParams{
 		ProjectID: projectID,
 		Name:      name,

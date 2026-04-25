@@ -16,7 +16,7 @@ import (
 )
 
 // Ensure BillingRecordRepository implements the interface.
-var _ billingDomain.BillingRecordRepository = (*BillingRecordRepository)(nil)
+var _ billingDomain.BillingRecordRepository = (*billingRecordRepository)(nil)
 
 // BillingRecordRepository is the pgx+sqlc implementation of
 // billingDomain.BillingRecordRepository. billing_records holds payment
@@ -27,19 +27,19 @@ var _ billingDomain.BillingRecordRepository = (*BillingRecordRepository)(nil)
 // Metadata, BillingSummary.CreatedAt / TotalAmount / RecordCount) are
 // dropped at the boundary — they will be stripped from the domain in
 // P2.B.11 once billing finishes migrating.
-type BillingRecordRepository struct {
+type billingRecordRepository struct {
 	tm     *db.TxManager
 	logger *slog.Logger
 }
 
 // NewBillingRecordRepository returns the pgx-backed repository.
-func NewBillingRecordRepository(tm *db.TxManager, logger *slog.Logger) *BillingRecordRepository {
-	return &BillingRecordRepository{tm: tm, logger: logger}
+func NewBillingRecordRepository(tm *db.TxManager, logger *slog.Logger) billingDomain.BillingRecordRepository {
+	return &billingRecordRepository{tm: tm, logger: logger}
 }
 
 // ----- billing_records ----------------------------------------------
 
-func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, rec *billingDomain.BillingRecord) error {
+func (r *billingRecordRepository) InsertBillingRecord(ctx context.Context, rec *billingDomain.BillingRecord) error {
 	if rec.CreatedAt.IsZero() {
 		rec.CreatedAt = time.Now()
 	}
@@ -67,7 +67,7 @@ func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, rec *
 	return nil
 }
 
-func (r *BillingRecordRepository) UpdateBillingRecord(ctx context.Context, recordID uuid.UUID, rec *billingDomain.BillingRecord) error {
+func (r *billingRecordRepository) UpdateBillingRecord(ctx context.Context, recordID uuid.UUID, rec *billingDomain.BillingRecord) error {
 	n, err := r.tm.Queries(ctx).UpdateBillingRecord(ctx, gen.UpdateBillingRecordParams{
 		ID:            recordID,
 		Period:        rec.Period,
@@ -87,7 +87,7 @@ func (r *BillingRecordRepository) UpdateBillingRecord(ctx context.Context, recor
 	return nil
 }
 
-func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID uuid.UUID) (*billingDomain.BillingRecord, error) {
+func (r *billingRecordRepository) GetBillingRecord(ctx context.Context, recordID uuid.UUID) (*billingDomain.BillingRecord, error) {
 	row, err := r.tm.Queries(ctx).GetBillingRecordByID(ctx, recordID)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -98,7 +98,7 @@ func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID
 	return billingRecordFromRow(&row), nil
 }
 
-func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billingDomain.BillingRecord, error) {
+func (r *billingRecordRepository) GetBillingHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billingDomain.BillingRecord, error) {
 	rows, err := r.tm.Queries(ctx).ListBillingRecordsByOrg(ctx, gen.ListBillingRecordsByOrgParams{
 		OrganizationID: orgID,
 		CreatedAt:      start,
@@ -116,7 +116,7 @@ func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID u
 
 // ----- billing_summaries --------------------------------------------
 
-func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, s *billingDomain.BillingSummary) error {
+func (r *billingRecordRepository) InsertBillingSummary(ctx context.Context, s *billingDomain.BillingSummary) error {
 	if s.ID == uuid.Nil {
 		s.ID = uid.New()
 	}
@@ -160,7 +160,7 @@ func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, s *b
 	return nil
 }
 
-func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID uuid.UUID, period string) (*billingDomain.BillingSummary, error) {
+func (r *billingRecordRepository) GetBillingSummary(ctx context.Context, orgID uuid.UUID, period string) (*billingDomain.BillingSummary, error) {
 	row, err := r.tm.Queries(ctx).GetLatestBillingSummary(ctx, gen.GetLatestBillingSummaryParams{
 		OrganizationID: orgID,
 		Period:         period,
@@ -174,7 +174,7 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 	return billingSummaryFromRow(&row)
 }
 
-func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billingDomain.BillingSummary, error) {
+func (r *billingRecordRepository) GetBillingSummaryHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billingDomain.BillingSummary, error) {
 	rows, err := r.tm.Queries(ctx).ListBillingSummariesByOrg(ctx, gen.ListBillingSummariesByOrgParams{
 		OrganizationID: orgID,
 		PeriodStart:    start,

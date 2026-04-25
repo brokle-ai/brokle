@@ -1,11 +1,9 @@
-// Tests for the organization handler. The coverage focuses on the
-// list endpoint's wire contract — CLAUDE.md gotcha #23 mandates the
-// canonical `{data, pagination}` shape for every list endpoint, and
-// the dashboard + SDK auth flows depend on it (/v1/organizations
-// unwrapping via client.getPaginated). A regression to the old
-// `{organizations, total, page, limit}` shape would break signup and
-// login with "No organizations found for user", which is the exact
-// bug these tests guard against.
+// Tests for the organization handler. Coverage focuses on the list
+// endpoint's wire contract — CLAUDE.md gotcha #23 mandates the
+// canonical `{data, pagination}` shape for every list endpoint. The
+// old `{organizations, total, page, limit}` shape is a historical
+// bug that broke frontend signup+login; these tests pin the correct
+// wire contract.
 package organization_test
 
 import (
@@ -13,16 +11,17 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	orgDomain "brokle/internal/core/domain/organization"
-	"brokle/internal/testing/humax"
+	organizationService "brokle/internal/core/services/organization"
 	handler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/httpctx"
 )
@@ -36,7 +35,7 @@ import (
 // outside the tested surface).
 
 type fakeOrganizationService struct {
-	orgDomain.OrganizationService // embedded: unused methods panic
+	*organizationService.OrganizationService // embedded: unused methods panic
 
 	listResp []*orgDomain.Organization
 	listErr  error
@@ -47,24 +46,34 @@ func (f *fakeOrganizationService) GetUserOrganizations(ctx context.Context, user
 }
 
 type fakeMemberService struct {
-	orgDomain.MemberService
+	*organizationService.MemberService
 }
 
 type fakeInvitationService struct {
-	orgDomain.InvitationService
+	*organizationService.InvitationService
 }
 
 type fakeSettingsService struct {
-	orgDomain.OrganizationSettingsService
+	*organizationService.OrganizationSettingsService
 }
 
 // ---- helpers ---------------------------------------------------------
 
-func newTestAPI(t *testing.T, orgSvc orgDomain.OrganizationService) humatest.TestAPI {
+// newTestRouter mounts the organization handler on a bare chi router
+// with a user-context injector standing in for the production
+// RequireAuth middleware.
+func newTestRouter(t *testing.T, orgSvc handler.OrganizationService) (*chi.Mux, uuid.UUID) {
 	t.Helper()
-	api := humax.NewAPI(t)
-	handler.RegisterRoutes(api, orgSvc, fakeMemberService{}, fakeInvitationService{}, fakeSettingsService{}, slog.Default())
-	return api
+	userID := uuid.New()
+	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := httpctx.WithUserID(req.Context(), userID)
+			next.ServeHTTP(w, req.WithContext(ctx))
+		})
+	})
+	handler.RegisterRoutes(r, orgSvc, fakeMemberService{}, fakeInvitationService{}, fakeSettingsService{}, slog.Default())
+	return r, userID
 }
 
 func makeOrgs(n int) []*orgDomain.Organization {
@@ -83,6 +92,14 @@ func makeOrgs(n int) []*orgDomain.Organization {
 	return out
 }
 
+func fetch(t *testing.T, r *chi.Mux, url string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec
+}
+
 // ---- tests -----------------------------------------------------------
 
 // TestListOrganizations_CanonicalShape — the list endpoint MUST emit
@@ -92,16 +109,14 @@ func makeOrgs(n int) []*orgDomain.Organization {
 // wire contract.
 func TestListOrganizations_CanonicalShape(t *testing.T) {
 	svc := &fakeOrganizationService{listResp: makeOrgs(2)}
-	api := newTestAPI(t, svc)
-	ctx := httpctx.WithUserID(context.Background(), uuid.New())
+	r, _ := newTestRouter(t, svc)
 
-	resp := api.GetCtx(ctx, "/api/v1/organizations")
+	resp := fetch(t, r, "/api/v1/organizations")
 	require.Equal(t, http.StatusOK, resp.Code)
 
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
 
-	// Canonical keys present.
 	data, hasData := body["data"].([]any)
 	require.True(t, hasData, "response must expose `data` array (canonical list shape)")
 	assert.Len(t, data, 2)
@@ -115,7 +130,6 @@ func TestListOrganizations_CanonicalShape(t *testing.T) {
 	assert.Equal(t, false, pagination["has_next"])
 	assert.Equal(t, false, pagination["has_prev"])
 
-	// Legacy / wrong keys MUST NOT be present — this is the bug guard.
 	_, hasLegacyOrgs := body["organizations"]
 	assert.False(t, hasLegacyOrgs, "response must NOT contain the legacy `organizations` key (CLAUDE.md gotcha #23 violation)")
 	_, hasFlatTotal := body["total"]
@@ -127,10 +141,9 @@ func TestListOrganizations_CanonicalShape(t *testing.T) {
 // as a hard error; a null data array would break consumers.
 func TestListOrganizations_Empty(t *testing.T) {
 	svc := &fakeOrganizationService{listResp: []*orgDomain.Organization{}}
-	api := newTestAPI(t, svc)
-	ctx := httpctx.WithUserID(context.Background(), uuid.New())
+	r, _ := newTestRouter(t, svc)
 
-	resp := api.GetCtx(ctx, "/api/v1/organizations")
+	resp := fetch(t, r, "/api/v1/organizations")
 	require.Equal(t, http.StatusOK, resp.Code)
 
 	var body struct {
@@ -152,10 +165,9 @@ func TestListOrganizations_Empty(t *testing.T) {
 // correctly through response.BuildPagination for a multi-page dataset.
 func TestListOrganizations_Pagination(t *testing.T) {
 	svc := &fakeOrganizationService{listResp: makeOrgs(30)}
-	api := newTestAPI(t, svc)
-	ctx := httpctx.WithUserID(context.Background(), uuid.New())
+	r, _ := newTestRouter(t, svc)
 
-	resp := api.GetCtx(ctx, "/api/v1/organizations?page=2&limit=10")
+	resp := fetch(t, r, "/api/v1/organizations?page=2&limit=10")
 	require.Equal(t, http.StatusOK, resp.Code)
 
 	var body struct {

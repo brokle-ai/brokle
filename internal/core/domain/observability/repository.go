@@ -141,11 +141,11 @@ type ComparisonMetrics struct {
 }
 
 type ScoreAnalyticsResponse struct {
-	Statistics   *ScoreStatistics   `json:"statistics"`
-	TimeSeries   []TraceTimeSeriesPoint  `json:"time_series"`
-	Distribution []DistributionBin  `json:"distribution"`
-	Heatmap      []HeatmapCell      `json:"heatmap,omitempty"`
-	Comparison   *ComparisonMetrics `json:"comparison,omitempty"`
+	Statistics   *ScoreStatistics       `json:"statistics"`
+	TimeSeries   []TraceTimeSeriesPoint `json:"time_series"`
+	Distribution []DistributionBin      `json:"distribution"`
+	Heatmap      []HeatmapCell          `json:"heatmap,omitempty"`
+	Comparison   *ComparisonMetrics     `json:"comparison,omitempty"`
 }
 
 type ScoreAnalyticsRepository interface {

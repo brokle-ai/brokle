@@ -14,7 +14,7 @@ type FilterPreset struct {
 	ProjectID        uuid.UUID       `json:"project_id"`
 	Name             string          `json:"name"`
 	Description      *string         `json:"description,omitempty"`
-	TargetTable      string          `json:"table_name"`            // "traces" or "spans"
+	TargetTable      string          `json:"table_name"`                   // "traces" or "spans"
 	Filters          json.RawMessage `json:"filters" swaggertype:"object"` // Array of filter conditions
 	ColumnOrder      json.RawMessage `json:"column_order,omitempty" swaggertype:"object"`
 	ColumnVisibility json.RawMessage `json:"column_visibility,omitempty" swaggertype:"object"`
@@ -28,11 +28,11 @@ type FilterPreset struct {
 
 // FilterCondition represents a single filter condition in a preset.
 type FilterCondition struct {
-	ID       string      `json:"id"`
-	Column   string      `json:"column"`
-	Operator string      `json:"operator"`
-	Value    any `json:"value"`
-	Type     string      `json:"type"` // "string", "number", "date", etc.
+	ID       string `json:"id"`
+	Column   string `json:"column"`
+	Operator string `json:"operator"`
+	Value    any    `json:"value"`
+	Type     string `json:"type"` // "string", "number", "date", etc.
 }
 
 // FilterPresetTableName defines valid table names for presets.

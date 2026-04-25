@@ -2,47 +2,47 @@ package observability
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
-// telemetryDeduplicationService implements the TelemetryDeduplicationService interface
-type telemetryDeduplicationService struct {
+// TelemetryDeduplicationService claims and releases event dedup IDs with Redis + Postgres fallback.
+type TelemetryDeduplicationService struct {
 	deduplicationRepo observability.TelemetryDeduplicationRepository
 }
 
 // NewTelemetryDeduplicationService creates a new telemetry deduplication service
 func NewTelemetryDeduplicationService(
 	deduplicationRepo observability.TelemetryDeduplicationRepository,
-) observability.TelemetryDeduplicationService {
-	return &telemetryDeduplicationService{
+) *TelemetryDeduplicationService {
+	return &TelemetryDeduplicationService{
 		deduplicationRepo: deduplicationRepo,
 	}
 }
 
 // CheckDuplicate checks if a dedup ID is a duplicate using Redis-only approach
-func (s *telemetryDeduplicationService) CheckDuplicate(ctx context.Context, dedupID string) (bool, error) {
+func (s *TelemetryDeduplicationService) CheckDuplicate(ctx context.Context, dedupID string) (bool, error) {
 	if dedupID == "" {
-		return false, errors.New("dedup ID cannot be empty")
+		return false, appErrors.NewValidationError("invalid dedup id", "dedup id cannot be empty")
 	}
 
 	// Use Redis-only exists check (auto-expiry handles cleanup)
 	exists, err := s.deduplicationRepo.Exists(ctx, dedupID)
 	if err != nil {
-		return false, fmt.Errorf("failed to check duplicate: %w", err)
+		return false, appErrors.NewInternalError("failed to check duplicate", err)
 	}
 
 	return exists, nil
 }
 
 // CheckBatchDuplicates efficiently checks multiple dedup IDs for duplicates
-func (s *telemetryDeduplicationService) CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error) {
+func (s *TelemetryDeduplicationService) CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error) {
 	if len(dedupIDs) == 0 {
 		return nil, nil
 	}
@@ -50,14 +50,14 @@ func (s *telemetryDeduplicationService) CheckBatchDuplicates(ctx context.Context
 	// Validate dedup IDs
 	for i, dedupID := range dedupIDs {
 		if dedupID == "" {
-			return nil, fmt.Errorf("dedup ID at index %d cannot be empty", i)
+			return nil, appErrors.NewValidationError("invalid dedup ids", fmt.Sprintf("dedup id at index %d cannot be empty", i))
 		}
 	}
 
 	// Use repository's optimized batch duplicate checking
 	duplicates, err := s.deduplicationRepo.CheckBatchDuplicates(ctx, dedupIDs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check batch duplicates: %w", err)
+		return nil, appErrors.NewInternalError("failed to check batch duplicates", err)
 	}
 
 	return duplicates, nil
@@ -65,59 +65,59 @@ func (s *telemetryDeduplicationService) CheckBatchDuplicates(ctx context.Context
 
 // ClaimEvents atomically claims dedup IDs for processing
 // Returns: (claimedIDs, duplicateIDs, error)
-func (s *telemetryDeduplicationService) ClaimEvents(ctx context.Context, projectID uuid.UUID, batchID uuid.UUID, dedupIDs []string, ttl time.Duration) ([]string, []string, error) {
+func (s *TelemetryDeduplicationService) ClaimEvents(ctx context.Context, projectID uuid.UUID, batchID uuid.UUID, dedupIDs []string, ttl time.Duration) ([]string, []string, error) {
 	if len(dedupIDs) == 0 {
 		return nil, nil, nil
 	}
 
 	if projectID == uuid.Nil {
-		return nil, nil, errors.New("project ID cannot be zero")
+		return nil, nil, appErrors.NewValidationError("invalid project id", "project id cannot be zero")
 	}
 
 	if batchID == uuid.Nil {
-		return nil, nil, errors.New("batch ID cannot be zero")
+		return nil, nil, appErrors.NewValidationError("invalid batch id", "batch id cannot be zero")
 	}
 
 	// Validate dedup IDs
 	for i, dedupID := range dedupIDs {
 		if dedupID == "" {
-			return nil, nil, fmt.Errorf("dedup ID at index %d cannot be empty", i)
+			return nil, nil, appErrors.NewValidationError("invalid dedup ids", fmt.Sprintf("dedup id at index %d cannot be empty", i))
 		}
 	}
 
 	// Delegate to repository for atomic claim operation
 	claimedIDs, duplicateIDs, err := s.deduplicationRepo.ClaimEvents(ctx, projectID, batchID, dedupIDs, ttl)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to claim events: %w", err)
+		return nil, nil, appErrors.NewInternalError("failed to claim events", err)
 	}
 
 	return claimedIDs, duplicateIDs, nil
 }
 
 // ReleaseEvents removes claimed dedup IDs (for rollback on publish failure)
-func (s *telemetryDeduplicationService) ReleaseEvents(ctx context.Context, dedupIDs []string) error {
+func (s *TelemetryDeduplicationService) ReleaseEvents(ctx context.Context, dedupIDs []string) error {
 	if len(dedupIDs) == 0 {
 		return nil
 	}
 
 	// Delegate to repository for batch deletion
 	if err := s.deduplicationRepo.ReleaseEvents(ctx, dedupIDs); err != nil {
-		return fmt.Errorf("failed to release events: %w", err)
+		return appErrors.NewInternalError("failed to release events", err)
 	}
 
 	return nil
 }
 
 // RegisterEvent registers a new event for deduplication
-func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, dedupID string, batchID uuid.UUID, projectID uuid.UUID, ttl time.Duration) error {
+func (s *TelemetryDeduplicationService) RegisterEvent(ctx context.Context, dedupID string, batchID uuid.UUID, projectID uuid.UUID, ttl time.Duration) error {
 	if dedupID == "" {
-		return errors.New("dedup ID cannot be empty")
+		return appErrors.NewValidationError("invalid dedup id", "dedup id cannot be empty")
 	}
 	if batchID == uuid.Nil {
-		return errors.New("batch ID cannot be zero")
+		return appErrors.NewValidationError("invalid batch id", "batch id cannot be zero")
 	}
 	if projectID == uuid.Nil {
-		return errors.New("project ID cannot be zero")
+		return appErrors.NewValidationError("invalid project id", "project id cannot be zero")
 	}
 
 	// Calculate optimal expiration time
@@ -134,12 +134,12 @@ func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, dedup
 
 	// Validate the deduplication entry
 	if validationErrors := dedup.Validate(); len(validationErrors) > 0 {
-		return fmt.Errorf("deduplication entry validation failed: %v", validationErrors)
+		return appErrors.NewValidationError("invalid deduplication entry", fmt.Sprintf("%v", validationErrors))
 	}
 
 	// Create in repository (this handles both database and Redis)
 	if err := s.deduplicationRepo.Create(ctx, dedup); err != nil {
-		return fmt.Errorf("failed to register event for deduplication: %w", err)
+		return appErrors.NewInternalError("failed to register event for deduplication", err)
 	}
 
 	return nil
@@ -147,12 +147,12 @@ func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, dedup
 
 // RegisterProcessedEventsBatch registers multiple processed events for deduplication
 // Uses the default TTL from configuration (typically 24 hours for telemetry events)
-func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context.Context, projectID uuid.UUID, batchID uuid.UUID, dedupIDs []string) error {
+func (s *TelemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context.Context, projectID uuid.UUID, batchID uuid.UUID, dedupIDs []string) error {
 	if projectID == uuid.Nil {
-		return errors.New("project ID cannot be zero")
+		return appErrors.NewValidationError("invalid project id", "project id cannot be zero")
 	}
 	if batchID == uuid.Nil {
-		return errors.New("batch ID cannot be zero")
+		return appErrors.NewValidationError("invalid batch id", "batch id cannot be zero")
 	}
 	if len(dedupIDs) == 0 {
 		return nil // Nothing to register
@@ -193,16 +193,16 @@ func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context
 
 	// Use batch create for better performance
 	if err := s.deduplicationRepo.CreateBatch(ctx, dedupEntries); err != nil {
-		return fmt.Errorf("failed to register processed events batch for deduplication: %w", err)
+		return appErrors.NewInternalError("failed to register processed events batch", err)
 	}
 
 	return nil
 }
 
 // CalculateOptimalTTL calculates the optimal TTL based on UUID timestamp and default TTL
-func (s *telemetryDeduplicationService) CalculateOptimalTTL(ctx context.Context, dedupID string, defaultTTL time.Duration) (time.Duration, error) {
+func (s *TelemetryDeduplicationService) CalculateOptimalTTL(ctx context.Context, dedupID string, defaultTTL time.Duration) (time.Duration, error) {
 	if dedupID == "" {
-		return 0, errors.New("dedup ID cannot be empty")
+		return 0, appErrors.NewValidationError("invalid dedup id", "dedup id cannot be empty")
 	}
 
 	// For composite OTLP IDs (trace_id:span_id), always use default TTL
@@ -211,7 +211,7 @@ func (s *telemetryDeduplicationService) CalculateOptimalTTL(ctx context.Context,
 }
 
 // GetExpirationTime calculates expiration time based on current time and base TTL
-func (s *telemetryDeduplicationService) GetExpirationTime(dedupID string, baseTTL time.Duration) time.Time {
+func (s *TelemetryDeduplicationService) GetExpirationTime(dedupID string, baseTTL time.Duration) time.Time {
 	// For composite OTLP IDs (trace_id:span_id), use current time
 	// No embedded timestamp in OTLP hex IDs
 	return time.Now().Add(baseTTL)
@@ -219,7 +219,7 @@ func (s *telemetryDeduplicationService) GetExpirationTime(dedupID string, baseTT
 
 // CleanupExpired removes expired deduplication entries
 // Note: With Redis-only approach, TTL handles auto-expiry, so manual cleanup is not needed
-func (s *telemetryDeduplicationService) CleanupExpired(ctx context.Context) (int64, error) {
+func (s *TelemetryDeduplicationService) CleanupExpired(ctx context.Context) (int64, error) {
 	// Redis automatically expires entries based on TTL
 	// Return 0 to indicate no manual cleanup performed
 	return 0, nil
@@ -227,9 +227,9 @@ func (s *telemetryDeduplicationService) CleanupExpired(ctx context.Context) (int
 
 // CleanupByProject removes expired entries for a specific project
 // Note: With Redis-only approach, TTL handles auto-expiry per key
-func (s *telemetryDeduplicationService) CleanupByProject(ctx context.Context, projectID uuid.UUID, olderThan time.Time) (int64, error) {
+func (s *TelemetryDeduplicationService) CleanupByProject(ctx context.Context, projectID uuid.UUID, olderThan time.Time) (int64, error) {
 	if projectID == uuid.Nil {
-		return 0, errors.New("project ID cannot be zero")
+		return 0, appErrors.NewValidationError("invalid project id", "project id cannot be zero")
 	}
 
 	// Redis automatically expires entries based on TTL
@@ -239,7 +239,7 @@ func (s *telemetryDeduplicationService) CleanupByProject(ctx context.Context, pr
 
 // BatchCleanup removes expired entries in batches for better performance
 // Note: With Redis-only approach, TTL handles auto-expiry, no batch cleanup needed
-func (s *telemetryDeduplicationService) BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error) {
+func (s *TelemetryDeduplicationService) BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error) {
 	// Redis automatically expires entries based on TTL
 	// No batch cleanup needed
 	return 0, nil
@@ -247,14 +247,14 @@ func (s *telemetryDeduplicationService) BatchCleanup(ctx context.Context, olderT
 
 // SyncToRedis synchronizes deduplication entries to Redis cache
 // Note: With Redis-only approach, entries are already in Redis via Create/CreateBatch
-func (s *telemetryDeduplicationService) SyncToRedis(ctx context.Context, entries []*observability.TelemetryEventDeduplication) error {
+func (s *TelemetryDeduplicationService) SyncToRedis(ctx context.Context, entries []*observability.TelemetryEventDeduplication) error {
 	// Redis-only approach - entries are already in Redis
 	// No sync needed
 	return nil
 }
 
 // ValidateRedisHealth checks Redis connectivity and performance
-func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context) (*observability.RedisHealthStatus, error) {
+func (s *TelemetryDeduplicationService) ValidateRedisHealth(ctx context.Context) (*observability.RedisHealthStatus, error) {
 	// Create a test key to measure latency
 	testKey := "test-span-id-0102030405060708"
 	testBatchID := uid.New()
@@ -312,15 +312,15 @@ func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context)
 }
 
 // GetDeduplicationStats retrieves deduplication performance statistics
-func (s *telemetryDeduplicationService) GetDeduplicationStats(ctx context.Context, projectID uuid.UUID) (*observability.DeduplicationStats, error) {
+func (s *TelemetryDeduplicationService) GetDeduplicationStats(ctx context.Context, projectID uuid.UUID) (*observability.DeduplicationStats, error) {
 	if projectID == uuid.Nil {
-		return nil, errors.New("project ID cannot be zero")
+		return nil, appErrors.NewValidationError("invalid project id", "project id cannot be zero")
 	}
 
 	// Get count of entries for the project
 	totalEntries, err := s.deduplicationRepo.CountByProjectID(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get deduplication stats: %w", err)
+		return nil, appErrors.NewInternalError("failed to get deduplication stats", err)
 	}
 
 	// In a real implementation, these metrics would be collected from actual operations
@@ -347,7 +347,7 @@ func (s *telemetryDeduplicationService) GetDeduplicationStats(ctx context.Contex
 }
 
 // GetCacheHitRate calculates cache hit rate over a time window
-func (s *telemetryDeduplicationService) GetCacheHitRate(ctx context.Context, timeWindow time.Duration) (float64, error) {
+func (s *TelemetryDeduplicationService) GetCacheHitRate(ctx context.Context, timeWindow time.Duration) (float64, error) {
 	// In a real implementation, this would query actual metrics
 	// For now, return a simulated cache hit rate
 
@@ -362,7 +362,7 @@ func (s *telemetryDeduplicationService) GetCacheHitRate(ctx context.Context, tim
 }
 
 // GetFallbackRate calculates database fallback rate over a time window
-func (s *telemetryDeduplicationService) GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error) {
+func (s *TelemetryDeduplicationService) GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error) {
 	// In a real implementation, this would query actual metrics
 	// For now, return a simulated fallback rate
 

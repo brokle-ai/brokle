@@ -172,7 +172,7 @@ func (s *OTLPEventsConverterService) convertGenAIEventRecord(
 		EvaluationScore:       evaluationScore,
 		EvaluationLabel:       evaluationLabel,
 		EvaluationExplanation: evaluationExplanation,
-		ProjectID: projectID,
+		ProjectID:             projectID,
 		UserID:                userID,
 		SessionID:             sessionID,
 	}

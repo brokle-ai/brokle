@@ -7,16 +7,18 @@ package auth
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
-// TestAuthCookies_AllEmitAtPathRoot — buildAuthCookies must emit
+// TestAuthCookies_AllEmitAtPathRoot — setAuthCookies must emit
 // access_token AND refresh_token AND csrf_token with Path=/. The
 // SSR silent-refresh path in web/src/proxy.ts depends on every
 // session cookie being attached to every same-origin request.
 func TestAuthCookies_AllEmitAtPathRoot(t *testing.T) {
-	cookies := buildAuthCookies("access-v", "refresh-v", "csrf-v", "")
-	assertAllPathRoot(t, cookies, "buildAuthCookies")
+	rec := httptest.NewRecorder()
+	setAuthCookies(rec, "access-v", "refresh-v", "csrf-v", "")
+	assertAllPathRoot(t, rec.Result().Cookies(), "setAuthCookies")
 }
 
 // TestClearAuthCookies_AllEmitAtPathRoot — same invariant on the
@@ -24,8 +26,9 @@ func TestAuthCookies_AllEmitAtPathRoot(t *testing.T) {
 // set Set-Cookie's attributes (Path in particular) for the browser
 // to drop the entry reliably.
 func TestClearAuthCookies_AllEmitAtPathRoot(t *testing.T) {
-	cookies := buildClearAuthCookies("")
-	assertAllPathRoot(t, cookies, "buildClearAuthCookies")
+	rec := httptest.NewRecorder()
+	clearAuthCookies(rec, "")
+	assertAllPathRoot(t, rec.Result().Cookies(), "clearAuthCookies")
 }
 
 // TestRefreshCookiePath_IsRoot — constant-level assertion. If this
@@ -37,7 +40,7 @@ func TestRefreshCookiePath_IsRoot(t *testing.T) {
 	}
 }
 
-func assertAllPathRoot(t *testing.T, cookies []http.Cookie, caller string) {
+func assertAllPathRoot(t *testing.T, cookies []*http.Cookie, caller string) {
 	t.Helper()
 	want := map[string]bool{
 		cookieNameAccess:  false,

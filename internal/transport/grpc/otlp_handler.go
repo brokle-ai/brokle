@@ -29,7 +29,7 @@ type OTLPHandler struct {
 	coltracepb.UnimplementedTraceServiceServer
 
 	streamProducer       *streams.TelemetryStreamProducer
-	deduplicationService observability.TelemetryDeduplicationService
+	deduplicationService *obsServices.TelemetryDeduplicationService
 	otlpConverter        *obsServices.OTLPConverterService
 	logger               *slog.Logger
 }
@@ -37,7 +37,7 @@ type OTLPHandler struct {
 // NewOTLPHandler creates a new gRPC OTLP handler
 func NewOTLPHandler(
 	streamProducer *streams.TelemetryStreamProducer,
-	deduplicationService observability.TelemetryDeduplicationService,
+	deduplicationService *obsServices.TelemetryDeduplicationService,
 	otlpConverter *obsServices.OTLPConverterService,
 	logger *slog.Logger,
 ) *OTLPHandler {

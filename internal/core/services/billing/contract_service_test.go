@@ -522,7 +522,7 @@ func TestContractService_GetContract_NotFound(t *testing.T) {
 
 	contractID := uid.New()
 
-	contractRepo.On("GetByID", ctx, contractID).Return(nil, appErrors.NewNotFoundError("Contract not found"))
+	contractRepo.On("GetByID", ctx, contractID).Return(nil, appErrors.NewNotFoundError("contract not found"))
 
 	// Execute
 	result, err := service.GetContract(ctx, contractID)

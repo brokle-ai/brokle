@@ -8,23 +8,24 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/analytics"
+	appErrors "brokle/pkg/errors"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/shopspring/decimal"
 )
 
-// ProviderPricingServiceImpl implements pricing lookup with LRU caching
-type ProviderPricingServiceImpl struct {
+// ProviderPricingService implements pricing lookup with LRU caching
+type ProviderPricingService struct {
 	modelRepo analytics.ProviderModelRepository
 	cache     *lru.Cache[string, *analytics.ProviderPricingSnapshot]
 }
 
 // NewProviderPricingService creates a new pricing service with 5-minute TTL cache
-func NewProviderPricingService(modelRepo analytics.ProviderModelRepository) analytics.ProviderPricingService {
+func NewProviderPricingService(modelRepo analytics.ProviderModelRepository) *ProviderPricingService {
 	// Cache 1000 pricing snapshots (5-minute TTL handled by cache key with timestamp)
 	cache, _ := lru.New[string, *analytics.ProviderPricingSnapshot](1000)
 
-	return &ProviderPricingServiceImpl{
+	return &ProviderPricingService{
 		modelRepo: modelRepo,
 		cache:     cache,
 	}
@@ -32,7 +33,7 @@ func NewProviderPricingService(modelRepo analytics.ProviderModelRepository) anal
 
 // GetProviderPricingSnapshot retrieves pricing snapshot for a model at specific time
 // Implements 5-minute caching for performance (pricing doesn't change frequently)
-func (s *ProviderPricingServiceImpl) GetProviderPricingSnapshot(
+func (s *ProviderPricingService) GetProviderPricingSnapshot(
 	ctx context.Context,
 	projectID *uuid.UUID,
 	modelName string,
@@ -55,13 +56,13 @@ func (s *ProviderPricingServiceImpl) GetProviderPricingSnapshot(
 	// Lookup provider model with temporal versioning
 	model, err := s.modelRepo.GetProviderModelAtTime(ctx, projectID, modelName, atTime)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get provider model: %w", err)
+		return nil, appErrors.NewInternalError("failed to get provider model", err)
 	}
 
 	// Lookup provider prices for this model (project-specific override takes precedence)
 	prices, err := s.modelRepo.GetProviderPrices(ctx, model.ID, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prices: %w", err)
+		return nil, appErrors.NewInternalError("failed to get provider prices", err)
 	}
 
 	// Build pricing snapshot
@@ -84,7 +85,7 @@ func (s *ProviderPricingServiceImpl) GetProviderPricingSnapshot(
 
 // CalculateProviderCost calculates costs from usage and pricing snapshot
 // Returns cost breakdown map with "total" key for aggregated cost
-func (s *ProviderPricingServiceImpl) CalculateProviderCost(
+func (s *ProviderPricingService) CalculateProviderCost(
 	usage map[string]uint64,
 	pricing *analytics.ProviderPricingSnapshot,
 ) map[string]decimal.Decimal {

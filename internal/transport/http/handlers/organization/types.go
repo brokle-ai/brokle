@@ -1,14 +1,15 @@
 package organization
 
 import (
-	"brokle/internal/core/domain/organization"
-	"brokle/pkg/response"
 	"time"
 
 	"github.com/google/uuid"
+
+	"brokle/internal/core/domain/organization"
+	"brokle/pkg/response"
 )
 
-// Huma operation types for the organization package.
+// ---- response DTOs ---------------------------------------------------
 
 type organizationResponse struct {
 	ID                 uuid.UUID `json:"id"`
@@ -48,132 +49,6 @@ type invitationResponse struct {
 	UpdatedAt      time.Time                `json:"updated_at"`
 }
 
-type ListOrganizationsInput struct {
-	Search  string `query:"search" required:"false" doc:"Filter by name substring"`
-	Page    int    `query:"page" required:"false" minimum:"1" doc:"Page number (1-indexed); default 1"`
-	Limit   int    `query:"limit" required:"false" minimum:"1" maximum:"100" doc:"Items per page; default 20"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Created-at sort direction; default desc"`
-}
-
-type listOrganizationsBody struct {
-	Data       []organizationResponse `json:"data"`
-	Pagination *response.Pagination   `json:"pagination"`
-}
-
-type ListOrganizationsOutput struct {
-	Body listOrganizationsBody
-}
-
-type CreateOrganizationInput struct {
-	Body createOrganizationBody
-}
-
-type createOrganizationBody struct {
-	Name        string `json:"name" minLength:"2" maxLength:"100" doc:"Organization name"`
-	Description string `json:"description,omitempty" maxLength:"500"`
-}
-
-type CreateOrganizationOutput struct {
-	Body organizationResponse
-}
-
-type GetOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type GetOrganizationOutput struct {
-	Body organizationResponse
-}
-
-type UpdateOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  updateOrganizationBody
-}
-
-type updateOrganizationBody struct {
-	Name         *string `json:"name,omitempty" minLength:"2" maxLength:"100"`
-	BillingEmail *string `json:"billing_email,omitempty" format:"email"`
-	Description  *string `json:"description,omitempty" maxLength:"500"`
-}
-
-type UpdateOrganizationOutput struct {
-	Body organizationResponse
-}
-
-type DeleteOrganizationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type DeleteOrganizationOutput struct{}
-
-type ListMembersInput struct {
-	OrgID  string `path:"orgId" format:"uuid"`
-	Status string `query:"status" required:"false" enum:"active,invited,suspended"`
-	Role   string `query:"role" required:"false"`
-}
-
-type listMembersBody struct {
-	Members []memberResponse `json:"members"`
-	Total   int              `json:"total"`
-}
-
-type ListMembersOutput struct {
-	Body listMembersBody
-}
-
-type RemoveMemberInput struct {
-	OrgID  string `path:"orgId" format:"uuid"`
-	UserID string `path:"userId" format:"uuid"`
-}
-
-type RemoveMemberOutput struct{}
-
-type CreateInvitationInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  createInvitationBody
-}
-
-type createInvitationBody struct {
-	Email   string    `json:"email" format:"email" doc:"Email address of user to invite"`
-	RoleID  uuid.UUID `json:"role_id" doc:"Role ID to assign"`
-	Message *string   `json:"message,omitempty" maxLength:"500" doc:"Optional personal message"`
-}
-
-type CreateInvitationOutput struct {
-	Body invitationResponse
-}
-
-type ListPendingInvitationsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-}
-
-type listPendingInvitationsBody struct {
-	Invitations []invitationResponse `json:"invitations"`
-	Total       int                  `json:"total"`
-}
-
-type ListPendingInvitationsOutput struct {
-	Body listPendingInvitationsBody
-}
-
-type ResendInvitationInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	InvitationID string `path:"invitationId" format:"uuid"`
-}
-
-type ResendInvitationOutput struct {
-	Body invitationResponse
-}
-
-type RevokeInvitationInput struct {
-	OrgID        string `path:"orgId" format:"uuid"`
-	InvitationID string `path:"invitationId" format:"uuid"`
-}
-
-type RevokeInvitationOutput struct{}
-
-type ListUserInvitationsInput struct{}
-
 type userInvitationResponse struct {
 	ID               uuid.UUID                `json:"id"`
 	Email            string                   `json:"email"`
@@ -187,19 +62,6 @@ type userInvitationResponse struct {
 	CreatedAt        time.Time                `json:"created_at"`
 }
 
-type listUserInvitationsBody struct {
-	Invitations []userInvitationResponse `json:"invitations"`
-	Total       int                      `json:"total"`
-}
-
-type ListUserInvitationsOutput struct {
-	Body listUserInvitationsBody
-}
-
-type ValidateInvitationTokenInput struct {
-	Token string `path:"token" doc:"Invitation token"`
-}
-
 type invitationDetailsBody struct {
 	OrganizationID   uuid.UUID `json:"organization_id"`
 	OrganizationName string    `json:"organization_name"`
@@ -210,30 +72,6 @@ type invitationDetailsBody struct {
 	IsExpired        bool      `json:"is_expired"`
 }
 
-type ValidateInvitationTokenOutput struct {
-	Body invitationDetailsBody
-}
-
-type AcceptInvitationInput struct {
-	Body acceptInvitationBody
-}
-
-type acceptInvitationBody struct {
-	Token string `json:"token" minLength:"1" doc:"Invitation token"`
-}
-
-type AcceptInvitationOutput struct{}
-
-type DeclineInvitationInput struct {
-	Body declineInvitationBody
-}
-
-type declineInvitationBody struct {
-	Token string `json:"token" minLength:"1" doc:"Invitation token"`
-}
-
-type DeclineInvitationOutput struct{}
-
 type settingResponse struct {
 	ID             uuid.UUID `json:"id"`
 	OrganizationID uuid.UUID `json:"organization_id"`
@@ -243,58 +81,64 @@ type settingResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-type ListSettingsInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
+// ---- list-response bodies -------------------------------------------
+
+type listOrganizationsBody struct {
+	Data       []organizationResponse `json:"data"`
+	Pagination *response.Pagination   `json:"pagination"`
+}
+
+type listMembersBody struct {
+	Members []memberResponse `json:"members"`
+	Total   int              `json:"total"`
+}
+
+type listPendingInvitationsBody struct {
+	Invitations []invitationResponse `json:"invitations"`
+	Total       int                  `json:"total"`
+}
+
+type listUserInvitationsBody struct {
+	Invitations []userInvitationResponse `json:"invitations"`
+	Total       int                      `json:"total"`
 }
 
 type listSettingsBody struct {
 	Settings map[string]any `json:"settings"`
 }
 
-type ListSettingsOutput struct {
-	Body listSettingsBody
+// ---- request bodies -------------------------------------------------
+
+type createOrganizationBody struct {
+	Name        string `json:"name"                  validate:"required,min=2,max=100"`
+	Description string `json:"description,omitempty" validate:"omitempty,max=500"`
 }
 
-type CreateSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Body  createSettingBody
+type updateOrganizationBody struct {
+	Name         *string `json:"name,omitempty"          validate:"omitempty,min=2,max=100"`
+	BillingEmail *string `json:"billing_email,omitempty" validate:"omitempty,email"`
+	Description  *string `json:"description,omitempty"   validate:"omitempty,max=500"`
+}
+
+type createInvitationBody struct {
+	Email   string    `json:"email"             validate:"required,email"`
+	RoleID  uuid.UUID `json:"role_id"           validate:"required"`
+	Message *string   `json:"message,omitempty" validate:"omitempty,max=500"`
+}
+
+type acceptInvitationBody struct {
+	Token string `json:"token" validate:"required,min=1"`
+}
+
+type declineInvitationBody struct {
+	Token string `json:"token" validate:"required,min=1"`
 }
 
 type createSettingBody struct {
-	Key   string `json:"key" minLength:"1" maxLength:"255" doc:"Setting key"`
-	Value any    `json:"value" doc:"Setting value (any JSON type)"`
-}
-
-type CreateSettingOutput struct {
-	Body settingResponse
-}
-
-type GetSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-}
-
-type GetSettingOutput struct {
-	Body settingResponse
-}
-
-type UpdateSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-	Body  updateSettingBody
+	Key   string `json:"key"   validate:"required,min=1,max=255"`
+	Value any    `json:"value"`
 }
 
 type updateSettingBody struct {
-	Value any `json:"value" doc:"New setting value (any JSON type)"`
+	Value any `json:"value"`
 }
-
-type UpdateSettingOutput struct {
-	Body settingResponse
-}
-
-type DeleteSettingInput struct {
-	OrgID string `path:"orgId" format:"uuid"`
-	Key   string `path:"key" minLength:"1"`
-}
-
-type DeleteSettingOutput struct{}

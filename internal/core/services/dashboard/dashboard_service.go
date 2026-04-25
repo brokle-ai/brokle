@@ -1,3 +1,4 @@
+// Package dashboard implements dashboards: layouts, widgets, templates, and widget query execution.
 package dashboard
 
 import (
@@ -13,7 +14,7 @@ import (
 	"brokle/pkg/uid"
 )
 
-type dashboardService struct {
+type DashboardService struct {
 	repo   dashboardDomain.DashboardRepository
 	logger *slog.Logger
 }
@@ -21,14 +22,14 @@ type dashboardService struct {
 func NewDashboardService(
 	repo dashboardDomain.DashboardRepository,
 	logger *slog.Logger,
-) dashboardDomain.DashboardService {
-	return &dashboardService{
+) *DashboardService {
+	return &DashboardService{
 		repo:   repo,
 		logger: logger,
 	}
 }
 
-func (s *dashboardService) CreateDashboard(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateDashboardRequest) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) CreateDashboard(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateDashboardRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
 		return nil, appErrors.NewValidationError("name", "dashboard name is required")
 	}
@@ -80,7 +81,7 @@ func (s *dashboardService) CreateDashboard(ctx context.Context, projectID uuid.U
 	return dashboard, nil
 }
 
-func (s *dashboardService) GetDashboard(ctx context.Context, id uuid.UUID) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) GetDashboard(ctx context.Context, id uuid.UUID) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
@@ -91,7 +92,7 @@ func (s *dashboardService) GetDashboard(ctx context.Context, id uuid.UUID) (*das
 	return dashboard, nil
 }
 
-func (s *dashboardService) GetDashboardByProject(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) GetDashboardByProject(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.repo.GetByID(ctx, dashboardID)
 	if err != nil {
 		if errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
@@ -107,7 +108,7 @@ func (s *dashboardService) GetDashboardByProject(ctx context.Context, projectID,
 	return dashboard, nil
 }
 
-func (s *dashboardService) UpdateDashboard(ctx context.Context, projectID, dashboardID uuid.UUID, req *dashboardDomain.UpdateDashboardRequest) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) UpdateDashboard(ctx context.Context, projectID, dashboardID uuid.UUID, req *dashboardDomain.UpdateDashboardRequest) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -158,7 +159,7 @@ func (s *dashboardService) UpdateDashboard(ctx context.Context, projectID, dashb
 	return dashboard, nil
 }
 
-func (s *dashboardService) DeleteDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) error {
+func (s *DashboardService) DeleteDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) error {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return err
@@ -180,21 +181,23 @@ func (s *dashboardService) DeleteDashboard(ctx context.Context, projectID, dashb
 	return nil
 }
 
-func (s *dashboardService) ListDashboards(ctx context.Context, projectID uuid.UUID, filter *dashboardDomain.DashboardFilter) (*dashboardDomain.DashboardListResponse, error) {
+// ListDashboards returns a paginated slice of dashboards for the given project
+// plus the total count. Handler-layer code wraps the result into the canonical
+// {data, pagination} envelope.
+func (s *DashboardService) ListDashboards(ctx context.Context, projectID uuid.UUID, filter *dashboardDomain.DashboardFilter) ([]*dashboardDomain.Dashboard, int64, error) {
 	if filter == nil {
 		filter = &dashboardDomain.DashboardFilter{}
 	}
 	filter.ProjectID = projectID
 
-	resp, err := s.repo.GetByProjectID(ctx, projectID, filter)
+	items, total, err := s.repo.GetByProjectID(ctx, projectID, filter)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list dashboards", err)
+		return nil, 0, appErrors.NewInternalError("failed to list dashboards", err)
 	}
-
-	return resp, nil
+	return items, total, nil
 }
 
-func (s *dashboardService) AddWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widget *dashboardDomain.Widget) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) AddWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widget *dashboardDomain.Widget) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -227,7 +230,7 @@ func (s *dashboardService) AddWidget(ctx context.Context, projectID, dashboardID
 	return dashboard, nil
 }
 
-func (s *dashboardService) UpdateWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widgetID string, widget *dashboardDomain.Widget) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) UpdateWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widgetID string, widget *dashboardDomain.Widget) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -262,7 +265,7 @@ func (s *dashboardService) UpdateWidget(ctx context.Context, projectID, dashboar
 	return dashboard, nil
 }
 
-func (s *dashboardService) RemoveWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widgetID string) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) RemoveWidget(ctx context.Context, projectID, dashboardID uuid.UUID, widgetID string) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -299,7 +302,7 @@ func (s *dashboardService) RemoveWidget(ctx context.Context, projectID, dashboar
 	return dashboard, nil
 }
 
-func (s *dashboardService) UpdateLayout(ctx context.Context, projectID, dashboardID uuid.UUID, layout []dashboardDomain.LayoutItem) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) UpdateLayout(ctx context.Context, projectID, dashboardID uuid.UUID, layout []dashboardDomain.LayoutItem) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -325,7 +328,7 @@ func (s *dashboardService) UpdateLayout(ctx context.Context, projectID, dashboar
 	return dashboard, nil
 }
 
-func (s *dashboardService) DuplicateDashboard(ctx context.Context, projectID, dashboardID uuid.UUID, req *dashboardDomain.DuplicateDashboardRequest) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) DuplicateDashboard(ctx context.Context, projectID, dashboardID uuid.UUID, req *dashboardDomain.DuplicateDashboardRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
 		return nil, appErrors.NewValidationError("name", "dashboard name is required")
 	}
@@ -385,7 +388,7 @@ func (s *dashboardService) DuplicateDashboard(ctx context.Context, projectID, da
 	return dashboard, nil
 }
 
-func (s *dashboardService) LockDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) LockDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -409,7 +412,7 @@ func (s *dashboardService) LockDashboard(ctx context.Context, projectID, dashboa
 	return dashboard, nil
 }
 
-func (s *dashboardService) UnlockDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) UnlockDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -433,7 +436,7 @@ func (s *dashboardService) UnlockDashboard(ctx context.Context, projectID, dashb
 	return dashboard, nil
 }
 
-func (s *dashboardService) ExportDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.DashboardExport, error) {
+func (s *DashboardService) ExportDashboard(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.DashboardExport, error) {
 	dashboard, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
 	if err != nil {
 		return nil, err
@@ -441,7 +444,7 @@ func (s *dashboardService) ExportDashboard(ctx context.Context, projectID, dashb
 
 	export := &dashboardDomain.DashboardExport{
 		Version:     "1.0",
-		ExportedAt:  time.Now().UTC(),
+		ExportedAt:  time.Now(),
 		Name:        dashboard.Name,
 		Description: dashboard.Description,
 		Config:      s.copyConfig(dashboard.Config),
@@ -456,7 +459,7 @@ func (s *dashboardService) ExportDashboard(ctx context.Context, projectID, dashb
 	return export, nil
 }
 
-func (s *dashboardService) ImportDashboard(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.DashboardImportRequest) (*dashboardDomain.Dashboard, error) {
+func (s *DashboardService) ImportDashboard(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.DashboardImportRequest) (*dashboardDomain.Dashboard, error) {
 	name := req.Name
 	if name == "" {
 		name = req.Data.Name
@@ -518,7 +521,7 @@ func (s *dashboardService) ImportDashboard(ctx context.Context, projectID uuid.U
 	return dashboard, nil
 }
 
-func (s *dashboardService) copyConfig(src dashboardDomain.DashboardConfig) dashboardDomain.DashboardConfig {
+func (s *DashboardService) copyConfig(src dashboardDomain.DashboardConfig) dashboardDomain.DashboardConfig {
 	dst := dashboardDomain.DashboardConfig{
 		RefreshRate: src.RefreshRate,
 	}
@@ -563,7 +566,7 @@ func (s *dashboardService) copyConfig(src dashboardDomain.DashboardConfig) dashb
 	return dst
 }
 
-func (s *dashboardService) copyQuery(src dashboardDomain.WidgetQuery) dashboardDomain.WidgetQuery {
+func (s *DashboardService) copyQuery(src dashboardDomain.WidgetQuery) dashboardDomain.WidgetQuery {
 	dst := dashboardDomain.WidgetQuery{
 		View:     src.View,
 		Limit:    src.Limit,
@@ -603,7 +606,7 @@ func (s *dashboardService) copyQuery(src dashboardDomain.WidgetQuery) dashboardD
 	return dst
 }
 
-func (s *dashboardService) copyLayout(src []dashboardDomain.LayoutItem) []dashboardDomain.LayoutItem {
+func (s *DashboardService) copyLayout(src []dashboardDomain.LayoutItem) []dashboardDomain.LayoutItem {
 	if src == nil {
 		return nil
 	}
@@ -620,7 +623,7 @@ func (s *dashboardService) copyLayout(src []dashboardDomain.LayoutItem) []dashbo
 	return dst
 }
 
-func (s *dashboardService) ValidateDashboardConfig(config *dashboardDomain.DashboardConfig) error {
+func (s *DashboardService) ValidateDashboardConfig(config *dashboardDomain.DashboardConfig) error {
 	if config == nil {
 		return nil
 	}
@@ -646,7 +649,7 @@ func (s *dashboardService) ValidateDashboardConfig(config *dashboardDomain.Dashb
 	return nil
 }
 
-func (s *dashboardService) ValidateWidgetQuery(query *dashboardDomain.WidgetQuery) error {
+func (s *DashboardService) ValidateWidgetQuery(query *dashboardDomain.WidgetQuery) error {
 	if query == nil {
 		return appErrors.NewValidationError("query", "widget query is required")
 	}

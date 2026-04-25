@@ -10,19 +10,19 @@ import (
 	"brokle/internal/infrastructure/db/gen"
 )
 
-type ExperimentItemRepository struct {
+type experimentItemRepository struct {
 	tm *db.TxManager
 }
 
-func NewExperimentItemRepository(tm *db.TxManager) *ExperimentItemRepository {
-	return &ExperimentItemRepository{tm: tm}
+func NewExperimentItemRepository(tm *db.TxManager) evalDomain.ExperimentItemRepository {
+	return &experimentItemRepository{tm: tm}
 }
 
-func (r *ExperimentItemRepository) Create(ctx context.Context, item *evalDomain.ExperimentItem) error {
+func (r *experimentItemRepository) Create(ctx context.Context, item *evalDomain.ExperimentItem) error {
 	return r.insertOne(ctx, item)
 }
 
-func (r *ExperimentItemRepository) CreateBatch(ctx context.Context, items []*evalDomain.ExperimentItem) error {
+func (r *experimentItemRepository) CreateBatch(ctx context.Context, items []*evalDomain.ExperimentItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -36,7 +36,7 @@ func (r *ExperimentItemRepository) CreateBatch(ctx context.Context, items []*eva
 	})
 }
 
-func (r *ExperimentItemRepository) insertOne(ctx context.Context, item *evalDomain.ExperimentItem) error {
+func (r *experimentItemRepository) insertOne(ctx context.Context, item *evalDomain.ExperimentItem) error {
 	input, err := marshalEvalJSON(item.Input)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (r *ExperimentItemRepository) insertOne(ctx context.Context, item *evalDoma
 	})
 }
 
-func (r *ExperimentItemRepository) List(ctx context.Context, experimentID uuid.UUID, limit, offset int) ([]*evalDomain.ExperimentItem, int64, error) {
+func (r *experimentItemRepository) List(ctx context.Context, experimentID uuid.UUID, limit, offset int) ([]*evalDomain.ExperimentItem, int64, error) {
 	total, err := r.tm.Queries(ctx).CountExperimentItems(ctx, experimentID)
 	if err != nil {
 		return nil, 0, err
@@ -91,7 +91,7 @@ func (r *ExperimentItemRepository) List(ctx context.Context, experimentID uuid.U
 	return out, total, nil
 }
 
-func (r *ExperimentItemRepository) CountByExperiment(ctx context.Context, experimentID uuid.UUID) (int64, error) {
+func (r *experimentItemRepository) CountByExperiment(ctx context.Context, experimentID uuid.UUID) (int64, error) {
 	return r.tm.Queries(ctx).CountExperimentItems(ctx, experimentID)
 }
 

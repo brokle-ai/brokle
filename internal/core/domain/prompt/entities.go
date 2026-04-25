@@ -24,31 +24,31 @@ const (
 
 // Prompt represents a prompt template with version management.
 type Prompt struct {
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   *time.Time     `json:"deleted_at,omitempty"`
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Type        PromptType     `json:"type"`
-	Tags        []string       `json:"tags"`
-	Versions    []Version      `json:"versions,omitempty"`
-	Labels      []Label        `json:"labels,omitempty"`
-	ID          uuid.UUID      `json:"id"`
-	ProjectID   uuid.UUID      `json:"project_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Type        PromptType `json:"type"`
+	Tags        []string   `json:"tags"`
+	Versions    []Version  `json:"versions,omitempty"`
+	Labels      []Label    `json:"labels,omitempty"`
+	ID          uuid.UUID  `json:"id"`
+	ProjectID   uuid.UUID  `json:"project_id"`
 }
 
 // Version represents an immutable version snapshot of a prompt.
 type Version struct {
-	CreatedAt     time.Time      `json:"created_at"`
-	Template      JSON           `json:"template"`
-	Config        *ModelConfig   `json:"config,omitempty"`
-	Variables     []string       `json:"variables"`
-	CommitMessage string         `json:"commit_message,omitempty"`
-	Labels        []Label        `json:"labels,omitempty"`
-	ID            uuid.UUID      `json:"id"`
-	PromptID      uuid.UUID      `json:"prompt_id"`
-	CreatedBy     *uuid.UUID     `json:"created_by,omitempty"`
-	Version       int            `json:"version"`
+	CreatedAt     time.Time    `json:"created_at"`
+	Template      JSON         `json:"template"`
+	Config        *ModelConfig `json:"config,omitempty"`
+	Variables     []string     `json:"variables"`
+	CommitMessage string       `json:"commit_message,omitempty"`
+	Labels        []Label      `json:"labels,omitempty"`
+	ID            uuid.UUID    `json:"id"`
+	PromptID      uuid.UUID    `json:"prompt_id"`
+	CreatedBy     *uuid.UUID   `json:"created_by,omitempty"`
+	Version       int          `json:"version"`
 }
 
 // Label represents a mutable pointer from a label name to a specific version.
@@ -81,15 +81,15 @@ type ChatMessage struct {
 
 // ModelConfig represents optional model configuration for a prompt version.
 type ModelConfig struct {
-	Model            string   `json:"model,omitempty"`
-	Provider         string   `json:"provider,omitempty"`      // Adapter type (openai, anthropic, azure, gemini, openrouter, custom)
+	Model            string     `json:"model,omitempty"`
+	Provider         string     `json:"provider,omitempty"`      // Adapter type (openai, anthropic, azure, gemini, openrouter, custom)
 	CredentialID     *uuid.UUID `json:"credential_id,omitempty"` // Specific credential config ID (optional, falls back to adapter-based lookup)
-	Temperature      *float64 `json:"temperature,omitempty"`
-	MaxTokens        *int     `json:"max_tokens,omitempty"`
-	TopP             *float64 `json:"top_p,omitempty"`
-	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
-	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
-	Stop             []string `json:"stop,omitempty"`
+	Temperature      *float64   `json:"temperature,omitempty"`
+	MaxTokens        *int       `json:"max_tokens,omitempty"`
+	TopP             *float64   `json:"top_p,omitempty"`
+	FrequencyPenalty *float64   `json:"frequency_penalty,omitempty"`
+	PresencePenalty  *float64   `json:"presence_penalty,omitempty"`
+	Stop             []string   `json:"stop,omitempty"`
 
 	// Tools defines function calling tools for the LLM (OpenAI format).
 	// Each tool is stored as raw JSON to preserve provider-specific fields.
@@ -196,7 +196,7 @@ type CreatePromptRequest struct {
 	Type          PromptType   `json:"type,omitempty"`
 	Description   string       `json:"description,omitempty"`
 	Tags          []string     `json:"tags,omitempty"`
-	Template      any  `json:"template" validate:"required"`
+	Template      any          `json:"template" validate:"required"`
 	Config        *ModelConfig `json:"config,omitempty"`
 	Labels        []string     `json:"labels,omitempty"`
 	CommitMessage string       `json:"commit_message,omitempty"`
@@ -209,7 +209,7 @@ type UpdatePromptRequest struct {
 }
 
 type CreateVersionRequest struct {
-	Template      any  `json:"template" validate:"required"`
+	Template      any          `json:"template" validate:"required"`
 	Config        *ModelConfig `json:"config,omitempty"`
 	Labels        []string     `json:"labels,omitempty"`
 	CommitMessage string       `json:"commit_message,omitempty"`
@@ -221,7 +221,7 @@ type UpsertPromptRequest struct {
 	Type          PromptType   `json:"type,omitempty"`
 	Description   string       `json:"description,omitempty"`
 	Tags          []string     `json:"tags,omitempty"`
-	Template      any  `json:"template" validate:"required"`
+	Template      any          `json:"template" validate:"required"`
 	Config        *ModelConfig `json:"config,omitempty"`
 	Labels        []string     `json:"labels,omitempty"`
 	CommitMessage string       `json:"commit_message,omitempty"`
@@ -297,16 +297,16 @@ type VersionResponse struct {
 }
 
 type VersionDiffResponse struct {
-	FromVersion      int         `json:"from_version"`
-	ToVersion        int         `json:"to_version"`
-	TemplateFrom     any `json:"template_from"`
-	TemplateTo       any `json:"template_to"`
-	VariablesAdded   []string    `json:"variables_added"`
-	VariablesRemoved []string    `json:"variables_removed"`
+	FromVersion      int      `json:"from_version"`
+	ToVersion        int      `json:"to_version"`
+	TemplateFrom     any      `json:"template_from"`
+	TemplateTo       any      `json:"template_to"`
+	VariablesAdded   []string `json:"variables_added"`
+	VariablesRemoved []string `json:"variables_removed"`
 }
 
 type ExecutePromptResponse struct {
-	CompiledPrompt any  `json:"compiled_prompt"`
+	CompiledPrompt any          `json:"compiled_prompt"`
 	Response       *LLMResponse `json:"response,omitempty"`
 	LatencyMs      int64        `json:"latency_ms"`
 	Error          string       `json:"error,omitempty"`
@@ -416,7 +416,6 @@ func NewProtectedLabel(projectID uuid.UUID, labelName string, createdBy *uuid.UU
 		CreatedAt: time.Now(),
 	}
 }
-
 
 func (p *Prompt) IsDeleted() bool {
 	return p.DeletedAt != nil

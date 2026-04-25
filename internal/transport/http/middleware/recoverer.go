@@ -9,8 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Recoverer is the chi-shape panic recovery middleware that replaces the
-// Gin-based Recovery in middleware.go.
+// Recoverer is the chi-shape panic recovery middleware.
 //
 // It deliberately uses log/slog (not the stdlib log that chi's built-in
 // Recoverer falls back to) so panic records are emitted with the same
@@ -23,9 +22,9 @@ import (
 // chi's own middleware.Timeout). Treating it as a recovered panic would
 // log spurious "panic" lines for every dropped streaming connection.
 //
-// The 500 envelope is written via the AppError pipeline so the response
-// shape matches non-panic error paths and Huma's renderer in
-// internal/transport/http/api_error.go.
+// The 500 envelope is byte-identical to the AppError envelope produced
+// by pkg/response.WriteError so non-panic error paths and recovered
+// panics return the same Stripe/OpenAI-style shape to the caller.
 func Recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -67,9 +66,10 @@ func Recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 // internalErrorBody is the canonical 500 envelope written by the
 // recoverer when a panic is caught. Hand-written constant rather than a
 // runtime AppError construction — the body is fixed, the path is hot,
-// and the recoverer must stay functional through the pkg/response
-// rewrite that lands later in the Chi migration.
-const internalErrorBody = `{"success":false,"error":{"type":"api_error","code":"api_error","message":"Internal server error"}}`
+// and the recoverer must stay functional even if pkg/response has
+// itself panicked. Shape matches pkg/errors.AppError.MarshalJSON for
+// type=api_error: a top-level "error" object, no envelope wrapper.
+const internalErrorBody = `{"error":{"type":"api_error","code":"api_error","message":"Internal server error"}}`
 
 // writePanicResponse emits the canonical 500 envelope.
 func writePanicResponse(w http.ResponseWriter, _ *http.Request) {

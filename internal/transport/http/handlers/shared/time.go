@@ -1,3 +1,4 @@
+// Package shared contains shared helpers used across handler packages (time parsing, response messaging).
 package shared
 
 import (
@@ -14,7 +15,7 @@ import (
 //   - timeRangeStr: Preset like "24h", "7d", "30d"
 //   - defaultRange: Fallback when no parameters provided
 //
-// Returns (from, to, error) - error is AppError ready for response.Error()
+// Returns (from, to, error) - error is AppError ready for response.WriteError()
 func ParseTimeRange(from, to, timeRangeStr string, defaultRange analytics.TimeRange) (time.Time, time.Time, error) {
 	var fromTime, toTime time.Time
 

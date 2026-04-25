@@ -13,11 +13,11 @@
 //
 // The HTTP status is a pure function of Type via ErrorType.HTTPStatus —
 // never derive status from a stored field, and never let callers
-// override it. Framework-level errors (Huma's pre-handler validation,
-// content-type negotiation, method routing) are categorised via
-// FromHTTPStatus, which uses an explicit map for documented statuses
-// plus an RFC 9110 §15.5/§15.6 class fallback so no 4xx is ever
-// miscategorised as a 5xx-flavoured Type.
+// override it. Framework-level errors arriving by status code (chi
+// middleware, request decoders) are categorised via FromHTTPStatus,
+// which uses an explicit map for documented statuses plus an
+// RFC 9110 §15.5/§15.6 class fallback so no 4xx is ever miscategorised
+// as a 5xx-flavoured Type.
 package errors
 
 import (
@@ -117,6 +117,23 @@ func (t ErrorType) HTTPStatus() int {
 	return http.StatusInternalServerError
 }
 
+// ErrorDetail carries a per-field validation diagnostic. One entry
+// per rejected field, populated by pkg/request.DecodeJSON from
+// go-playground/validator errors.
+//
+// Location is a dotted path from the root of the request document —
+// "body.items[3].tags" for a nested JSON field, "query.page" for a
+// query parameter. Message is the humanised validation failure
+// ("required", "must be ≥ 1", "must be one of: a b c"). Value is
+// the offending input echoed back verbatim so the client can render
+// "you gave us X, but X is invalid" without needing to re-read the
+// request body.
+type ErrorDetail struct {
+	Location string `json:"location,omitempty"`
+	Message  string `json:"message"`
+	Value    any    `json:"value,omitempty"`
+}
+
 // AppError is the canonical HTTP-aware domain error. Construct with one
 // of the typed New* helpers below or as a struct literal in tests; Type
 // and Message are required, Code defaults to string(Type) on the wire
@@ -130,15 +147,16 @@ func (t ErrorType) HTTPStatus() int {
 // JSON tags are for tests and debug logs that inspect the struct as
 // JSON (e.g. slog "error"=err). The on-the-wire shape returned to
 // HTTP clients comes from MarshalJSON below, which emits the
-// canonical {success, error: {...}} envelope — NOT the raw struct.
-// Both paths (tests + wire) therefore use lowercase keys consistently.
+// canonical {error: {...}} envelope — NOT the raw struct. Both paths
+// (tests + wire) therefore use lowercase keys consistently.
 type AppError struct {
-	Type    ErrorType `json:"type"`
-	Code    string    `json:"code,omitempty"`
-	Message string    `json:"message"`
-	Details string    `json:"details,omitempty"`
-	Param   string    `json:"param,omitempty"`
-	Err     error     `json:"-"`
+	Type    ErrorType     `json:"type"`
+	Code    string        `json:"code,omitempty"`
+	Message string        `json:"message"`
+	Details string        `json:"details,omitempty"`
+	Param   string        `json:"param,omitempty"`
+	Errors  []ErrorDetail `json:"errors,omitempty"`
+	Err     error         `json:"-"`
 }
 
 // Error formats the error for log output. Includes Type, Message, and
@@ -159,37 +177,35 @@ func (e *AppError) Unwrap() error { return e.Err }
 func (e *AppError) HTTPStatus() int { return e.Type.HTTPStatus() }
 
 // MarshalJSON serializes AppError as the canonical Brokle error
-// envelope: `{"error":{type,code,message,details?,param?}}`.
+// envelope: `{"error":{type,code,message,details?,param?,errors?}}`.
 //
-// The shape matches Stripe and OpenAI verbatim. There is deliberately
-// NO top-level `success` boolean — HTTP status is the canonical
-// success/failure signal (per RFC 9110 §15), and a redundant body
-// field forces every client to double-check what the status line
-// already told them. Stripe, OpenAI, Anthropic, GitHub, Slack all
-// converge on this shape.
+// The shape matches Stripe / OpenAI / Anthropic verbatim. There is
+// deliberately NO top-level `success` boolean — HTTP status is the
+// canonical success/failure signal (per RFC 9110 §15), and a
+// redundant body field forces every client to double-check what the
+// status line already told them. Stripe, OpenAI, Anthropic, GitHub,
+// Slack all converge on this shape.
 //
-// Keeps the wire contract consistent across Huma's two error-
-// emission paths:
+// Keeps the wire contract consistent across the two error-emission
+// paths:
 //
-//  1. Handler returns *AppError. Huma v2 detects huma.StatusError
-//     via errors.As (huma.go:1100-1105) and writes the error directly
-//     to the response — bypassing the installed NewError factory.
-//     Without this method, Go's default struct marshaller would emit
-//     `{"Type":"...","Code":"",...}` with capitalised Go field names
-//     and the wrapped `Err` leaking as `"Err":null`.
+//  1. Handler returns *AppError. The chi handler's call to
+//     response.WriteError invokes buildAPIError which reads the same
+//     fields this marshaller emits; both produce byte-identical bytes
+//     (pinned by pkg/response/error_shape_test.go).
 //
-//  2. Framework pipeline error (415, 422, 405, ...). Huma calls
-//     NewError, which our factory (pkg/response/humaerror.go) wraps
-//     into *statusError whose MarshalJSON emits the same envelope.
+//  2. Middleware rejects a request before it reaches a handler
+//     (auth, rate limit, panic recovery, CORS). The middleware calls
+//     pkg/response.WriteError directly with a synthesised AppError;
+//     buildAPIError renders the same envelope shape.
 //
 // With both paths producing identical bytes for the same inputs,
-// every consumer (frontend BrokleAPIError, Python SDK, Fern codegen)
-// parses one shape.
+// every consumer (frontend error parser, Python SDK, JS SDK) parses
+// one shape.
 //
 // The envelope mirrors pkg/response.APIError; the shape is inlined
 // here rather than imported to avoid the pkg/errors → pkg/response
-// import cycle. OpenAPI codegen consumers see the APIError component
-// from pkg/response as the single schema-level source of truth.
+// import cycle.
 func (e *AppError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Error inner `json:"error"`
@@ -200,25 +216,22 @@ func (e *AppError) MarshalJSON() ([]byte, error) {
 			Message: e.Message,
 			Details: e.Details,
 			Param:   e.Param,
+			Errors:  e.Errors,
 		},
 	})
 }
 
 // inner is the on-the-wire shape of the `error` field in the envelope.
-// Kept package-private; consumers read via the ErrorResponse component
-// in the OpenAPI spec (pkg/response).
+// Kept package-private; consumers read via the APIError component in
+// pkg/response.
 type inner struct {
-	Type    string `json:"type"`
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
-	Param   string `json:"param,omitempty"`
+	Type    string        `json:"type"`
+	Code    string        `json:"code,omitempty"`
+	Message string        `json:"message"`
+	Details string        `json:"details,omitempty"`
+	Param   string        `json:"param,omitempty"`
+	Errors  []ErrorDetail `json:"errors,omitempty"`
 }
-
-// GetStatus satisfies huma.StatusError so AppError values returned from
-// Huma operation handlers map to the right HTTP status without an
-// explicit conversion.
-func (e *AppError) GetStatus() int { return e.HTTPStatus() }
 
 // CodeOrType returns the explicit Code, falling back to the Type's
 // string form when Code is empty. Used by the wire renderer to ensure
@@ -280,6 +293,15 @@ func WithParam(param string) Option {
 // via Unwrap and serialised into Error() but never written to clients.
 func WithCause(cause error) Option {
 	return func(e *AppError) { e.Err = cause }
+}
+
+// WithErrors attaches per-field validation diagnostics. Populated by
+// the request-binding layer (pkg/request.DecodeJSON) when
+// go-playground/validator rejects a field, and by any other callsite
+// that needs to surface multiple independent input problems on one
+// response. Empty slices are omitted from the wire envelope.
+func WithErrors(details []ErrorDetail) Option {
+	return func(e *AppError) { e.Errors = details }
 }
 
 // New is the low-level constructor. The typed helpers below are
@@ -431,9 +453,9 @@ func IsNotFound(err error) bool {
 // ----- Framework-boundary categorisation -----
 
 // FromHTTPStatus synthesises an AppError from an HTTP status code,
-// used by the Huma adapter for framework-level errors that arrive
-// without an AppError context (pre-handler validation 422, content
-// negotiation 406/415, method routing 405, body size 413, …).
+// used by the framework boundary for errors that arrive without an
+// AppError context (request body decode 422, content-type negotiation
+// 406/415, method routing 405, body size 413, …).
 //
 // Class-fallback safe: any 4xx not in the explicit map becomes
 // TypeInvalidRequest, any 5xx becomes TypeAPIError. This eliminates

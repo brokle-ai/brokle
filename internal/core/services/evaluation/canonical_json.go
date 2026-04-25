@@ -1,3 +1,4 @@
+// Package evaluation implements experiments, datasets, evaluators, and scoring pipelines for LLM evaluation.
 package evaluation
 
 import (

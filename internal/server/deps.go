@@ -9,23 +9,21 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"brokle/internal/config"
-	analyticsDomain "brokle/internal/core/domain/analytics"
-	authDomain "brokle/internal/core/domain/auth"
-	annotationDomain "brokle/internal/core/domain/annotation"
-	billingDomain "brokle/internal/core/domain/billing"
-	commentDomain "brokle/internal/core/domain/comment"
-	credentialsDomain "brokle/internal/core/domain/credentials"
-	dashboardDomain "brokle/internal/core/domain/dashboard"
-	evaluationDomain "brokle/internal/core/domain/evaluation"
-	orgDomain "brokle/internal/core/domain/organization"
-	playgroundDomain "brokle/internal/core/domain/playground"
-	promptDomain "brokle/internal/core/domain/prompt"
-	userDomain "brokle/internal/core/domain/user"
-	websiteDomain "brokle/internal/core/domain/website"
+	analyticsService "brokle/internal/core/services/analytics"
+	annotationService "brokle/internal/core/services/annotation"
 	authService "brokle/internal/core/services/auth"
+	billingService "brokle/internal/core/services/billing"
+	commentService "brokle/internal/core/services/comment"
 	credentialsService "brokle/internal/core/services/credentials"
+	dashboardService "brokle/internal/core/services/dashboard"
+	evaluationService "brokle/internal/core/services/evaluation"
 	observabilityService "brokle/internal/core/services/observability"
+	organizationService "brokle/internal/core/services/organization"
+	playgroundService "brokle/internal/core/services/playground"
+	promptService "brokle/internal/core/services/prompt"
 	"brokle/internal/core/services/registration"
+	userService "brokle/internal/core/services/user"
+	websiteService "brokle/internal/core/services/website"
 	"brokle/internal/transport/http/middleware"
 )
 
@@ -33,13 +31,13 @@ import (
 // route table. Populated by internal/app/providers.go and passed
 // once to server.New.
 //
-// The set grows incrementally as handler domains are converted to
-// Huma operations (Step 4 of the chi+Huma migration). Each new
-// domain adds its service field here; per-domain RegisterRoutes
-// functions (in internal/transport/http/handlers/<domain>/routes.go)
-// take the explicit services they need rather than reaching into the
-// whole Deps struct — Mat Ryer's "ask for what you need" rule
-// applied at the registration boundary.
+// Per-domain RegisterRoutes functions (in
+// internal/transport/http/handlers/<domain>/) take the explicit
+// services they need rather than reaching into the whole Deps struct —
+// Mat Ryer's "ask for what you need" rule applied at the registration
+// boundary. Adding a new handler domain means adding the service
+// field here and threading it into the domain's RegisterRoutes call
+// in routes.go.
 type Deps struct {
 	Config *config.Config
 	Logger *slog.Logger
@@ -51,108 +49,108 @@ type Deps struct {
 
 	// Auth/identity services consumed by RequireAuth, RequireSDKAuth,
 	// RequireProjectAccess, and RequirePermission middleware.
-	JWT       authDomain.JWTService
-	Blacklist authDomain.BlacklistedTokenService
-	OrgMember authDomain.OrganizationMemberService
-	APIKey    authDomain.APIKeyService
+	JWT       *authService.JWTService
+	Blacklist *authService.BlacklistedTokenService
+	OrgMember *authService.OrganizationMemberService
+	APIKey    *authService.APIKeyService
 
 	// Project service used by RequireProjectAccess and the project
 	// handler domain.
-	Project orgDomain.ProjectService
+	Project *organizationService.ProjectService
 
 	// OrgMemberOrg is the organization-domain member service (distinct
 	// from OrgMember above, which is auth.OrganizationMemberService).
 	// Consumed by the project handler for per-org membership checks on
 	// list/create.
-	OrgMemberOrg orgDomain.MemberService
+	OrgMemberOrg *organizationService.MemberService
 
-	// Domain services. Add as handler domains migrate to Huma. The
-	// list grows with each vertical slice; domains not yet converted
-	// to Huma operations are NOT listed here (CLAUDE.md scaffolded-
-	// but-unreachable rule).
+	// Domain services consumed by handler RegisterRoutes calls in
+	// internal/server/routes.go. Per CLAUDE.md scaffolded-but-
+	// unreachable rule, no service is listed here without an active
+	// caller.
 
 	// Auth domain handlers — login, signup, logout, refresh, password
 	// mgmt, /me, profile, sessions, OAuth. Distinct from the
 	// middleware-facing JWT/Blacklist/OrgMember services above:
-	// those carry invariant checks for every protected route;
-	// Auth/User/Profile/Registration/Session/OAuth are the
-	// "business logic" services the auth handler operations invoke.
-	Auth          authDomain.AuthService
-	User          userDomain.UserService
-	Profile       userDomain.ProfileService
-	Registration  registration.RegistrationService
-	Session       authDomain.SessionService
+	// those carry invariant checks for every protected route; the
+	// services below are the business-logic services the auth handler
+	// methods invoke.
+	Auth          *authService.AuthService
+	User          *userService.UserService
+	Profile       *userService.ProfileService
+	Registration  *registration.RegistrationService
+	Session       *authService.SessionService
 	OAuthProvider *authService.OAuthProviderService
 
 	// Organization service is used by the user handler's
 	// get-user-profile op to render the org hierarchy in the
 	// dashboard sidebar.
-	Organization orgDomain.OrganizationService
+	Organization *organizationService.OrganizationService
 
 	// Comment service powers the trace-attached discussion threads.
-	Comment commentDomain.Service
+	Comment *commentService.CommentService
 
 	// Overview service powers the project-overview dashboard page.
-	Overview analyticsDomain.OverviewService
+	Overview *analyticsService.OverviewService
 
 	// Credentials: AI provider credential CRUD + connection-test +
 	// model-catalog discovery (available models derived from
 	// configured providers).
-	Credential           credentialsDomain.ProviderCredentialService
-	CredentialModelCatalog credentialsService.ModelCatalogService
+	Credential             *credentialsService.ProviderCredentialService
+	CredentialModelCatalog *credentialsService.ModelCatalogService
 
 	// Website contact-form handler.
-	Website websiteDomain.WebsiteService
+	Website *websiteService.WebsiteService
 
 	// Dashboard domain: dashboards, widget query execution, and
 	// pre-defined templates. Three-service trio to match the
 	// pre-migration gin layout.
-	Dashboard         dashboardDomain.DashboardService
-	DashboardQuery    dashboardDomain.WidgetQueryService
-	DashboardTemplate dashboardDomain.TemplateService
+	Dashboard         *dashboardService.DashboardService
+	DashboardQuery    *dashboardService.WidgetQueryService
+	DashboardTemplate *dashboardService.TemplateService
 
 	// Annotation domain: HITL review queues, items, assignments.
-	AnnotationQueue      annotationDomain.QueueService
-	AnnotationItem       annotationDomain.ItemService
-	AnnotationAssignment annotationDomain.AssignmentService
+	AnnotationQueue      *annotationService.QueueService
+	AnnotationItem       *annotationService.ItemService
+	AnnotationAssignment *annotationService.AssignmentService
 
 	// Billing domain: usage tracking, budgets, contracts, pricing.
-	BillingUsage    billingDomain.BillableUsageService
-	BillingBudget   billingDomain.BudgetService
-	BillingContract billingDomain.ContractService
-	BillingPricing  billingDomain.PricingService
+	BillingUsage    *billingService.BillableUsageService
+	BillingBudget   *billingService.BudgetService
+	BillingContract *billingService.ContractService
+	BillingPricing  *billingService.PricingService
 
 	// RBAC / auth-extended domain services consumed by the rbac handler
 	// (read-only role/permission discovery + custom-role lifecycle +
 	// scope checks). Distinct from the middleware-facing invariants
 	// (JWT / Blacklist / OrgMember) already above.
-	Role       authDomain.RoleService
-	Permission authDomain.PermissionService
-	Scope      authDomain.ScopeService
+	Role       *authService.RoleService
+	Permission *authService.PermissionService
+	Scope      *authService.ScopeService
 
 	// Organization: invitations + settings. The OrganizationService +
 	// MemberService (OrgMemberOrg) are already declared above.
-	Invitation       orgDomain.InvitationService
-	OrgSettings      orgDomain.OrganizationSettingsService
+	Invitation  *organizationService.InvitationService
+	OrgSettings *organizationService.OrganizationSettingsService
 
 	// Prompt domain: prompt + version CRUD + compile/preview.
-	Prompt         promptDomain.PromptService
-	PromptCompiler promptDomain.CompilerService
+	Prompt         *promptService.PromptService
+	PromptCompiler *promptService.CompilerService
 
 	// Playground domain: execute + session CRUD + streaming.
-	Playground playgroundDomain.PlaygroundService
+	Playground *playgroundService.PlaygroundService
 
 	// Evaluation domain: datasets, experiments, evaluators, score
 	// configs, executions. Largest service surface in the codebase.
-	EvalScoreConfig        evaluationDomain.ScoreConfigService
-	EvalDataset            evaluationDomain.DatasetService
-	EvalDatasetItem        evaluationDomain.DatasetItemService
-	EvalDatasetVersion     evaluationDomain.DatasetVersionService
-	EvalExperiment         evaluationDomain.ExperimentService
-	EvalExperimentItem     evaluationDomain.ExperimentItemService
-	EvalExperimentWizard   evaluationDomain.ExperimentWizardService
-	EvalEvaluator          evaluationDomain.EvaluatorService
-	EvalEvaluatorExecution evaluationDomain.EvaluatorExecutionService
+	EvalScoreConfig        *evaluationService.ScoreConfigService
+	EvalDataset            *evaluationService.DatasetService
+	EvalDatasetItem        *evaluationService.DatasetItemService
+	EvalDatasetVersion     *evaluationService.DatasetVersionService
+	EvalExperiment         *evaluationService.ExperimentService
+	EvalExperimentItem     *evaluationService.ExperimentItemService
+	EvalExperimentWizard   *evaluationService.ExperimentWizardService
+	EvalEvaluator          *evaluationService.EvaluatorService
+	EvalEvaluatorExecution *evaluationService.EvaluatorExecutionService
 
 	// Observability: trace/span/score/filter-preset + OTLP ingest.
 	// We carry the observability ServiceRegistry pointer directly —

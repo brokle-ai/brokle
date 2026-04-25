@@ -9,6 +9,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // roleRepository is the pgx+sqlc implementation of authDomain.RoleRepository.
@@ -36,6 +37,9 @@ func (r *roleRepository) Create(ctx context.Context, role *authDomain.Role) erro
 		CreatedAt:   role.CreatedAt,
 		UpdatedAt:   role.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create role %s: %w", role.Name, authDomain.ErrRoleAlreadyExists)
+		}
 		return fmt.Errorf("create role %s: %w", role.Name, err)
 	}
 	return nil
@@ -114,7 +118,7 @@ func (r *roleRepository) GetByScopeType(ctx context.Context, scopeType string) (
 	return rolesFromRows(rows), nil
 }
 
-func (r *roleRepository) GetAllRoles(ctx context.Context) ([]*authDomain.Role, error) {
+func (r *roleRepository) ListRoles(ctx context.Context) ([]*authDomain.Role, error) {
 	rows, err := r.tm.Queries(ctx).ListAllRoles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all roles: %w", err)

@@ -13,7 +13,7 @@ import (
 	"brokle/pkg/pagination"
 )
 
-type evaluatorExecutionService struct {
+type EvaluatorExecutionService struct {
 	repo   evaluation.EvaluatorExecutionRepository
 	logger *slog.Logger
 }
@@ -21,14 +21,14 @@ type evaluatorExecutionService struct {
 func NewEvaluatorExecutionService(
 	repo evaluation.EvaluatorExecutionRepository,
 	logger *slog.Logger,
-) evaluation.EvaluatorExecutionService {
-	return &evaluatorExecutionService{
+) *EvaluatorExecutionService {
+	return &EvaluatorExecutionService{
 		repo:   repo,
 		logger: logger,
 	}
 }
 
-func (s *evaluatorExecutionService) StartExecution(
+func (s *EvaluatorExecutionService) StartExecution(
 	ctx context.Context,
 	evaluatorID uuid.UUID,
 	projectID uuid.UUID,
@@ -51,7 +51,7 @@ func (s *evaluatorExecutionService) StartExecution(
 	return execution, nil
 }
 
-func (s *evaluatorExecutionService) CompleteExecution(
+func (s *EvaluatorExecutionService) CompleteExecution(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,
@@ -88,7 +88,7 @@ func (s *evaluatorExecutionService) CompleteExecution(
 	return nil
 }
 
-func (s *evaluatorExecutionService) FailExecution(
+func (s *EvaluatorExecutionService) FailExecution(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,
@@ -123,7 +123,7 @@ func (s *evaluatorExecutionService) FailExecution(
 	return nil
 }
 
-func (s *evaluatorExecutionService) CancelExecution(
+func (s *EvaluatorExecutionService) CancelExecution(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,
@@ -155,7 +155,7 @@ func (s *evaluatorExecutionService) CancelExecution(
 	return nil
 }
 
-func (s *evaluatorExecutionService) GetByID(
+func (s *EvaluatorExecutionService) GetByID(
 	ctx context.Context,
 	id uuid.UUID,
 	projectID uuid.UUID,
@@ -170,7 +170,7 @@ func (s *evaluatorExecutionService) GetByID(
 	return execution, nil
 }
 
-func (s *evaluatorExecutionService) ListByEvaluatorID(
+func (s *EvaluatorExecutionService) ListByEvaluatorID(
 	ctx context.Context,
 	evaluatorID uuid.UUID,
 	projectID uuid.UUID,
@@ -184,7 +184,7 @@ func (s *evaluatorExecutionService) ListByEvaluatorID(
 	return executions, total, nil
 }
 
-func (s *evaluatorExecutionService) GetLatestByEvaluatorID(
+func (s *EvaluatorExecutionService) GetLatestByEvaluatorID(
 	ctx context.Context,
 	evaluatorID uuid.UUID,
 	projectID uuid.UUID,
@@ -196,7 +196,7 @@ func (s *evaluatorExecutionService) GetLatestByEvaluatorID(
 	return execution, nil
 }
 
-func (s *evaluatorExecutionService) IncrementCounters(
+func (s *EvaluatorExecutionService) IncrementCounters(
 	ctx context.Context,
 	executionID string,
 	projectID uuid.UUID,
@@ -224,7 +224,7 @@ func (s *evaluatorExecutionService) IncrementCounters(
 	return nil
 }
 
-func (s *evaluatorExecutionService) StartExecutionWithCount(
+func (s *EvaluatorExecutionService) StartExecutionWithCount(
 	ctx context.Context,
 	evaluatorID uuid.UUID,
 	projectID uuid.UUID,
@@ -250,7 +250,7 @@ func (s *evaluatorExecutionService) StartExecutionWithCount(
 	return execution, nil
 }
 
-func (s *evaluatorExecutionService) IncrementAndCheckCompletion(
+func (s *EvaluatorExecutionService) IncrementAndCheckCompletion(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,
@@ -280,7 +280,7 @@ func (s *evaluatorExecutionService) IncrementAndCheckCompletion(
 	return completed, nil
 }
 
-func (s *evaluatorExecutionService) UpdateSpansMatched(
+func (s *EvaluatorExecutionService) UpdateSpansMatched(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,
@@ -295,7 +295,7 @@ func (s *evaluatorExecutionService) UpdateSpansMatched(
 	return nil
 }
 
-func (s *evaluatorExecutionService) GetExecutionDetail(
+func (s *EvaluatorExecutionService) GetExecutionDetail(
 	ctx context.Context,
 	executionID uuid.UUID,
 	projectID uuid.UUID,

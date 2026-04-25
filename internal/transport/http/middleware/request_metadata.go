@@ -9,10 +9,9 @@ import (
 
 // RequestMetadata resolves the originating client IP via the
 // supplied clientip.Resolver and captures the User-Agent header,
-// stuffing both into the request context via httpctx. Huma
-// operation handlers receive only context.Context; this is the
-// bridge that lets them record audit-log metadata without reaching
-// for an http.ResponseWriter.
+// stuffing both into the request context via httpctx. Downstream
+// services that record audit-log metadata read these values from
+// ctx without reaching back into *http.Request.
 //
 // Mount in the global middleware chain AFTER chi/middleware.RealIP
 // (which normalises r.RemoteAddr) and BEFORE any middleware that

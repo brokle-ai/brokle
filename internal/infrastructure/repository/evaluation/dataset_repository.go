@@ -15,15 +15,15 @@ import (
 	"brokle/pkg/pagination"
 )
 
-type DatasetRepository struct {
+type datasetRepository struct {
 	tm *db.TxManager
 }
 
-func NewDatasetRepository(tm *db.TxManager) *DatasetRepository {
-	return &DatasetRepository{tm: tm}
+func NewDatasetRepository(tm *db.TxManager) evalDomain.DatasetRepository {
+	return &datasetRepository{tm: tm}
 }
 
-func (r *DatasetRepository) Create(ctx context.Context, d *evalDomain.Dataset) error {
+func (r *datasetRepository) Create(ctx context.Context, d *evalDomain.Dataset) error {
 	meta, err := marshalEvalJSON(d.Metadata)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (r *DatasetRepository) Create(ctx context.Context, d *evalDomain.Dataset) e
 	return nil
 }
 
-func (r *DatasetRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Dataset, error) {
+func (r *datasetRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.Dataset, error) {
 	row, err := r.tm.Queries(ctx).GetDatasetByID(ctx, gen.GetDatasetByIDParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -58,7 +58,7 @@ func (r *DatasetRepository) GetByID(ctx context.Context, id, projectID uuid.UUID
 	return datasetFromRow(&row)
 }
 
-func (r *DatasetRepository) GetByName(ctx context.Context, projectID uuid.UUID, name string) (*evalDomain.Dataset, error) {
+func (r *datasetRepository) GetByName(ctx context.Context, projectID uuid.UUID, name string) (*evalDomain.Dataset, error) {
 	row, err := r.tm.Queries(ctx).GetDatasetByName(ctx, gen.GetDatasetByNameParams{
 		ProjectID: projectID,
 		Name:      name,
@@ -72,7 +72,7 @@ func (r *DatasetRepository) GetByName(ctx context.Context, projectID uuid.UUID, 
 	return datasetFromRow(&row)
 }
 
-func (r *DatasetRepository) List(ctx context.Context, projectID uuid.UUID, filter *evalDomain.DatasetFilter, offset, limit int) ([]*evalDomain.Dataset, int64, error) {
+func (r *datasetRepository) List(ctx context.Context, projectID uuid.UUID, filter *evalDomain.DatasetFilter, offset, limit int) ([]*evalDomain.Dataset, int64, error) {
 	base := sq.Select().From("datasets").Where(sq.Eq{"project_id": projectID})
 	if filter != nil && filter.Search != nil && *filter.Search != "" {
 		p := "%" + strings.ToLower(*filter.Search) + "%"
@@ -113,7 +113,7 @@ func (r *DatasetRepository) List(ctx context.Context, projectID uuid.UUID, filte
 	return out, total, rows.Err()
 }
 
-func (r *DatasetRepository) Update(ctx context.Context, d *evalDomain.Dataset, projectID uuid.UUID) error {
+func (r *datasetRepository) Update(ctx context.Context, d *evalDomain.Dataset, projectID uuid.UUID) error {
 	meta, err := marshalEvalJSON(d.Metadata)
 	if err != nil {
 		return err
@@ -138,7 +138,7 @@ func (r *DatasetRepository) Update(ctx context.Context, d *evalDomain.Dataset, p
 	return nil
 }
 
-func (r *DatasetRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
+func (r *datasetRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteDataset(ctx, gen.DeleteDatasetParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -152,7 +152,7 @@ func (r *DatasetRepository) Delete(ctx context.Context, id, projectID uuid.UUID)
 	return nil
 }
 
-func (r *DatasetRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
+func (r *datasetRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
 	return r.tm.Queries(ctx).DatasetExistsByName(ctx, gen.DatasetExistsByNameParams{
 		ProjectID: projectID,
 		Name:      name,
@@ -161,7 +161,7 @@ func (r *DatasetRepository) ExistsByName(ctx context.Context, projectID uuid.UUI
 
 // ListWithFilters returns datasets with item counts, via a LEFT JOIN
 // against a count subquery so sort-by-item_count works for pagination.
-func (r *DatasetRepository) ListWithFilters(
+func (r *datasetRepository) ListWithFilters(
 	ctx context.Context,
 	projectID uuid.UUID,
 	filter *evalDomain.DatasetFilter,

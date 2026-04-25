@@ -8,25 +8,41 @@ import (
 
 // Queue request/response types
 
-// CreateQueueRequest represents the request body for creating an annotation queue.
-// @Description Create annotation queue request
+// CreateQueueRequest is the POST body for creating an annotation queue.
 type CreateQueueRequest struct {
-	Name           string         `json:"name" binding:"required,min=1,max=255"`
+	Name           string         `json:"name"                      validate:"required,min=1,max=255"`
 	Description    *string        `json:"description,omitempty"`
 	Instructions   *string        `json:"instructions,omitempty"`
 	ScoreConfigIDs []uuid.UUID    `json:"score_config_ids,omitempty"`
 	Settings       *QueueSettings `json:"settings,omitempty"`
 }
 
-// UpdateQueueRequest represents the request body for updating an annotation queue.
-// @Description Update annotation queue request
+// UpdateQueueRequest is the PUT body for updating an annotation queue.
 type UpdateQueueRequest struct {
-	Name           *string        `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
+	Name           *string        `json:"name,omitempty"             validate:"omitempty,min=1,max=255"`
 	Description    *string        `json:"description,omitempty"`
 	Instructions   *string        `json:"instructions,omitempty"`
-	ScoreConfigIDs *[]uuid.UUID   `json:"score_config_ids,omitempty"` // Pointer to distinguish nil (no change) from empty (clear all)
-	Status         *string        `json:"status,omitempty" binding:"omitempty,oneof=active paused archived"`
+	ScoreConfigIDs *[]uuid.UUID   `json:"score_config_ids,omitempty"`
+	Status         *string        `json:"status,omitempty"           validate:"omitempty,oneof=active paused archived"`
 	Settings       *QueueSettings `json:"settings,omitempty"`
+}
+
+// listQueuesResponse is the wire shape for GET
+// /projects/{projectId}/annotation-queues.
+type listQueuesResponse struct {
+	Data  []*QueueWithStatsResponse `json:"data"`
+	Total int64                     `json:"total"`
+	Page  int                       `json:"page"`
+	Limit int                       `json:"limit"`
+}
+
+// listItemsResponse is the wire shape for GET
+// /projects/{projectId}/annotation-queues/{queueId}/items.
+type listItemsResponse struct {
+	Data  []*ItemResponse `json:"data"`
+	Total int64           `json:"total"`
+	Page  int             `json:"page"`
+	Limit int             `json:"limit"`
 }
 
 // QueueSettings represents configurable settings for an annotation queue.

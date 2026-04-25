@@ -10,15 +10,15 @@ import (
 	"brokle/internal/infrastructure/db/gen"
 )
 
-type ExperimentConfigRepository struct {
+type experimentConfigRepository struct {
 	tm *db.TxManager
 }
 
-func NewExperimentConfigRepository(tm *db.TxManager) *ExperimentConfigRepository {
-	return &ExperimentConfigRepository{tm: tm}
+func NewExperimentConfigRepository(tm *db.TxManager) evalDomain.ExperimentConfigRepository {
+	return &experimentConfigRepository{tm: tm}
 }
 
-func (r *ExperimentConfigRepository) Create(ctx context.Context, c *evalDomain.ExperimentConfig) error {
+func (r *experimentConfigRepository) Create(ctx context.Context, c *evalDomain.ExperimentConfig) error {
 	modelCfg, err := marshalEvalJSON(c.ModelConfig)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (r *ExperimentConfigRepository) Create(ctx context.Context, c *evalDomain.E
 	})
 }
 
-func (r *ExperimentConfigRepository) GetByID(ctx context.Context, id uuid.UUID) (*evalDomain.ExperimentConfig, error) {
+func (r *experimentConfigRepository) GetByID(ctx context.Context, id uuid.UUID) (*evalDomain.ExperimentConfig, error) {
 	row, err := r.tm.Queries(ctx).GetExperimentConfigByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -55,7 +55,7 @@ func (r *ExperimentConfigRepository) GetByID(ctx context.Context, id uuid.UUID) 
 	return experimentConfigFromRow(&row)
 }
 
-func (r *ExperimentConfigRepository) GetByExperimentID(ctx context.Context, experimentID uuid.UUID) (*evalDomain.ExperimentConfig, error) {
+func (r *experimentConfigRepository) GetByExperimentID(ctx context.Context, experimentID uuid.UUID) (*evalDomain.ExperimentConfig, error) {
 	row, err := r.tm.Queries(ctx).GetExperimentConfigByExperimentID(ctx, experimentID)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -66,7 +66,7 @@ func (r *ExperimentConfigRepository) GetByExperimentID(ctx context.Context, expe
 	return experimentConfigFromRow(&row)
 }
 
-func (r *ExperimentConfigRepository) Update(ctx context.Context, c *evalDomain.ExperimentConfig) error {
+func (r *experimentConfigRepository) Update(ctx context.Context, c *evalDomain.ExperimentConfig) error {
 	modelCfg, err := marshalEvalJSON(c.ModelConfig)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (r *ExperimentConfigRepository) Update(ctx context.Context, c *evalDomain.E
 	return nil
 }
 
-func (r *ExperimentConfigRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *experimentConfigRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteExperimentConfig(ctx, id)
 	if err != nil {
 		return err

@@ -12,15 +12,15 @@ import (
 	"brokle/pkg/pagination"
 )
 
-type EvaluatorExecutionRepository struct {
+type evaluatorExecutionRepository struct {
 	tm *db.TxManager
 }
 
-func NewEvaluatorExecutionRepository(tm *db.TxManager) *EvaluatorExecutionRepository {
-	return &EvaluatorExecutionRepository{tm: tm}
+func NewEvaluatorExecutionRepository(tm *db.TxManager) evalDomain.EvaluatorExecutionRepository {
+	return &evaluatorExecutionRepository{tm: tm}
 }
 
-func (r *EvaluatorExecutionRepository) Create(ctx context.Context, e *evalDomain.EvaluatorExecution) error {
+func (r *evaluatorExecutionRepository) Create(ctx context.Context, e *evalDomain.EvaluatorExecution) error {
 	meta, err := marshalEvalJSON(e.Metadata)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (r *EvaluatorExecutionRepository) Create(ctx context.Context, e *evalDomain
 	})
 }
 
-func (r *EvaluatorExecutionRepository) Update(ctx context.Context, e *evalDomain.EvaluatorExecution) error {
+func (r *evaluatorExecutionRepository) Update(ctx context.Context, e *evalDomain.EvaluatorExecution) error {
 	meta, err := marshalEvalJSON(e.Metadata)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (r *EvaluatorExecutionRepository) Update(ctx context.Context, e *evalDomain
 	return nil
 }
 
-func (r *EvaluatorExecutionRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.EvaluatorExecution, error) {
+func (r *evaluatorExecutionRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.EvaluatorExecution, error) {
 	row, err := r.tm.Queries(ctx).GetEvaluatorExecutionByID(ctx, gen.GetEvaluatorExecutionByIDParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -93,7 +93,7 @@ func (r *EvaluatorExecutionRepository) GetByID(ctx context.Context, id, projectI
 	return executionFromRow(&row)
 }
 
-func (r *EvaluatorExecutionRepository) GetByEvaluatorID(
+func (r *evaluatorExecutionRepository) GetByEvaluatorID(
 	ctx context.Context,
 	evaluatorID, projectID uuid.UUID,
 	filter *evalDomain.ExecutionFilter,
@@ -148,7 +148,7 @@ func (r *EvaluatorExecutionRepository) GetByEvaluatorID(
 	return out, total, rows.Err()
 }
 
-func (r *EvaluatorExecutionRepository) GetLatestByEvaluatorID(ctx context.Context, evaluatorID, projectID uuid.UUID) (*evalDomain.EvaluatorExecution, error) {
+func (r *evaluatorExecutionRepository) GetLatestByEvaluatorID(ctx context.Context, evaluatorID, projectID uuid.UUID) (*evalDomain.EvaluatorExecution, error) {
 	row, err := r.tm.Queries(ctx).GetLatestEvaluatorExecution(ctx, gen.GetLatestEvaluatorExecutionParams{
 		EvaluatorID: evaluatorID,
 		ProjectID:   projectID,
@@ -162,7 +162,7 @@ func (r *EvaluatorExecutionRepository) GetLatestByEvaluatorID(ctx context.Contex
 	return executionFromRow(&row)
 }
 
-func (r *EvaluatorExecutionRepository) IncrementCounters(ctx context.Context, id, projectID uuid.UUID, spansScored, errorsCount int) error {
+func (r *evaluatorExecutionRepository) IncrementCounters(ctx context.Context, id, projectID uuid.UUID, spansScored, errorsCount int) error {
 	n, err := r.tm.Queries(ctx).IncrementEvaluatorExecutionCounters(ctx, gen.IncrementEvaluatorExecutionCountersParams{
 		ID:           id,
 		ProjectID:    projectID,
@@ -178,7 +178,7 @@ func (r *EvaluatorExecutionRepository) IncrementCounters(ctx context.Context, id
 	return nil
 }
 
-func (r *EvaluatorExecutionRepository) UpdateSpansMatched(ctx context.Context, id, projectID uuid.UUID, spansMatched int) error {
+func (r *evaluatorExecutionRepository) UpdateSpansMatched(ctx context.Context, id, projectID uuid.UUID, spansMatched int) error {
 	n, err := r.tm.Queries(ctx).UpdateEvaluatorExecutionSpansMatched(ctx, gen.UpdateEvaluatorExecutionSpansMatchedParams{
 		ID:           id,
 		ProjectID:    projectID,
@@ -196,7 +196,7 @@ func (r *EvaluatorExecutionRepository) UpdateSpansMatched(ctx context.Context, i
 // IncrementCountersAndComplete locks the execution row, increments
 // spans_scored + errors_count, and flips status to completed once all
 // matched spans have been processed.
-func (r *EvaluatorExecutionRepository) IncrementCountersAndComplete(ctx context.Context, id, projectID uuid.UUID, spansScored, errorsCount int) (bool, error) {
+func (r *evaluatorExecutionRepository) IncrementCountersAndComplete(ctx context.Context, id, projectID uuid.UUID, spansScored, errorsCount int) (bool, error) {
 	var completed bool
 	err := r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
 		row, err := r.tm.Queries(ctx).LockEvaluatorExecutionForUpdate(ctx, gen.LockEvaluatorExecutionForUpdateParams{

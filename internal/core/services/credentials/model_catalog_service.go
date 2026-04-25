@@ -12,15 +12,12 @@ import (
 )
 
 // ModelCatalogService provides model selection for the playground.
-// Combines default models from provider_models table with custom user-defined models.
-type ModelCatalogService interface {
-	// GetAvailableModels returns all available models for an organization based on configured providers.
-	// Standard providers (openai, anthropic, etc.): default models from DB + custom_models
-	// Custom provider: only custom_models (no defaults exist)
-	GetAvailableModels(ctx context.Context, orgID uuid.UUID) ([]*analytics.AvailableModel, error)
-}
-
-type modelCatalogServiceImpl struct {
+// Combines default models from provider_models table with custom
+// user-defined models. Concrete type; consumers that need to mock it
+// (handler tests) declare a local interface with only the methods
+// they use — see CLAUDE.md "Service constructors return concrete
+// types" rule.
+type ModelCatalogService struct {
 	credentialRepo credentialsDomain.ProviderCredentialRepository
 	modelRepo      analytics.ProviderModelRepository
 	logger         *slog.Logger
@@ -30,8 +27,8 @@ func NewModelCatalogService(
 	credentialRepo credentialsDomain.ProviderCredentialRepository,
 	modelRepo analytics.ProviderModelRepository,
 	logger *slog.Logger,
-) ModelCatalogService {
-	return &modelCatalogServiceImpl{
+) *ModelCatalogService {
+	return &ModelCatalogService{
 		credentialRepo: credentialRepo,
 		modelRepo:      modelRepo,
 		logger:         logger,
@@ -40,7 +37,7 @@ func NewModelCatalogService(
 
 // GetAvailableModels returns all available models for an organization based on configured providers.
 // For multiple credentials of the same provider, includes credential info to allow selection.
-func (s *modelCatalogServiceImpl) GetAvailableModels(
+func (s *ModelCatalogService) GetAvailableModels(
 	ctx context.Context,
 	orgID uuid.UUID,
 ) ([]*analytics.AvailableModel, error) {
@@ -51,7 +48,7 @@ func (s *modelCatalogServiceImpl) GetAvailableModels(
 			"error", err,
 			"organization_id", orgID,
 		)
-		return nil, appErrors.NewInternalError("Failed to list credentials", err)
+		return nil, appErrors.NewInternalError("failed to list credentials", err)
 	}
 
 	if len(credentials) == 0 {
@@ -101,7 +98,7 @@ func (s *modelCatalogServiceImpl) GetAvailableModels(
 				"error", err,
 				"providers", standardProviders,
 			)
-			return nil, appErrors.NewInternalError("Failed to fetch default models", err)
+			return nil, appErrors.NewInternalError("failed to fetch default models", err)
 		}
 
 		for _, m := range defaultModels {

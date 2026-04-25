@@ -14,8 +14,9 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
+	analyticsService "brokle/internal/core/services/analytics"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
@@ -88,32 +89,32 @@ type InputOutputTruncated struct {
 
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
-	logger                 *slog.Logger
-	providerPricingService analytics.ProviderPricingService
-	config                 *config.ObservabilityConfig
+	logger  *slog.Logger
+	pricing *analyticsService.ProviderPricingService
+	cfg     *config.ObservabilityConfig
 }
 
 // NewOTLPConverterService creates a new OTLP converter service
 func NewOTLPConverterService(
 	logger *slog.Logger,
-	providerPricingService analytics.ProviderPricingService,
+	pricing *analyticsService.ProviderPricingService,
 	observabilityConfig *config.ObservabilityConfig,
 ) *OTLPConverterService {
 	return &OTLPConverterService{
-		logger:                 logger,
-		providerPricingService: providerPricingService,
-		config:                 observabilityConfig,
+		logger:  logger,
+		pricing: pricing,
+		cfg:     observabilityConfig,
 	}
 }
 
 // brokleEvent represents an internal converted event (before domain conversion)
 type brokleEvent struct {
 	Payload   map[string]any `json:"payload"`
-	Timestamp *int64                 `json:"timestamp,omitempty"`
-	EventID   string                 `json:"event_id"`
-	SpanID    string                 `json:"span_id"`
-	TraceID   string                 `json:"trace_id"`
-	EventType string                 `json:"event_type"`
+	Timestamp *int64         `json:"timestamp,omitempty"`
+	EventID   string         `json:"event_id"`
+	SpanID    string         `json:"span_id"`
+	TraceID   string         `json:"trace_id"`
+	EventType string         `json:"event_type"`
 }
 
 // isRootSpanCheck determines if a span is a root span by checking if parent ID is nil, empty, or zero.
@@ -172,7 +173,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 			for _, span := range scopeSpan.Spans {
 				obsEvent, err := s.createSpanEvent(ctx, span, resourceAttrs, scopeAttrs, resourceSpan.Resource, scopeSpan.Scope, projectID)
 				if err != nil {
-					return nil, fmt.Errorf("failed to create span event: %w", err)
+					return nil, appErrors.NewInternalError("failed to create span event", err)
 				}
 				internalEvents = append(internalEvents, obsEvent)
 			}
@@ -563,12 +564,12 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["scope_schema_url"] = scope.SchemaUrl
 	}
 
-	if s.config.PreserveRawOTLP {
+	if s.cfg.PreserveRawOTLP {
 		rawOTLPJSON, err := json.Marshal(span)
 		if err == nil {
 			payload["otlp_span_raw"] = string(rawOTLPJSON)
 		} else {
-			s.logger.Warn("Failed to marshal raw OTLP span", "error", err)
+			s.logger.Warn("failed to marshal raw OTLP span", "error", err)
 		}
 
 		if len(resourceAttrs) > 0 {
@@ -996,14 +997,14 @@ func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
 		}
 	}
 
-	providerPricing, err := s.providerPricingService.GetProviderPricingSnapshot(ctx, projectIDPtr, modelName, time.Now())
+	providerPricing, err := s.pricing.GetProviderPricingSnapshot(ctx, projectIDPtr, modelName, time.Now())
 	if err != nil {
-		s.logger.Warn("Failed to get provider pricing - continuing without cost data", "model", modelName, "project_id", projectID, "error", err)
+		s.logger.Warn("failed to get provider pricing - continuing without cost data", "model", modelName, "project_id", projectID, "error", err)
 		payload["usage_details"] = usage
 		return
 	}
 
-	providerCost := s.providerPricingService.CalculateProviderCost(usage, providerPricing)
+	providerCost := s.pricing.CalculateProviderCost(usage, providerPricing)
 
 	providerPricingSnapshot := make(map[string]decimal.Decimal)
 	for usageType, price := range providerPricing.Pricing {
@@ -1019,7 +1020,7 @@ func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
 		payload["total_cost"] = totalCost
 	}
 
-	s.logger.Debug("Provider costs calculated successfully", "model", modelName, "usage_types", len(usage), "total_tokens", total, "provider_cost_usd", providerCost["total"], "provider_pricing_date", providerPricing.SnapshotTime)
+	s.logger.Debug("provider costs calculated successfully", "model", modelName, "usage_types", len(usage), "total_tokens", total, "provider_cost_usd", providerCost["total"], "provider_pricing_date", providerPricing.SnapshotTime)
 }
 
 func extractStringFromInterface(val any) string {

@@ -103,12 +103,12 @@ type Invitation struct {
 	Inviter        *InviterRef      `json:"inviter,omitempty"`        // Hydrated by list-path methods; nil otherwise
 	Role           *RoleRef         `json:"role,omitempty"`           // Hydrated by list-path methods; nil otherwise
 	Status         InvitationStatus `json:"status"`
-	TokenHash      string           `json:"-"`                        // SHA-256 hash for secure storage
+	TokenHash      string           `json:"-"` // SHA-256 hash for secure storage
 	Email          string           `json:"email"`
 	ID             uuid.UUID        `json:"id"`
 	RoleID         uuid.UUID        `json:"role_id"`
 	OrganizationID uuid.UUID        `json:"organization_id"`
-	ResentCount    int              `json:"resent_count"`             // Track resend attempts
+	ResentCount    int              `json:"resent_count"` // Track resend attempts
 }
 
 // Request/Response DTOs
@@ -137,6 +137,14 @@ type InviteUserRequest struct {
 	Email   string    `json:"email" validate:"required,email"`
 	RoleID  uuid.UUID `json:"role_id" validate:"required"`
 	Message *string   `json:"message,omitempty" validate:"omitempty,max=500"` // Personal message for the invitee
+}
+
+// AcceptInvitationResult captures the data returned by InvitationService.AcceptInvitation
+// so handlers can render the onboarding response without a follow-up org lookup.
+type AcceptInvitationResult struct {
+	OrganizationID   uuid.UUID
+	OrganizationName string
+	RoleName         string
 }
 
 // InvitationStatus represents the status of an organization invitation
@@ -292,8 +300,8 @@ type OrganizationSettings struct {
 
 // Settings-related DTOs
 type CreateOrganizationSettingRequest struct {
-	Value any `json:"value" validate:"required"`
-	Key   string      `json:"key" validate:"required,min=1,max=255"`
+	Value any    `json:"value" validate:"required"`
+	Key   string `json:"key" validate:"required,min=1,max=255"`
 }
 
 type UpdateOrganizationSettingRequest struct {

@@ -1,23 +1,16 @@
-// Cross-path wire-contract test. Three code paths can produce an
-// error response body:
+// Cross-path wire-contract test. Two code paths produce an error
+// response body:
 //
-//  1. A Huma operation handler returns *AppError directly. Huma v2
-//     detects huma.StatusError (AppError implements it) and marshals
-//     AppError via its own MarshalJSON (pkg/errors/errors.go).
-//  2. A Huma framework-pipeline error (415, 422, 405, ...). Huma
-//     calls NewError, which our factory wraps *AppError into
-//     *statusError. statusError.MarshalJSON emits ErrorResponse.
-//  3. A chi middleware rejects a request before it reaches Huma
-//     (rate-limit, panic recovery, CORS preflight denial). The
-//     middleware calls pkg/response.WriteError which encodes
-//     ErrorResponse.
+//  1. Handler returns *AppError. AppError.MarshalJSON emits the
+//     canonical {error:{...}} envelope directly.
+//  2. Middleware or handler calls pkg/response.WriteError(w, err).
+//     WriteError builds APIError + ErrorResponse and encodes them.
 //
-// This test guarantees the three paths produce byte-identical
-// envelope bytes for the same input AppError (excluding the optional
-// per-field `errors` array which only path 2 populates). If the
-// envelope shape ever drifts between paths, SDK consumers will see
-// intermittent parse failures that are hell to diagnose — this test
-// is the tripwire.
+// This test guarantees both paths produce byte-identical envelope
+// bytes for the same input AppError, including the per-field
+// `errors` array populated by pkg/request.DecodeJSON. If the envelope
+// shape ever drifts between paths, SDK consumers will see intermittent
+// parse failures that are hell to diagnose — this test is the tripwire.
 package response_test
 
 import (
@@ -44,14 +37,14 @@ func buildAppError() *appErrors.AppError {
 }
 
 // TestErrorShape_HandlerAndWriteErrorByteIdentical pins that
-// AppError.MarshalJSON (handler path) and WriteError (chi-middleware
-// path) emit byte-identical envelope bytes for the same input.
-// These are the two "pure" AppError paths — no per-field Errors[]
-// augmentation from Huma's ErrorDetailer lift.
+// AppError.MarshalJSON (direct json.Marshal) and WriteError (chi
+// middleware path) emit byte-identical envelope bytes for the same
+// input. These are the two "pure" AppError paths — no per-field
+// Errors[] augmentation from a framework's validation layer.
 func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 	e := buildAppError()
 
-	// Path 1 — handler returns *AppError; Huma calls json.Marshal on it.
+	// Path 1 — handler returns *AppError; the encoder calls json.Marshal.
 	handlerBytes, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("json.Marshal(AppError): %v", err)
@@ -73,14 +66,13 @@ func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 }
 
 // TestErrorShape_StatusErrorMatchesAppError pins that statusError
-// (the internal wrapper Huma's NewError factory produces for pipeline
-// errors) produces byte-identical bytes to AppError.MarshalJSON when
+// (the internal wrapper NewError produces for status-only error
+// callers) produces byte-identical bytes to AppError.MarshalJSON when
 // no per-field Errors[] are present.
 //
 // We can't construct statusError directly (unexported) — we exercise
-// it by simulating a handler-returned AppError going through the
-// factory the same way Huma's handler-error path does. The factory's
-// behaviour for handler-returned AppErrors is: look up the first
+// it by routing a handler-returned AppError through NewError exactly
+// the way framework-boundary error paths do: look up the first
 // *AppError in errs, wrap it, emit.
 func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 	e := buildAppError()
@@ -91,10 +83,7 @@ func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 		t.Fatalf("json.Marshal(AppError): %v", err)
 	}
 
-	// Install the factory so NewError goes through our wrapper.
-	response.InstallHumaErrorFactory()
-
-	// Pipeline path — same shape as Huma's internal wrapAppError. We
+	// Pipeline path — wire shape when handler returns *AppError. We
 	// go through the public NewError factory installer: it matches
 	// the factory's output which is what the wire sees.
 	// Build the wrapped *statusError: we marshal ErrorResponse with
@@ -119,6 +108,52 @@ func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 			"  handler path:  %s\n"+
 			"  pipeline path: %s",
 			handlerBytes, pipelineBytes)
+	}
+}
+
+// TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors pins
+// that AppError.MarshalJSON (handler path) and WriteError (chi-
+// middleware / chi-handler path) emit byte-identical envelope bytes
+// when the AppError carries per-field Errors[] diagnostics (the
+// go-playground/validator path). Regression guard for the Phase-0
+// addition of AppError.Errors — the two marshal paths must stay
+// byte-identical on both empty-Errors and populated-Errors inputs.
+func TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors(t *testing.T) {
+	e := &appErrors.AppError{
+		Type:    appErrors.TypeValidation,
+		Code:    string(appErrors.TypeValidation),
+		Message: "Validation failed",
+		Details: "one or more fields failed validation",
+		Param:   "body.name",
+		Errors: []appErrors.ErrorDetail{
+			{Location: "body.name", Message: "required", Value: ""},
+			{Location: "body.api_key", Message: "must be at least 10", Value: "abc"},
+		},
+	}
+
+	handlerBytes, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("json.Marshal(AppError): %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	response.WriteError(rec, e)
+	writeErrorBytes := bytes.TrimRight(rec.Body.Bytes(), "\n")
+
+	if !bytes.Equal(handlerBytes, writeErrorBytes) {
+		t.Errorf("envelope drift on Errors[] path:\n"+
+			"  handler path: %s\n"+
+			"  WriteError:   %s",
+			handlerBytes, writeErrorBytes)
+	}
+
+	// Sanity: both paths include the errors array with both entries.
+	if !bytes.Contains(handlerBytes, []byte(`"errors"`)) {
+		t.Errorf("handler path missing `errors` key: %s", handlerBytes)
+	}
+	if !bytes.Contains(handlerBytes, []byte(`"body.name"`)) ||
+		!bytes.Contains(handlerBytes, []byte(`"body.api_key"`)) {
+		t.Errorf("handler path missing ErrorDetail entries: %s", handlerBytes)
 	}
 }
 

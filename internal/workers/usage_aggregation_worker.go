@@ -17,6 +17,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/organization"
+	billingService "brokle/internal/core/services/billing"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/uid"
@@ -34,7 +35,7 @@ type UsageAggregationWorker struct {
 	budgetRepo               billing.UsageBudgetRepository
 	alertRepo                billing.UsageAlertRepository
 	orgRepo                  organization.OrganizationRepository
-	pricingService           billing.PricingService
+	pricingService           *billingService.PricingService
 	notificationWorker       *NotificationWorker
 	quit                     chan struct{}
 	wg                       sync.WaitGroup
@@ -52,7 +53,7 @@ func NewUsageAggregationWorker(
 	budgetRepo billing.UsageBudgetRepository,
 	alertRepo billing.UsageAlertRepository,
 	orgRepo organization.OrganizationRepository,
-	pricingService billing.PricingService,
+	pricingService *billingService.PricingService,
 	notificationWorker *NotificationWorker,
 ) *UsageAggregationWorker {
 	// Get alert deduplication window from config (default 24 hours)
@@ -144,7 +145,7 @@ func (w *UsageAggregationWorker) run() {
 
 		orgs, err := w.orgRepo.List(ctx, filters)
 		if err != nil {
-			w.logger.Error("failed to list organizations", "error", err, "page", page)
+			w.logger.Error("Failed to list organizations", "error", err, "page", page)
 			return
 		}
 
@@ -156,7 +157,7 @@ func (w *UsageAggregationWorker) run() {
 		for _, org := range orgs {
 			// Sync billing state for each organization
 			if err := w.syncOrganizationUsage(ctx, org.ID); err != nil {
-				w.logger.Error("failed to sync organization usage",
+				w.logger.Error("Failed to sync organization usage",
 					"error", err,
 					"organization_id", org.ID,
 				)
@@ -167,7 +168,7 @@ func (w *UsageAggregationWorker) run() {
 			// Check budgets and trigger alerts
 			alerts, err := w.checkBudgets(ctx, org.ID)
 			if err != nil {
-				w.logger.Error("failed to check budgets",
+				w.logger.Error("Failed to check budgets",
 					"error", err,
 					"organization_id", org.ID,
 				)
@@ -203,7 +204,7 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	orgBilling, err := w.billingRepo.GetByOrgID(ctx, orgID)
 	if err != nil {
 		// Organization might not have billing set up yet
-		w.logger.Debug("no billing record for organization", "organization_id", orgID)
+		w.logger.Debug("No billing record for organization", "organization_id", orgID)
 		return nil
 	}
 
@@ -302,7 +303,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID uuid
 			}
 			projectSummary, err := w.usageRepo.GetUsageSummary(ctx, filter)
 			if err != nil {
-				w.logger.Warn("failed to get project usage",
+				w.logger.Warn("Failed to get project usage",
 					"error", err,
 					"project_id", budget.ProjectID,
 				)
@@ -316,7 +317,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID uuid
 			// Org-level budget - calculate cost using marginal cost approach
 			result, err := w.calculateBudgetCost(ctx, orgID, budget, summary, cost, effectivePricing)
 			if err != nil {
-				w.logger.Warn("failed to calculate budget cost",
+				w.logger.Warn("Failed to calculate budget cost",
 					"error", err,
 					"budget_id", budget.ID,
 				)
@@ -329,7 +330,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID uuid
 		}
 
 		if err := w.budgetRepo.UpdateUsage(ctx, budget.ID, spans, bytes, scores, budgetCost); err != nil {
-			w.logger.Warn("failed to update budget usage",
+			w.logger.Warn("Failed to update budget usage",
 				"error", err,
 				"budget_id", budget.ID,
 			)
@@ -359,14 +360,14 @@ func (w *UsageAggregationWorker) checkBudgets(ctx context.Context, orgID uuid.UU
 			if err := w.alertRepo.Create(ctx, alert); err != nil {
 				// Check if this is a duplicate alert (concurrent worker already created it)
 				if appErrors.IsUniqueViolation(err) {
-					w.logger.Debug("alert already exists (concurrent creation)",
+					w.logger.Debug("Alert already exists (concurrent creation)",
 						"budget_id", budget.ID,
 						"threshold", alert.AlertThreshold,
 						"dimension", alert.Dimension,
 					)
 					continue
 				}
-				w.logger.Error("failed to create alert",
+				w.logger.Error("Failed to create alert",
 					"error", err,
 					"budget_id", budget.ID,
 				)
@@ -374,7 +375,7 @@ func (w *UsageAggregationWorker) checkBudgets(ctx context.Context, orgID uuid.UU
 			}
 			newAlerts = append(newAlerts, alert)
 
-			w.logger.Warn("budget alert triggered",
+			w.logger.Warn("Budget alert triggered",
 				"alert_id", alert.ID,
 				"budget_id", budget.ID,
 				"budget_name", budget.Name,
@@ -540,7 +541,7 @@ func (w *UsageAggregationWorker) sendAlertNotification(ctx context.Context, org 
 
 	// Mark notification as sent
 	if err := w.alertRepo.MarkNotificationSent(ctx, alert.ID); err != nil {
-		w.logger.Warn("failed to mark notification sent",
+		w.logger.Warn("Failed to mark notification sent",
 			"error", err,
 			"alert_id", alert.ID,
 		)

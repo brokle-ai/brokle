@@ -11,6 +11,7 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // organizationSettingsRepository is the pgx+sqlc implementation of
@@ -35,6 +36,9 @@ func (r *organizationSettingsRepository) Create(ctx context.Context, s *orgDomai
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create organization_setting %s/%s: %w", s.OrganizationID, s.Key, orgDomain.ErrSettingsAlreadyExists)
+		}
 		return fmt.Errorf("create organization_setting %s/%s: %w", s.OrganizationID, s.Key, err)
 	}
 	return nil

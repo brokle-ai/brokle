@@ -224,7 +224,7 @@ fmt-frontend: ## Format frontend code
 
 ##@ Documentation
 
-generate: generate-sqlc ## Generate sqlc types (OpenAPI 3.1 is served at runtime via Huma — no swagger step)
+generate: generate-sqlc ## Generate sqlc types (server is chi-only; no OpenAPI spec is emitted)
 	@echo "✅ Code generation complete"
 
 generate-sqlc: ensure-sqlc ## Generate type-safe Go bindings from SQL queries

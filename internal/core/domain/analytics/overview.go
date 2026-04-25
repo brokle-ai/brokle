@@ -1,3 +1,4 @@
+// Package analytics contains the analytics domain: overview, provider models, pricing snapshots.
 package analytics
 
 import (
@@ -131,9 +132,9 @@ type TopError struct {
 
 // ScoreSummary represents a score overview for the conditional score section
 type ScoreSummary struct {
-	Name      string            `json:"name"`
-	AvgValue  float64           `json:"avg_value"`
-	Trend     float64           `json:"trend"` // Percentage change vs previous period
+	Name      string                    `json:"name"`
+	AvgValue  float64                   `json:"avg_value"`
+	Trend     float64                   `json:"trend"` // Percentage change vs previous period
 	Sparkline []OverviewTimeSeriesPoint `json:"sparkline"`
 }
 
@@ -147,16 +148,16 @@ type ChecklistStatus struct {
 
 // OverviewResponse is the complete response for the overview endpoint
 type OverviewResponse struct {
-	Stats           OverviewStats     `json:"stats"`
+	Stats           OverviewStats             `json:"stats"`
 	TraceVolume     []OverviewTimeSeriesPoint `json:"trace_volume"`
 	CostTimeSeries  []OverviewTimeSeriesPoint `json:"cost_time_series"`  // Cost over time
 	TokenTimeSeries []OverviewTimeSeriesPoint `json:"token_time_series"` // Tokens over time
 	ErrorTimeSeries []OverviewTimeSeriesPoint `json:"error_time_series"` // Error count over time
-	CostByModel     []CostByModel     `json:"cost_by_model"`
-	RecentTraces    []RecentTrace     `json:"recent_traces"`
-	TopErrors       []TopError        `json:"top_errors"`
-	ScoresSummary   []ScoreSummary    `json:"scores_summary,omitempty"` // Only if scores exist
-	ChecklistStatus ChecklistStatus   `json:"checklist_status"`
+	CostByModel     []CostByModel             `json:"cost_by_model"`
+	RecentTraces    []RecentTrace             `json:"recent_traces"`
+	TopErrors       []TopError                `json:"top_errors"`
+	ScoresSummary   []ScoreSummary            `json:"scores_summary,omitempty"` // Only if scores exist
+	ChecklistStatus ChecklistStatus           `json:"checklist_status"`
 }
 
 // OverviewFilter contains the filter parameters for overview queries
@@ -227,11 +228,4 @@ type OverviewRepository interface {
 
 	// HasScores checks if the project has any scores
 	HasScores(ctx context.Context, projectID uuid.UUID) (bool, error)
-}
-
-// OverviewService defines the business logic interface for overview
-type OverviewService interface {
-	// GetOverview retrieves the complete overview data for a project
-	// Filter must contain ProjectID and either TimeRange (for presets) or StartTime/EndTime (for custom ranges)
-	GetOverview(ctx context.Context, filter *OverviewFilter) (*OverviewResponse, error)
 }

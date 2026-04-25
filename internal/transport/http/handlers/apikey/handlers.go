@@ -6,80 +6,37 @@
 package apikey
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
 
 	authDomain "brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
-	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
 type handler struct {
-	apiKeySvc authDomain.APIKeyService
+	apiKeySvc *authService.APIKeyService
 	logger    *slog.Logger
 }
 
-// RegisterRoutes registers every API-key operation on apiAdmin.
-func RegisterRoutes(api huma.API, apiKeySvc authDomain.APIKeyService, logger *slog.Logger) {
+// RegisterRoutes mounts API-key routes on r. Expected mount context:
+// the authed dashboard chi group (RequireAuth + LimitByUser).
+func RegisterRoutes(r chi.Router, apiKeySvc *authService.APIKeyService, logger *slog.Logger) {
 	h := &handler{apiKeySvc: apiKeySvc, logger: logger}
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-api-keys",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/api-keys",
-		Tags:        []string{"api-keys"},
-		Summary:     "List a project's API keys",
-		Description: "Returns keys in preview form (bk_xxxx...yyyy) — the full key is never replayed. Offset-paginated; filter by status=active|expired.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.list)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-api-key",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/api-keys",
-		Tags:          []string{"api-keys"},
-		Summary:       "Create an API key for a project",
-		Description:   "The full key value appears in the response `key` field ONCE and is never stored in plaintext server-side; subsequent list/get calls only return the preview. Expiry is one of 30days / 90days / never.",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.create)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-api-key",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/api-keys/{keyId}",
-		Tags:          []string{"api-keys"},
-		Summary:       "Delete an API key",
-		Description:   "Permanently revokes the key — SDK clients using it start receiving 401 on their next request.",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.delete)
+	r.Route("/api/v1/projects/{projectId}/api-keys", func(r chi.Router) {
+		r.Get("/", h.list)
+		r.Post("/", h.create)
+		r.Delete("/{keyId}", h.delete)
+	})
 }
 
-// apiKey is the wire shape returned by list/create.
-type apiKey struct {
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
-	Key        string     `json:"key,omitempty" doc:"Full API-key value — populated only on the create response"`
-	KeyPreview string     `json:"key_preview"`
-	ProjectID  uuid.UUID  `json:"project_id"`
-	Status     string     `json:"status" enum:"active,expired"`
-	LastUsed   *time.Time `json:"last_used,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	CreatedBy  uuid.UUID  `json:"created_by"`
-}
-
-// keyStatus returns "expired" when the key's expiry has passed,
-// otherwise "active". Soft-deleted keys are filtered by the
-// repository layer so this function never sees them.
 func keyStatus(k authDomain.APIKey) string {
 	if k.IsExpired() {
 		return "expired"
@@ -87,38 +44,35 @@ func keyStatus(k authDomain.APIKey) string {
 	return "active"
 }
 
-// ----- list-api-keys --------------------------------------------------
-
-type listAPIKeysInput struct {
-	ProjectID string `path:"projectId" format:"uuid" doc:"Project that owns the API keys"`
-	Status    string `query:"status" required:"false" enum:"active,expired" doc:"Optional status filter"`
-	Page      int    `query:"page" required:"false" minimum:"1" doc:"Page number, 1-indexed"`
-	Limit     int    `query:"limit" required:"false" doc:"Items per page (10, 25, 50, 100)"`
-	SortBy    string `query:"sort_by" required:"false" enum:"created_at,name,last_used_at" doc:"Sort field"`
-	SortDir   string `query:"sort_dir" required:"false" enum:"asc,desc" doc:"Sort direction"`
-}
-
-type listAPIKeysOutput struct {
-	Body listAPIKeysResponse
-}
-
-type listAPIKeysResponse struct {
-	Data       []apiKey             `json:"data"`
-	Pagination *response.Pagination `json:"pagination"`
-}
-
-func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysOutput, error) {
-	projectID, err := uuid.Parse(in.ProjectID)
+// list returns a paginated view of the project's API keys. Status
+// filter (active/expired) is optional.
+func (h *handler) list(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	params := parsePagination(in.Page, in.Limit, in.SortBy, in.SortDir)
+	page, limit, err := request.QueryPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	params := pagination.Params{
+		Page:    page,
+		Limit:   limit,
+		SortBy:  r.URL.Query().Get("sort_by"),
+		SortDir: r.URL.Query().Get("sort_dir"),
+	}
+	if params.SortDir != "asc" && params.SortDir != "desc" {
+		params.SortDir = "desc"
+	}
+
 	filters := &authDomain.APIKeyFilters{ProjectID: &projectID}
 	filters.Params = params
 
-	switch in.Status {
+	switch r.URL.Query().Get("status") {
 	case "active":
 		expired := false
 		filters.IsExpired = &expired
@@ -127,16 +81,20 @@ func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysO
 		filters.IsExpired = &expired
 	}
 
-	keys, err := h.apiKeySvc.GetAPIKeys(ctx, filters)
+	keys, err := h.apiKeySvc.GetAPIKeys(r.Context(), filters)
 	if err != nil {
-		h.logger.WarnContext(ctx, "apikey: list failed", "user_id", userID, "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "apikey: list failed",
+			"user_id", userID, "project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	total, err := h.apiKeySvc.CountAPIKeys(ctx, filters)
+	total, err := h.apiKeySvc.CountAPIKeys(r.Context(), filters)
 	if err != nil {
-		h.logger.WarnContext(ctx, "apikey: count failed", "user_id", userID, "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "apikey: count failed",
+			"user_id", userID, "project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
 	out := make([]apiKey, len(keys))
@@ -154,69 +112,30 @@ func (h *handler) list(ctx context.Context, in *listAPIKeysInput) (*listAPIKeysO
 		}
 	}
 
-	return &listAPIKeysOutput{
-		Body: listAPIKeysResponse{
-			Data:       out,
-			Pagination: response.BuildPagination(params.Page, params.Limit, total),
-		},
-	}, nil
+	response.Success(w, listAPIKeysResponse{
+		Data:       out,
+		Pagination: response.BuildPagination(params.Page, params.Limit, total),
+	})
 }
 
-// parsePagination normalises the query-param tuple into a
-// pagination.Params, applying defaults and validation so the
-// handler doesn't carry the logic inline.
-func parsePagination(page, limit int, sortBy, sortDir string) pagination.Params {
-	p := pagination.Params{
-		Page:    1,
-		Limit:   50,
-		SortBy:  sortBy,
-		SortDir: "desc",
-	}
-	if page >= 1 {
-		p.Page = page
-	}
-	if pagination.IsValidPageSize(limit) {
-		p.Limit = limit
-	}
-	if sortDir == "asc" || sortDir == "desc" {
-		p.SortDir = sortDir
-	}
-	if err := p.Validate(); err != nil {
-		if p.GetOffset() > pagination.MaxOffset {
-			p.Page = pagination.MaxOffset / p.Limit
-		}
-		if p.Page < 1 {
-			p.Page = 1
-		}
-	}
-	return p
-}
-
-// ----- create-api-key -------------------------------------------------
-
-type createAPIKeyInput struct {
-	ProjectID string `path:"projectId" format:"uuid" doc:"Project the new key belongs to"`
-	Body      createAPIKeyBody
-}
-
-type createAPIKeyBody struct {
-	Name         string `json:"name" minLength:"2" maxLength:"100" doc:"Human-readable name"`
-	ExpiryOption string `json:"expiry_option" enum:"30days,90days,never" doc:"Expiry bucket"`
-}
-
-type createAPIKeyOutput struct {
-	Body apiKey
-}
-
-func (h *handler) create(ctx context.Context, in *createAPIKeyInput) (*createAPIKeyOutput, error) {
-	projectID, err := uuid.Parse(in.ProjectID)
+// create mints a new API key. The response includes the full key
+// value ONCE — it is never replayed on subsequent reads.
+func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
+
+	var body createAPIKeyBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
 
 	var expiresAt *time.Time
-	switch in.Body.ExpiryOption {
+	switch body.ExpiryOption {
 	case "30days":
 		t := time.Now().Add(30 * 24 * time.Hour)
 		expiresAt = &t
@@ -227,58 +146,58 @@ func (h *handler) create(ctx context.Context, in *createAPIKeyInput) (*createAPI
 		expiresAt = nil
 	}
 
-	resp, err := h.apiKeySvc.CreateAPIKey(ctx, userID, &authDomain.CreateAPIKeyRequest{
-		Name:      in.Body.Name,
+	resp, err := h.apiKeySvc.CreateAPIKey(r.Context(), userID, &authDomain.CreateAPIKeyRequest{
+		Name:      body.Name,
 		ProjectID: projectID,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		h.logger.WarnContext(ctx, "apikey: create failed", "user_id", userID, "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.WarnContext(r.Context(), "apikey: create failed",
+			"user_id", userID, "project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	h.logger.InfoContext(ctx, "apikey: created", "user_id", userID, "project_id", projectID, "api_key_id", resp.ID)
+	h.logger.InfoContext(r.Context(), "apikey: created",
+		"user_id", userID, "project_id", projectID, "api_key_id", resp.ID)
 
-	return &createAPIKeyOutput{
-		Body: apiKey{
-			ID:         resp.ID,
-			Name:       resp.Name,
-			Key:        resp.Key,
-			KeyPreview: resp.KeyPreview,
-			ProjectID:  resp.ProjectID,
-			Status:     "active",
-			CreatedAt:  resp.CreatedAt,
-			ExpiresAt:  resp.ExpiresAt,
-			CreatedBy:  userID,
-		},
-	}, nil
+	response.Created(w, apiKey{
+		ID:         resp.ID,
+		Name:       resp.Name,
+		Key:        resp.Key,
+		KeyPreview: resp.KeyPreview,
+		ProjectID:  resp.ProjectID,
+		Status:     "active",
+		CreatedAt:  resp.CreatedAt,
+		ExpiresAt:  resp.ExpiresAt,
+		CreatedBy:  userID,
+	})
 }
 
-// ----- delete-api-key -------------------------------------------------
-
-type deleteAPIKeyInput struct {
-	ProjectID string `path:"projectId" format:"uuid" doc:"Project that owns the key"`
-	KeyID     string `path:"keyId" format:"uuid" doc:"API key to delete"`
-}
-
-type deleteAPIKeyOutput struct{}
-
-func (h *handler) delete(ctx context.Context, in *deleteAPIKeyInput) (*deleteAPIKeyOutput, error) {
-	projectID, err := uuid.Parse(in.ProjectID)
+// delete revokes an API key. SDK clients using it start receiving
+// 401 on their next request.
+func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	keyID, err := uuid.Parse(in.KeyID)
+	keyID, err := request.URLParamUUID(r, "keyId")
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid API key ID", "keyId must be a valid UUID")
+		response.WriteError(w, err)
+		return
 	}
-	userID := httpctx.MustGetUserID(ctx)
+	userID := httpctx.MustGetUserID(r.Context())
 
-	if err := h.apiKeySvc.DeleteAPIKey(ctx, keyID, projectID); err != nil {
-		h.logger.WarnContext(ctx, "apikey: delete failed", "user_id", userID, "project_id", projectID, "api_key_id", keyID, "error", err)
-		return nil, err
+	if err := h.apiKeySvc.DeleteAPIKey(r.Context(), keyID, projectID); err != nil {
+		h.logger.WarnContext(r.Context(), "apikey: delete failed",
+			"user_id", userID, "project_id", projectID,
+			"api_key_id", keyID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	h.logger.InfoContext(ctx, "apikey: deleted", "user_id", userID, "project_id", projectID, "api_key_id", keyID)
-	return &deleteAPIKeyOutput{}, nil
+	h.logger.InfoContext(r.Context(), "apikey: deleted",
+		"user_id", userID, "project_id", projectID, "api_key_id", keyID)
+	response.NoContent(w)
 }

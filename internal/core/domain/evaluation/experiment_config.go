@@ -199,9 +199,9 @@ type ValidateStepRequest struct {
 
 // ValidateStepResponse is the response from step validation.
 type ValidateStepResponse struct {
-	IsValid  bool              `json:"is_valid"`
+	IsValid  bool                        `json:"is_valid"`
 	Errors   []EvaluationValidationError `json:"errors,omitempty"`
-	Warnings []string          `json:"warnings,omitempty"`
+	Warnings []string                    `json:"warnings,omitempty"`
 }
 
 // EstimateCostRequest is the request to estimate experiment cost.

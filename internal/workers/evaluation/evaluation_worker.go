@@ -17,6 +17,8 @@ import (
 
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
+	evaluationService "brokle/internal/core/services/evaluation"
+	observabilityService "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/database"
 	"brokle/pkg/uid"
 )
@@ -56,8 +58,8 @@ type EvaluationWorkerConfig struct {
 // EvaluationWorker consumes evaluation jobs and executes scorers
 type EvaluationWorker struct {
 	redis            *database.RedisDB
-	scoreService     observability.ScoreService
-	executionService evaluation.EvaluatorExecutionService
+	scoreService     *observabilityService.ScoreService
+	executionService *evaluationService.EvaluatorExecutionService
 	llmScorer        Scorer
 	builtinScorer    Scorer
 	regexScorer      Scorer
@@ -102,8 +104,8 @@ type executionProgress struct {
 // NewEvaluationWorker creates a new evaluation worker
 func NewEvaluationWorker(
 	redis *database.RedisDB,
-	scoreService observability.ScoreService,
-	executionService evaluation.EvaluatorExecutionService,
+	scoreService *observabilityService.ScoreService,
+	executionService *evaluationService.EvaluatorExecutionService,
 	llmScorer Scorer,
 	builtinScorer Scorer,
 	regexScorer Scorer,
@@ -395,7 +397,7 @@ func (w *EvaluationWorker) trackExecutionSuccess(ctx context.Context, job *Evalu
 		0, // errorsCount
 	)
 	if err != nil {
-		w.logger.Error("failed to track execution success",
+		w.logger.Error("Failed to track execution success",
 			"execution_id", job.ExecutionID,
 			"job_id", job.JobID,
 			"error", err,
@@ -404,7 +406,7 @@ func (w *EvaluationWorker) trackExecutionSuccess(ctx context.Context, job *Evalu
 	}
 
 	if completed {
-		w.logger.Info("execution auto-completed",
+		w.logger.Info("Execution auto-completed",
 			"execution_id", job.ExecutionID,
 			"evaluator_id", job.EvaluatorID,
 			"project_id", job.ProjectID,
@@ -426,7 +428,7 @@ func (w *EvaluationWorker) trackExecutionError(ctx context.Context, job *Evaluat
 		1, // errorsCount
 	)
 	if err != nil {
-		w.logger.Error("failed to track execution error",
+		w.logger.Error("Failed to track execution error",
 			"execution_id", job.ExecutionID,
 			"job_id", job.JobID,
 			"error", err,
@@ -435,7 +437,7 @@ func (w *EvaluationWorker) trackExecutionError(ctx context.Context, job *Evaluat
 	}
 
 	if completed {
-		w.logger.Info("execution auto-completed with errors",
+		w.logger.Info("Execution auto-completed with errors",
 			"execution_id", job.ExecutionID,
 			"evaluator_id", job.EvaluatorID,
 			"project_id", job.ProjectID,

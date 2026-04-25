@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
@@ -15,7 +15,7 @@ import (
 // needs. Same constructor-with-Deps pattern as AuthDeps; populated once
 // at server start and threaded into RequireSDKAuth.
 type SDKAuthDeps struct {
-	APIKey auth.APIKeyService
+	APIKey *authService.APIKeyService
 	Logger *slog.Logger
 }
 

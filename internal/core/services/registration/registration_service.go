@@ -1,3 +1,4 @@
+// Package registration orchestrates user registration across auth, organization, and user domains.
 package registration
 
 import (
@@ -8,25 +9,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	authDomain "brokle/internal/core/domain/auth"
-	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
+	auth "brokle/internal/core/services/auth"
+	billingService "brokle/internal/core/services/billing"
 	appErrors "brokle/pkg/errors"
 )
-
-// RegistrationService handles complete user registration orchestration
-// This service coordinates across multiple domains: auth, organization, user
-type RegistrationService interface {
-	// RegisterWithOrganization creates a new user with a new organization
-	RegisterWithOrganization(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error)
-
-	// RegisterWithInvitation creates a new user and adds them to an existing organization
-	RegisterWithInvitation(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error)
-
-	// CompleteOAuthRegistration handles OAuth-based registration
-	CompleteOAuthRegistration(ctx context.Context, req *OAuthRegistrationRequest) (*RegistrationResponse, error)
-}
 
 // RegisterRequest contains all data needed for registration
 type RegisterRequest struct {
@@ -64,16 +53,16 @@ type RegistrationResponse struct {
 	LoginTokens  *authDomain.LoginResponse
 }
 
-type registrationService struct {
+type RegistrationService struct {
 	transactor           common.Transactor
 	userRepo             userDomain.Repository
 	orgRepo              orgDomain.OrganizationRepository
 	memberRepo           orgDomain.MemberRepository
 	projectRepo          orgDomain.ProjectRepository
 	invitationRepo       orgDomain.InvitationRepository
-	roleService          authDomain.RoleService
-	authService          authDomain.AuthService
-	billableUsageService billingDomain.BillableUsageService
+	roles          *auth.RoleService
+	auth          *auth.AuthService
+	usage *billingService.BillableUsageService
 }
 
 // NewRegistrationService creates a new registration service
@@ -84,25 +73,25 @@ func NewRegistrationService(
 	memberRepo orgDomain.MemberRepository,
 	projectRepo orgDomain.ProjectRepository,
 	invitationRepo orgDomain.InvitationRepository,
-	roleService authDomain.RoleService,
-	authService authDomain.AuthService,
-	billableUsageService billingDomain.BillableUsageService,
-) RegistrationService {
-	return &registrationService{
+	roles *auth.RoleService,
+	auth *auth.AuthService,
+	usage *billingService.BillableUsageService,
+) *RegistrationService {
+	return &RegistrationService{
 		transactor:           transactor,
 		userRepo:             userRepo,
 		orgRepo:              orgRepo,
 		memberRepo:           memberRepo,
 		projectRepo:          projectRepo,
 		invitationRepo:       invitationRepo,
-		roleService:          roleService,
-		authService:          authService,
-		billableUsageService: billableUsageService,
+		roles:          roles,
+		auth:          auth,
+		usage: usage,
 	}
 }
 
 // RegisterWithOrganization handles fresh signup: user + organization + project
-func (s *registrationService) RegisterWithOrganization(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
+func (s *RegistrationService) RegisterWithOrganization(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
 	// Validation
 	if req.OrganizationName == nil || *req.OrganizationName == "" {
 		return nil, appErrors.NewValidationError("organization name is required", "")
@@ -146,17 +135,17 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 		}
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
-			// Check for duplicate email (database unique constraint)
-			if appErrors.IsUniqueViolation(err) {
-				return appErrors.NewConflictError("Email already registered")
+			// Repo wraps UNIQUE (email) collisions into userDomain.ErrAlreadyExists.
+			if errors.Is(err, userDomain.ErrAlreadyExists) {
+				return appErrors.NewConflictError("email already registered")
 			}
-			return appErrors.NewInternalError("Failed to create user", err)
+			return appErrors.NewInternalError("failed to create user", err)
 		}
 
 		// Create user profile
 		profile := userDomain.NewUserProfile(newUser.ID)
 		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
-			return appErrors.NewInternalError("Failed to create user profile", err)
+			return appErrors.NewInternalError("failed to create user profile", err)
 		}
 
 		// 2. Create organization
@@ -166,35 +155,35 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 		org.SubscriptionStatus = "active"
 
 		if err := s.orgRepo.Create(ctx, org); err != nil {
-			return appErrors.NewInternalError("Failed to create organization", err)
+			return appErrors.NewInternalError("failed to create organization", err)
 		}
 
 		// 2.5. Provision billing for organization
-		if err := s.billableUsageService.ProvisionOrganizationBilling(ctx, org.ID); err != nil {
-			return appErrors.NewInternalError("Failed to provision billing", err)
+		if err := s.usage.ProvisionOrganizationBilling(ctx, org.ID); err != nil {
+			return appErrors.NewInternalError("failed to provision billing", err)
 		}
 
 		// 3. Add user as organization owner
-		ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", "organization")
+		ownerRole, err := s.roles.GetRoleByNameAndScope(ctx, "owner", "organization")
 		if err != nil || ownerRole == nil {
 			return appErrors.NewInternalError("owner role not found - database seed may be missing", err)
 		}
 
 		member := orgDomain.NewMember(org.ID, newUser.ID, ownerRole.ID)
 		if err := s.memberRepo.Create(ctx, member); err != nil {
-			return appErrors.NewInternalError("Failed to add user as organization owner", err)
+			return appErrors.NewInternalError("failed to add user as organization owner", err)
 		}
 
 		// 4. Create default project
 		project = orgDomain.NewProject(org.ID, "Default Project", "Your default project")
 		if err := s.projectRepo.Create(ctx, project); err != nil {
-			return appErrors.NewInternalError("Failed to create default project", err)
+			return appErrors.NewInternalError("failed to create default project", err)
 		}
 
 		// 5. Set user's default organization
 		newUser.DefaultOrganizationID = &org.ID
 		if err := s.userRepo.Update(ctx, newUser); err != nil {
-			return appErrors.NewInternalError("Failed to set default organization", err)
+			return appErrors.NewInternalError("failed to set default organization", err)
 		}
 
 		return nil
@@ -208,7 +197,7 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 	var loginTokens *authDomain.LoginResponse
 	if req.IsOAuthUser {
 		// OAuth users: generate tokens without password validation
-		loginTokens, err = s.authService.GenerateTokensForUser(ctx, newUser.ID)
+		loginTokens, err = s.auth.GenerateTokensForUser(ctx, newUser.ID)
 		if err != nil {
 			// Non-critical - user created successfully, just can't auto-login
 			loginTokens = nil
@@ -219,7 +208,7 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 			Email:    req.Email,
 			Password: req.Password,
 		}
-		loginTokens, err = s.authService.Login(ctx, loginReq)
+		loginTokens, err = s.auth.Login(ctx, loginReq)
 		if err != nil {
 			// Non-critical - user created successfully, just can't auto-login
 			loginTokens = nil
@@ -235,7 +224,7 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 }
 
 // RegisterWithInvitation handles invitation-based signup
-func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
+func (s *RegistrationService) RegisterWithInvitation(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
 	// Validation
 	if req.InvitationToken == nil || *req.InvitationToken == "" {
 		return nil, appErrors.NewValidationError("invitation token is required", "")
@@ -264,10 +253,10 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 	// Check if user already exists
 	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil && !errors.Is(err, userDomain.ErrNotFound) {
-		return nil, appErrors.NewInternalError("User lookup failed", err)
+		return nil, appErrors.NewInternalError("user lookup failed", err)
 	}
 	if existingUser != nil {
-		return nil, appErrors.NewConflictError("Email already exists")
+		return nil, appErrors.NewConflictError("email already exists")
 	}
 
 	// Hash password BEFORE transaction (don't re-hash inside)
@@ -306,17 +295,17 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 		newUser.DefaultOrganizationID = &invitation.OrganizationID
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
-			// Check for duplicate email (database unique constraint)
-			if appErrors.IsUniqueViolation(err) {
-				return appErrors.NewConflictError("Email already registered")
+			// Repo wraps UNIQUE (email) collisions into userDomain.ErrAlreadyExists.
+			if errors.Is(err, userDomain.ErrAlreadyExists) {
+				return appErrors.NewConflictError("email already registered")
 			}
-			return appErrors.NewInternalError("Failed to create user", err)
+			return appErrors.NewInternalError("failed to create user", err)
 		}
 
 		// Create user profile (same as fresh signup)
 		profile := userDomain.NewUserProfile(newUser.ID)
 		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
-			return appErrors.NewInternalError("Failed to create user profile", err)
+			return appErrors.NewInternalError("failed to create user profile", err)
 		}
 
 		// 2. Update invitation status to accepted
@@ -324,19 +313,19 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 		acceptedAt := time.Now()
 		invitation.AcceptedAt = &acceptedAt
 		if err := s.invitationRepo.Update(ctx, invitation); err != nil {
-			return appErrors.NewInternalError("Failed to update invitation", err)
+			return appErrors.NewInternalError("failed to update invitation", err)
 		}
 
 		// 3. Add user as organization member
 		member := orgDomain.NewMember(invitation.OrganizationID, newUser.ID, invitation.RoleID)
 		if err := s.memberRepo.Create(ctx, member); err != nil {
-			return appErrors.NewInternalError("Failed to add user to organization", err)
+			return appErrors.NewInternalError("failed to add user to organization", err)
 		}
 
 		// 4. Get organization details
 		org, err = s.orgRepo.GetByID(ctx, invitation.OrganizationID)
 		if err != nil {
-			return appErrors.NewInternalError("Failed to get organization", err)
+			return appErrors.NewInternalError("failed to get organization", err)
 		}
 
 		return nil
@@ -350,7 +339,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 	var loginTokens *authDomain.LoginResponse
 	if req.IsOAuthUser {
 		// OAuth users: generate tokens without password validation
-		loginTokens, err = s.authService.GenerateTokensForUser(ctx, newUser.ID)
+		loginTokens, err = s.auth.GenerateTokensForUser(ctx, newUser.ID)
 		if err != nil {
 			loginTokens = nil
 		}
@@ -360,7 +349,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 			Email:    req.Email,
 			Password: req.Password,
 		}
-		loginTokens, err = s.authService.Login(ctx, loginReq)
+		loginTokens, err = s.auth.Login(ctx, loginReq)
 		if err != nil {
 			loginTokens = nil
 		}
@@ -375,7 +364,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 }
 
 // CompleteOAuthRegistration handles OAuth-based registration
-func (s *registrationService) CompleteOAuthRegistration(ctx context.Context, req *OAuthRegistrationRequest) (*RegistrationResponse, error) {
+func (s *RegistrationService) CompleteOAuthRegistration(ctx context.Context, req *OAuthRegistrationRequest) (*RegistrationResponse, error) {
 	// Convert to RegisterRequest
 	regReq := &RegisterRequest{
 		Email:            req.Email,
@@ -400,7 +389,7 @@ func (s *registrationService) CompleteOAuthRegistration(ctx context.Context, req
 
 // hashPassword handles password hashing for regular users
 // OAuth users don't use this - they get NULL password and auth_method='oauth'
-func (s *registrationService) hashPassword(password string, isOAuthUser bool) (string, error) {
+func (s *RegistrationService) hashPassword(password string, isOAuthUser bool) (string, error) {
 	if isOAuthUser {
 		// OAuth users: return empty string (will be set to NULL in database)
 		return "", nil
@@ -409,7 +398,7 @@ func (s *registrationService) hashPassword(password string, isOAuthUser bool) (s
 	// Password users: hash the password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", appErrors.NewInternalError("Failed to hash password", err)
+		return "", appErrors.NewInternalError("failed to hash password", err)
 	}
 	return string(hashed), nil
 }

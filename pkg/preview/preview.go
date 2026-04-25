@@ -1,3 +1,4 @@
+// Package preview generates truncated previews of text/JSON payloads for observability.
 package preview
 
 import (

@@ -71,7 +71,7 @@ func (b *BinaryNode) isFilterNode() {}
 type ConditionNode struct {
 	Field    string         // Attribute path: service.name, gen_ai.system
 	Operator FilterOperator // Comparison operator
-	Value    any    // string, float64, []string (for IN clause)
+	Value    any            // string, float64, []string (for IN clause)
 	Negated  bool           // For NOT EXISTS
 }
 

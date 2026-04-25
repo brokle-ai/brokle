@@ -13,76 +13,66 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
-	"brokle/internal/transport/http/handlers/shared"
+	organizationService "brokle/internal/core/services/organization"
+	userService "brokle/internal/core/services/user"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 	"brokle/pkg/utils"
 )
 
 type handler struct {
-	userSvc    user.UserService
-	profileSvc user.ProfileService
-	orgSvc     orgDomain.OrganizationService
+	userSvc    *userService.UserService
+	profileSvc *userService.ProfileService
+	orgSvc     *organizationService.OrganizationService
 	logger     *slog.Logger
 }
 
-// RegisterRoutes registers every user operation on apiAdmin.
+// RegisterRoutes mounts the user-profile routes on r. Expected mount
+// context: the authed dashboard chi group (RequireAuth + LimitByUser).
 func RegisterRoutes(
-	api huma.API,
-	userSvc user.UserService,
-	profileSvc user.ProfileService,
-	orgSvc orgDomain.OrganizationService,
+	r chi.Router,
+	userSvc *userService.UserService,
+	profileSvc *userService.ProfileService,
+	orgSvc *organizationService.OrganizationService,
 	logger *slog.Logger,
 ) {
 	h := &handler{userSvc: userSvc, profileSvc: profileSvc, orgSvc: orgSvc, logger: logger}
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-user-profile",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/users/me",
-		Tags:        []string{"user"},
-		Summary:     "Get the authenticated user's profile + organization hierarchy",
-		Description: "Returns user core fields, extended profile, profile-completeness score, and organizations + nested projects. Dashboard reads this on every page load for the sidebar + org switcher.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getProfile)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-user-profile",
-		Method:      http.MethodPatch,
-		Path:        "/api/v1/users/me",
-		Tags:        []string{"user"},
-		Summary:     "Update the authenticated user's name and preferences",
-		Description: "Partial update. Name fields write to the user record; timezone/language write to the profile record; profile-layer failures are soft-logged and do not abort the user-layer update.",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updateProfile)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "set-default-organization",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/users/me/default-organization",
-		Tags:        []string{"user"},
-		Summary:     "Set the authenticated user's default organization",
-		Description: "Verifies membership before persisting; 403 when the user is not a member (doesn't leak whether the org exists).",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.setDefaultOrganization)
+	r.Route("/api/v1/users/me", func(r chi.Router) {
+		r.Get("/", h.getProfile)
+		r.Patch("/", h.updateProfile)
+		r.Put("/default-organization", h.setDefaultOrganization)
+	})
 }
 
-// Operation Input/Output and body/response types live in types.go.
+// ----- get-user-profile ------------------------------------------------
 
-// ----- get-user-profile ---------------------------------------------
+func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.buildProfile(r.Context())
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, resp)
+}
 
-func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetUserProfileOutput, error) {
+// buildProfile is shared between GET and the PATCH echo so the two
+// endpoints emit byte-identical response shapes.
+func (h *handler) buildProfile(ctx context.Context) (getProfileResponse, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
 	u, err := h.userSvc.GetUser(ctx, userID)
 	if err != nil {
-		h.logger.WarnContext(ctx, "user: get-profile user fetch failed", "user_id", userID, "error", err)
-		return nil, err
+		h.logger.WarnContext(ctx, "user: get-profile user fetch failed",
+			"user_id", userID, "error", err)
+		return getProfileResponse{}, err
 	}
 
 	profile, profileErr := h.profileSvc.GetProfile(ctx, userID)
@@ -93,12 +83,14 @@ func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetUserProfileO
 
 	completeness, completenessErr := h.profileSvc.GetProfileCompleteness(ctx, userID)
 	if completenessErr != nil {
-		h.logger.WarnContext(ctx, "user: completeness lookup failed", "user_id", userID, "error", completenessErr)
+		h.logger.WarnContext(ctx, "user: completeness lookup failed",
+			"user_id", userID, "error", completenessErr)
 	}
 
 	orgsWithProjects, orgErr := h.orgSvc.GetUserOrganizationsWithProjects(ctx, userID)
 	if orgErr != nil {
-		h.logger.WarnContext(ctx, "user: org hierarchy lookup failed, returning empty", "user_id", userID, "error", orgErr)
+		h.logger.WarnContext(ctx, "user: org hierarchy lookup failed, returning empty",
+			"user_id", userID, "error", orgErr)
 		orgsWithProjects = []*orgDomain.OrganizationWithProjectsAndRole{}
 	}
 
@@ -133,7 +125,7 @@ func (h *handler) getProfile(ctx context.Context, _ *struct{}) (*GetUserProfileO
 		resp.Completeness = completeness.OverallScore
 	}
 
-	return &GetUserProfileOutput{Body: resp}, nil
+	return resp, nil
 }
 
 func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []organizationWithProjects {
@@ -166,62 +158,97 @@ func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []org
 	return out
 }
 
-// ----- update-user-profile ------------------------------------------
+// ----- update-user-profile ---------------------------------------------
 
-func (h *handler) updateProfile(ctx context.Context, in *UpdateUserProfileInput) (*UpdateUserProfileOutput, error) {
-	userID := httpctx.MustGetUserID(ctx)
+func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := httpctx.MustGetUserID(r.Context())
 
-	if in.Body.FirstName != nil || in.Body.LastName != nil {
-		if _, err := h.userSvc.UpdateUser(ctx, userID, &user.UpdateUserRequest{
-			FirstName: in.Body.FirstName,
-			LastName:  in.Body.LastName,
+	var body updateUserProfileBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+
+	if body.FirstName != nil || body.LastName != nil {
+		if _, err := h.userSvc.UpdateUser(r.Context(), userID, &user.UpdateUserRequest{
+			FirstName: body.FirstName,
+			LastName:  body.LastName,
 		}); err != nil {
-			h.logger.WarnContext(ctx, "user: update-profile user update failed", "user_id", userID, "error", err)
-			return nil, err
+			h.logger.WarnContext(r.Context(), "user: update-profile user update failed",
+				"user_id", userID, "error", err)
+			response.WriteError(w, err)
+			return
 		}
 	}
 
-	if in.Body.Timezone != nil || in.Body.Language != nil {
-		if _, err := h.profileSvc.UpdateProfile(ctx, userID, &user.UpdateUserProfileRequest{
-			Timezone: in.Body.Timezone,
-			Language: in.Body.Language,
+	if body.Timezone != nil || body.Language != nil {
+		if _, err := h.profileSvc.UpdateProfile(r.Context(), userID, &user.UpdateUserProfileRequest{
+			Timezone: body.Timezone,
+			Language: body.Language,
 		}); err != nil {
-			h.logger.DebugContext(ctx, "user: update-profile profile update skipped (profile may not exist yet)", "user_id", userID, "error", err)
+			h.logger.DebugContext(r.Context(),
+				"user: update-profile profile update skipped (profile may not exist yet)",
+				"user_id", userID, "error", err)
 		}
 	}
 
-	out, err := h.getProfile(ctx, nil)
+	resp, err := h.buildProfile(r.Context())
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdateUserProfileOutput{Body: out.Body}, nil
+	response.Success(w, resp)
 }
 
-// ----- set-default-organization -------------------------------------
+// ----- set-default-organization ----------------------------------------
 
-func (h *handler) setDefaultOrganization(ctx context.Context, in *SetDefaultOrgInput) (*SetDefaultOrgOutput, error) {
-	userID := httpctx.MustGetUserID(ctx)
+func (h *handler) setDefaultOrganization(w http.ResponseWriter, r *http.Request) {
+	userID := httpctx.MustGetUserID(r.Context())
 
-	orgID, err := uuid.Parse(in.Body.OrganizationID)
-	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid organization ID", "organization_id must be a valid UUID")
+	var body setDefaultOrgBody
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
 
-	isMember, err := h.userSvc.ValidateUserOrgMembership(ctx, userID, orgID)
+	orgID, err := uuid.Parse(body.OrganizationID)
 	if err != nil {
-		h.logger.WarnContext(ctx, "user: org membership check failed", "user_id", userID, "org_id", orgID, "error", err)
-		return nil, err
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid organization ID",
+			"organization_id must be a valid UUID",
+			appErrors.WithParam("organization_id"),
+		))
+		return
+	}
+
+	isMember, err := h.userSvc.ValidateUserOrgMembership(r.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WarnContext(r.Context(), "user: org membership check failed",
+			"user_id", userID, "org_id", orgID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 	if !isMember {
-		h.logger.WarnContext(ctx, "user: set-default denied (not a member)", "user_id", userID, "org_id", orgID)
-		return nil, appErrors.NewForbiddenError("You are not a member of this organization")
+		h.logger.WarnContext(r.Context(), "user: set-default denied (not a member)",
+			"user_id", userID, "org_id", orgID)
+		response.WriteError(w, appErrors.NewForbiddenError("You are not a member of this organization"))
+		return
 	}
 
-	if err := h.userSvc.SetDefaultOrganization(ctx, userID, orgID); err != nil {
-		h.logger.WarnContext(ctx, "user: set-default persist failed", "user_id", userID, "org_id", orgID, "error", err)
-		return nil, err
+	if err := h.userSvc.SetDefaultOrganization(r.Context(), userID, orgID); err != nil {
+		h.logger.WarnContext(r.Context(), "user: set-default persist failed",
+			"user_id", userID, "org_id", orgID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
-	h.logger.InfoContext(ctx, "user: default organization updated", "user_id", userID, "org_id", orgID)
-	return &SetDefaultOrgOutput{Body: shared.MessageResponse{Message: "Default organization updated successfully"}}, nil
+	h.logger.InfoContext(r.Context(), "user: default organization updated",
+		"user_id", userID, "org_id", orgID)
+
+	resp, err := h.buildProfile(r.Context())
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, resp)
 }

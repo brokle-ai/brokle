@@ -21,15 +21,15 @@ type Session struct {
 	ProjectID uuid.UUID `json:"project_id"`
 
 	// Session metadata
-	Name        *string        `json:"name,omitempty"`
-	Description *string        `json:"description,omitempty"`
-	Tags        []string       `json:"tags"`
+	Name        *string  `json:"name,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	Tags        []string `json:"tags"`
 
 	// Session content
-	Variables JSON `json:"variables"` // Variable values
-	Config    JSON `json:"config,omitempty"`              // Model config
-	Windows   JSON `json:"windows,omitempty"`             // Array of window states
-	LastRun   JSON `json:"last_run,omitempty"`            // Last execution result
+	Variables JSON `json:"variables"`          // Variable values
+	Config    JSON `json:"config,omitempty"`   // Model config
+	Windows   JSON `json:"windows,omitempty"`  // Array of window states
+	LastRun   JSON `json:"last_run,omitempty"` // Last execution result
 
 	// Audit fields
 	CreatedBy  *uuid.UUID `json:"created_by,omitempty"`

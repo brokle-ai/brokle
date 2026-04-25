@@ -83,7 +83,7 @@ func (w *LockExpiryWorker) run() {
 	// Get all active queues across all projects
 	queues, err := w.getAllActiveQueues(ctx)
 	if err != nil {
-		w.logger.Error("failed to get active queues for lock expiry", "error", err)
+		w.logger.Error("Failed to get active queues for lock expiry", "error", err)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (w *LockExpiryWorker) run() {
 
 		released, err := w.itemRepo.ReleaseExpiredLocks(ctx, queue.ID, lockTimeout)
 		if err != nil {
-			w.logger.Error("failed to release expired locks for queue",
+			w.logger.Error("Failed to release expired locks for queue",
 				"error", err,
 				"queue_id", queue.ID,
 				"project_id", queue.ProjectID,
@@ -112,7 +112,7 @@ func (w *LockExpiryWorker) run() {
 		}
 
 		if released > 0 {
-			w.logger.Info("released expired locks",
+			w.logger.Info("Released expired locks",
 				"queue_id", queue.ID,
 				"project_id", queue.ProjectID,
 				"released", released,
@@ -124,7 +124,7 @@ func (w *LockExpiryWorker) run() {
 	duration := time.Since(startTime)
 
 	if totalReleased > 0 || failedQueues > 0 {
-		w.logger.Info("lock expiry cycle completed",
+		w.logger.Info("Lock expiry cycle completed",
 			"queues_processed", len(queues),
 			"locks_released", totalReleased,
 			"failed_queues", failedQueues,
@@ -147,7 +147,7 @@ func (w *LockExpiryWorker) getAllActiveQueues(ctx context.Context) ([]*annotatio
 	}
 
 	// Fallback: log warning and return empty
-	w.logger.Warn("queue repository does not implement ListAllActive, lock expiry will not run")
+	w.logger.Warn("Queue repository does not implement ListAllActive, lock expiry will not run")
 	return nil, nil
 }
 

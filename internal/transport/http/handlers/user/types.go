@@ -4,19 +4,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"brokle/internal/transport/http/handlers/shared"
 )
 
-// Huma operation types for the user package. Input/Output wrappers
-// are the operation signatures; body/response shapes carry the JSON
-// contracts.
-
-// ----- get-user-profile ---------------------------------------------
-
-type GetUserProfileOutput struct {
-	Body getProfileResponse
-}
+// ----- get-user-profile response shape ---------------------------------
 
 type getProfileResponse struct {
 	ID                    uuid.UUID                  `json:"id"`
@@ -69,33 +59,17 @@ type projectSummary struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// ----- update-user-profile ------------------------------------------
-
-type UpdateUserProfileInput struct {
-	Body updateUserProfileBody
-}
+// ----- update-user-profile body ----------------------------------------
 
 type updateUserProfileBody struct {
-	FirstName *string `json:"first_name,omitempty" minLength:"1" maxLength:"100"`
-	LastName  *string `json:"last_name,omitempty" minLength:"1" maxLength:"100"`
+	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100"`
+	LastName  *string `json:"last_name,omitempty"  validate:"omitempty,min=1,max=100"`
 	Timezone  *string `json:"timezone,omitempty"`
-	Language  *string `json:"language,omitempty" minLength:"2" maxLength:"2"`
+	Language  *string `json:"language,omitempty"   validate:"omitempty,min=2,max=2"`
 }
 
-type UpdateUserProfileOutput struct {
-	Body getProfileResponse
-}
-
-// ----- set-default-organization -------------------------------------
-
-type SetDefaultOrgInput struct {
-	Body setDefaultOrgBody
-}
+// ----- set-default-organization body -----------------------------------
 
 type setDefaultOrgBody struct {
-	OrganizationID string `json:"organization_id" format:"uuid" doc:"Organization to set as default"`
-}
-
-type SetDefaultOrgOutput struct {
-	Body shared.MessageResponse
+	OrganizationID string `json:"organization_id" validate:"required"`
 }

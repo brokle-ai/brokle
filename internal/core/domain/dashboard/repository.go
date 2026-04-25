@@ -15,7 +15,7 @@ type DashboardRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 
 	// Project-scoped queries
-	GetByProjectID(ctx context.Context, projectID uuid.UUID, filter *DashboardFilter) (*DashboardListResponse, error)
+	GetByProjectID(ctx context.Context, projectID uuid.UUID, filter *DashboardFilter) (items []*Dashboard, total int64, err error)
 	GetByNameAndProject(ctx context.Context, projectID uuid.UUID, name string) (*Dashboard, error)
 
 	// Soft delete operations

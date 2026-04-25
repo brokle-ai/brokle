@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Huma operation types for the SDK-plane score ingestion feature.
+// Request and response DTOs for the SDK-plane score ingestion feature.
 
 type CreateScoreRequest struct {
 	TraceID          *string        `json:"trace_id,omitempty"`
@@ -48,20 +48,4 @@ type SubmittedScoreResponse struct {
 
 type BatchScoreResponse struct {
 	Created int `json:"created"`
-}
-
-type SDKCreateScoreInput struct {
-	Body CreateScoreRequest
-}
-
-type SDKCreateScoreOutput struct {
-	Body *SubmittedScoreResponse
-}
-
-type SDKCreateScoreBatchInput struct {
-	Body BatchScoreRequest
-}
-
-type SDKCreateScoreBatchOutput struct {
-	Body *BatchScoreResponse
 }

@@ -10,6 +10,7 @@ import (
 	userDomain "brokle/internal/core/domain/user"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // userRepository is the pgx+sqlc implementation of userDomain.Repository.
@@ -64,6 +65,9 @@ func (r *userRepository) Create(ctx context.Context, u *userDomain.User) error {
 		CreatedAt:             u.CreatedAt,
 		UpdatedAt:             u.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create user %s: %w", u.Email, userDomain.ErrAlreadyExists)
+		}
 		return fmt.Errorf("create user %s: %w", u.Email, err)
 	}
 	return nil
@@ -120,6 +124,9 @@ func (r *userRepository) Update(ctx context.Context, u *userDomain.User) error {
 		OauthProvider:         u.OAuthProvider,
 		OauthProviderID:       u.OAuthProviderID,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("update user %s: %w", u.ID, userDomain.ErrAlreadyExists)
+		}
 		return fmt.Errorf("update user %s: %w", u.ID, err)
 	}
 	return nil

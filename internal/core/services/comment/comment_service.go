@@ -1,3 +1,4 @@
+// Package comment implements trace-attached comments with threaded replies and emoji reactions.
 package comment
 
 import (
@@ -15,7 +16,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type commentService struct {
+type CommentService struct {
 	commentRepo  comment.Repository
 	reactionRepo comment.ReactionRepository
 	traceRepo    observability.TraceRepository
@@ -27,8 +28,8 @@ func NewCommentService(
 	reactionRepo comment.ReactionRepository,
 	traceRepo observability.TraceRepository,
 	logger *slog.Logger,
-) comment.Service {
-	return &commentService{
+) *CommentService {
+	return &CommentService{
 		commentRepo:  commentRepo,
 		reactionRepo: reactionRepo,
 		traceRepo:    traceRepo,
@@ -36,7 +37,7 @@ func NewCommentService(
 	}
 }
 
-func (s *commentService) CreateComment(ctx context.Context, projectID uuid.UUID, traceID string, userID uuid.UUID, req *comment.CreateCommentRequest) (*comment.CommentResponse, error) {
+func (s *CommentService) CreateComment(ctx context.Context, projectID uuid.UUID, traceID string, userID uuid.UUID, req *comment.CreateCommentRequest) (*comment.CommentResponse, error) {
 	if err := s.validateTraceOwnership(ctx, traceID, projectID); err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func (s *commentService) CreateComment(ctx context.Context, projectID uuid.UUID,
 	return cwu.ToResponse(), nil
 }
 
-func (s *commentService) UpdateComment(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID, req *comment.UpdateCommentRequest) (*comment.CommentResponse, error) {
+func (s *CommentService) UpdateComment(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID, req *comment.UpdateCommentRequest) (*comment.CommentResponse, error) {
 	if err := s.validateTraceOwnership(ctx, traceID, projectID); err != nil {
 		return nil, err
 	}
@@ -118,7 +119,7 @@ func (s *commentService) UpdateComment(ctx context.Context, projectID uuid.UUID,
 	return cwu.ToResponse(), nil
 }
 
-func (s *commentService) DeleteComment(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID) error {
+func (s *CommentService) DeleteComment(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID) error {
 	if err := s.validateTraceOwnership(ctx, traceID, projectID); err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ func (s *commentService) DeleteComment(ctx context.Context, projectID uuid.UUID,
 	return nil
 }
 
-func (s *commentService) ListComments(ctx context.Context, projectID uuid.UUID, traceID string, currentUserID *uuid.UUID) (*comment.ListCommentsResponse, error) {
+func (s *CommentService) ListComments(ctx context.Context, projectID uuid.UUID, traceID string, currentUserID *uuid.UUID) (*comment.ListCommentsResponse, error) {
 	topLevelComments, err := s.commentRepo.ListByEntity(ctx, comment.EntityTypeTrace, traceID, projectID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to list comments", err)
@@ -240,7 +241,7 @@ func (s *commentService) ListComments(ctx context.Context, projectID uuid.UUID, 
 	}, nil
 }
 
-func (s *commentService) GetCommentCount(ctx context.Context, projectID uuid.UUID, traceID string) (*comment.CommentCountResponse, error) {
+func (s *CommentService) GetCommentCount(ctx context.Context, projectID uuid.UUID, traceID string) (*comment.CommentCountResponse, error) {
 	count, err := s.commentRepo.CountByEntity(ctx, comment.EntityTypeTrace, traceID, projectID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to count comments", err)
@@ -251,7 +252,7 @@ func (s *commentService) GetCommentCount(ctx context.Context, projectID uuid.UUI
 	}, nil
 }
 
-func (s *commentService) ToggleReaction(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID, req *comment.ToggleReactionRequest) ([]comment.ReactionSummary, error) {
+func (s *CommentService) ToggleReaction(ctx context.Context, projectID uuid.UUID, traceID string, commentID, userID uuid.UUID, req *comment.ToggleReactionRequest) ([]comment.ReactionSummary, error) {
 	if err := s.validateTraceOwnership(ctx, traceID, projectID); err != nil {
 		return nil, err
 	}
@@ -324,7 +325,7 @@ func (s *commentService) ToggleReaction(ctx context.Context, projectID uuid.UUID
 	return summaries, nil
 }
 
-func (s *commentService) CreateReply(ctx context.Context, projectID uuid.UUID, traceID string, parentID, userID uuid.UUID, req *comment.CreateCommentRequest) (*comment.CommentResponse, error) {
+func (s *CommentService) CreateReply(ctx context.Context, projectID uuid.UUID, traceID string, parentID, userID uuid.UUID, req *comment.CreateCommentRequest) (*comment.CommentResponse, error) {
 	if err := s.validateTraceOwnership(ctx, traceID, projectID); err != nil {
 		return nil, err
 	}
@@ -371,7 +372,7 @@ func (s *commentService) CreateReply(ctx context.Context, projectID uuid.UUID, t
 	return cwu.ToResponse(), nil
 }
 
-func (s *commentService) validateTraceOwnership(ctx context.Context, traceID string, projectID uuid.UUID) error {
+func (s *CommentService) validateTraceOwnership(ctx context.Context, traceID string, projectID uuid.UUID) error {
 	_, err := s.traceRepo.GetRootSpanByProject(ctx, traceID, projectID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

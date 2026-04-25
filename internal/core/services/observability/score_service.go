@@ -1,12 +1,13 @@
 package observability
 
 import (
-	"github.com/google/uuid"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"

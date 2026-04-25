@@ -4,372 +4,88 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
-	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 // ---- dashboard dataset routes ---------------------------------------
 
-func registerDatasetRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-dataset",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/datasets",
-		Tags:          []string{"datasets"},
-		Summary:       "Create a dataset",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.dashCreateDataset)
+// registerDashboardDatasetRoutes mounts datasets + items + versions
+// under /api/v1/projects/{projectId}/datasets.
+func registerDashboardDatasetRoutes(r chi.Router, h *handler) {
+	r.Route("/datasets", func(r chi.Router) {
+		r.Post("/", h.dashCreateDataset)
+		r.Get("/", h.dashListDatasets)
+		r.Route("/{datasetId}", func(r chi.Router) {
+			r.Get("/", h.dashGetDataset)
+			r.Put("/", h.dashUpdateDataset)
+			r.Delete("/", h.dashDeleteDataset)
+			r.Get("/info", h.dashGetDatasetWithVersionInfo)
+			r.Post("/pin", h.dashPinDatasetVersion)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-datasets",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets",
-		Tags:        []string{"datasets"},
-		Summary:     "List datasets with item counts",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashListDatasets)
+			r.Route("/items", func(r chi.Router) {
+				r.Get("/", h.dashListDatasetItems)
+				r.Post("/", h.dashCreateDatasetItem)
+				r.Delete("/{itemId}", h.dashDeleteDatasetItem)
+				r.Get("/export", h.dashExportDatasetItems)
+				r.Post("/import-json", h.dashImportItemsJSON)
+				r.Post("/import-csv", h.dashImportItemsCSV)
+				r.Post("/from-traces", h.dashItemsFromTraces)
+				r.Post("/from-spans", h.dashItemsFromSpans)
+			})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dataset",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}",
-		Tags:        []string{"datasets"},
-		Summary:     "Get a dataset",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashGetDataset)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-dataset",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}",
-		Tags:        []string{"datasets"},
-		Summary:     "Update a dataset",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashUpdateDataset)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-dataset",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/datasets/{datasetId}",
-		Tags:          []string{"datasets"},
-		Summary:       "Delete a dataset",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.dashDeleteDataset)
-
-	// ---- dataset items -----------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-dataset-items",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items",
-		Tags:        []string{"dataset-items"},
-		Summary:     "List dataset items",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashListDatasetItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-dataset-item",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/datasets/{datasetId}/items",
-		Tags:          []string{"dataset-items"},
-		Summary:       "Create a dataset item",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.dashCreateDatasetItem)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-dataset-item",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/datasets/{datasetId}/items/{itemId}",
-		Tags:          []string{"dataset-items"},
-		Summary:       "Delete a dataset item",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.dashDeleteDatasetItem)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "export-dataset-items",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/export",
-		Tags:        []string{"dataset-items"},
-		Summary:     "Export all dataset items",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashExportDatasetItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "import-dataset-items-json",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/import-json",
-		Tags:        []string{"dataset-items"},
-		Summary:     "Import dataset items from JSON",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashImportItemsJSON)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "import-dataset-items-csv",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/import-csv",
-		Tags:        []string{"dataset-items"},
-		Summary:     "Import dataset items from CSV",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashImportItemsCSV)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-dataset-items-from-traces",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/from-traces",
-		Tags:        []string{"dataset-items"},
-		Summary:     "Create dataset items from production traces",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashItemsFromTraces)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-dataset-items-from-spans",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/from-spans",
-		Tags:        []string{"dataset-items"},
-		Summary:     "Create dataset items from production spans",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashItemsFromSpans)
-
-	// ---- dataset versions --------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-dataset-version",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/datasets/{datasetId}/versions",
-		Tags:          []string{"dataset-versions"},
-		Summary:       "Create a dataset version snapshot",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.dashCreateDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-dataset-versions",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/versions",
-		Tags:        []string{"dataset-versions"},
-		Summary:     "List dataset versions",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashListDatasetVersions)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dataset-version",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/versions/{versionId}",
-		Tags:        []string{"dataset-versions"},
-		Summary:     "Get a dataset version",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashGetDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dataset-version-items",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/versions/{versionId}/items",
-		Tags:        []string{"dataset-versions"},
-		Summary:     "List items for a dataset version",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashGetDatasetVersionItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "pin-dataset-version",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/pin",
-		Tags:        []string{"dataset-versions"},
-		Summary:     "Pin a dataset to a version (or unpin with null)",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashPinDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-dataset-with-version-info",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/datasets/{datasetId}/info",
-		Tags:        []string{"dataset-versions"},
-		Summary:     "Get a dataset with version info",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.dashGetDatasetWithVersionInfo)
+			r.Route("/versions", func(r chi.Router) {
+				r.Post("/", h.dashCreateDatasetVersion)
+				r.Get("/", h.dashListDatasetVersions)
+				r.Get("/{versionId}", h.dashGetDatasetVersion)
+				r.Get("/{versionId}/items", h.dashGetDatasetVersionItems)
+			})
+		})
+	})
 }
 
 // ---- SDK dataset routes ---------------------------------------------
 
-func registerSDKDatasetRoutes(api huma.API, h *handler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-create-dataset",
-		Method:        http.MethodPost,
-		Path:          "/v1/datasets",
-		Tags:          []string{"SDK - datasets"},
-		Summary:       "Create a dataset (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.sdkCreateDataset)
+func registerSDKDatasetRoutes(r chi.Router, h *handler) {
+	r.Route("/v1/datasets", func(r chi.Router) {
+		r.Post("/", h.sdkCreateDataset)
+		r.Get("/", h.sdkListDatasets)
+		r.Route("/{datasetId}", func(r chi.Router) {
+			r.Get("/", h.sdkGetDataset)
+			r.Patch("/", h.sdkUpdateDataset)
+			r.Delete("/", h.sdkDeleteDataset)
+			r.Get("/info", h.sdkGetDatasetWithVersionInfo)
+			r.Post("/pin", h.sdkPinDatasetVersion)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-list-datasets",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "List datasets (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkListDatasets)
+			r.Route("/items", func(r chi.Router) {
+				r.Post("/", h.sdkBatchCreateDatasetItems)
+				r.Get("/", h.sdkListDatasetItems)
+				r.Get("/export", h.sdkExportDatasetItems)
+				r.Post("/import-json", h.sdkImportItemsJSON)
+				r.Post("/import-csv", h.sdkImportItemsCSV)
+				r.Post("/from-traces", h.sdkItemsFromTraces)
+				r.Post("/from-spans", h.sdkItemsFromSpans)
+			})
 
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-get-dataset",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Get a dataset (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkGetDataset)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-update-dataset",
-		Method:      http.MethodPatch,
-		Path:        "/v1/datasets/{datasetId}",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Update a dataset (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkUpdateDataset)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-delete-dataset",
-		Method:        http.MethodDelete,
-		Path:          "/v1/datasets/{datasetId}",
-		Tags:          []string{"SDK - datasets"},
-		Summary:       "Delete a dataset (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.sdkDeleteDataset)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-batch-create-dataset-items",
-		Method:        http.MethodPost,
-		Path:          "/v1/datasets/{datasetId}/items",
-		Tags:          []string{"SDK - datasets"},
-		Summary:       "Batch-create dataset items (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.sdkBatchCreateDatasetItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-list-dataset-items",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/items",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "List dataset items (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkListDatasetItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-export-dataset-items",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/items/export",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Export dataset items (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkExportDatasetItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-import-dataset-items-json",
-		Method:      http.MethodPost,
-		Path:        "/v1/datasets/{datasetId}/items/import-json",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Import dataset items from JSON (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkImportItemsJSON)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-import-dataset-items-csv",
-		Method:      http.MethodPost,
-		Path:        "/v1/datasets/{datasetId}/items/import-csv",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Import dataset items from CSV (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkImportItemsCSV)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-dataset-items-from-traces",
-		Method:      http.MethodPost,
-		Path:        "/v1/datasets/{datasetId}/items/from-traces",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Create dataset items from traces (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkItemsFromTraces)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-dataset-items-from-spans",
-		Method:      http.MethodPost,
-		Path:        "/v1/datasets/{datasetId}/items/from-spans",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Create dataset items from spans (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkItemsFromSpans)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "sdk-create-dataset-version",
-		Method:        http.MethodPost,
-		Path:          "/v1/datasets/{datasetId}/versions",
-		Tags:          []string{"SDK - datasets"},
-		Summary:       "Create a dataset version snapshot (SDK)",
-		Security:      []map[string][]string{{"apiKey": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.sdkCreateDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-list-dataset-versions",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/versions",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "List dataset versions (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkListDatasetVersions)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-get-dataset-version",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/versions/{versionId}",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Get a dataset version (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkGetDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-get-dataset-version-items",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/versions/{versionId}/items",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "List dataset version items (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkGetDatasetVersionItems)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-pin-dataset-version",
-		Method:      http.MethodPost,
-		Path:        "/v1/datasets/{datasetId}/pin",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Pin a dataset to a version (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkPinDatasetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-get-dataset-with-version-info",
-		Method:      http.MethodGet,
-		Path:        "/v1/datasets/{datasetId}/info",
-		Tags:        []string{"SDK - datasets"},
-		Summary:     "Get dataset with version info (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.sdkGetDatasetWithVersionInfo)
+			r.Route("/versions", func(r chi.Router) {
+				r.Post("/", h.sdkCreateDatasetVersion)
+				r.Get("/", h.sdkListDatasetVersions)
+				r.Get("/{versionId}", h.sdkGetDatasetVersion)
+				r.Get("/{versionId}/items", h.sdkGetDatasetVersionItems)
+			})
+		})
+	})
 }
 
-// Request body DTOs live in dataset_types.go.
+// ---- shared bodies --------------------------------------------------
 
-// ---- shared dataset op bodies ----------------------------------------
-
-func (h *handler) createDataset(ctx context.Context, projectID uuid.UUID, body *CreateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
+func (h *handler) createDatasetCore(ctx context.Context, projectID uuid.UUID, body *CreateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetRequest{
 		Name:        body.Name,
 		Description: body.Description,
@@ -384,7 +100,7 @@ func (h *handler) createDataset(ctx context.Context, projectID uuid.UUID, body *
 	return ds.ToResponse(), nil
 }
 
-func (h *handler) listDatasets(
+func (h *handler) listDatasetsCore(
 	ctx context.Context,
 	projectID uuid.UUID,
 	search, sortBy, sortDir string,
@@ -417,7 +133,7 @@ func (h *handler) listDatasets(
 	return out, total, params, nil
 }
 
-func (h *handler) updateDataset(ctx context.Context, projectID, datasetID uuid.UUID, body *UpdateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
+func (h *handler) updateDatasetCore(ctx context.Context, projectID, datasetID uuid.UUID, body *UpdateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
 	domainReq := &evaluationDomain.UpdateDatasetRequest{
 		Name:        body.Name,
 		Description: body.Description,
@@ -430,304 +146,9 @@ func (h *handler) updateDataset(ctx context.Context, projectID, datasetID uuid.U
 	return ds.ToResponse(), nil
 }
 
-// ---- dashboard handler methods ---------------------------------------
-
-type DashCreateDatasetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Body      CreateDatasetRequest
-}
-type DatasetOutput struct {
-	Body *evaluationDomain.DatasetResponse
-}
-
-func (h *handler) dashCreateDataset(ctx context.Context, in *DashCreateDatasetInput) (*DatasetOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := h.createDataset(ctx, projectID, &in.Body)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetOutput{Body: resp}, nil
-}
-
-type DashListDatasetsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	Search    string `query:"search" required:"false"`
-	SortBy    string `query:"sort_by" required:"false"`
-	SortDir   string `query:"sort_dir" required:"false" enum:"asc,desc"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-}
-type DatasetListOutput struct {
-	Body pageList[*evaluationDomain.DatasetWithItemCountResponse]
-}
-
-func (h *handler) dashListDatasets(ctx context.Context, in *DashListDatasetsInput) (*DatasetListOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	out, total, params, err := h.listDatasets(ctx, projectID, in.Search, in.SortBy, in.SortDir, in.Page, in.Limit)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetListOutput{Body: pageList[*evaluationDomain.DatasetWithItemCountResponse]{
-		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
-	}}, nil
-}
-
-type DashGetDatasetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-}
-
-func (h *handler) dashGetDataset(ctx context.Context, in *DashGetDatasetInput) (*DatasetOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	ds, err := h.datasetSvc.GetByID(ctx, datasetID, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetOutput{Body: ds.ToResponse()}, nil
-}
-
-type DashUpdateDatasetInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      UpdateDatasetRequest
-}
-
-func (h *handler) dashUpdateDataset(ctx context.Context, in *DashUpdateDatasetInput) (*DatasetOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := h.updateDataset(ctx, projectID, datasetID, &in.Body)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetOutput{Body: resp}, nil
-}
-
-type DashDeleteDatasetInput = DashGetDatasetInput
-
-func (h *handler) dashDeleteDataset(ctx context.Context, in *DashDeleteDatasetInput) (*EmptyOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	if err := h.datasetSvc.Delete(ctx, datasetID, projectID); err != nil {
-		return nil, err
-	}
-	return &EmptyOutput{}, nil
-}
-
-// ---- dashboard dataset items -----------------------------------------
-
-type DashListDatasetItemsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-}
-type DatasetItemListOutput struct {
-	Body pageList[*DatasetItemResponse]
-}
-
-func (h *handler) dashListDatasetItems(ctx context.Context, in *DashListDatasetItemsInput) (*DatasetItemListOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	page, limit := normalizePagination(in.Page, in.Limit)
-	offset := (page - 1) * limit
-	items, total, err := h.datasetItemSvc.List(ctx, datasetID, projectID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*DatasetItemResponse, len(items))
-	for i, it := range items {
-		out[i] = toDatasetItemResponse(it)
-	}
-	return &DatasetItemListOutput{Body: pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
-	}}, nil
-}
-
-type DashCreateDatasetItemInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateDatasetItemRequest
-}
-type DatasetItemOutput struct {
-	Body *DatasetItemResponse
-}
-
-func (h *handler) dashCreateDatasetItem(ctx context.Context, in *DashCreateDatasetItemInput) (*DatasetItemOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	body := in.Body
-	item, err := h.datasetItemSvc.Create(ctx, datasetID, projectID, &body)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetItemOutput{Body: toDatasetItemResponse(item)}, nil
-}
-
-type DashDeleteDatasetItemInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	ItemID    string `path:"itemId" format:"uuid"`
-}
-
-func (h *handler) dashDeleteDatasetItem(ctx context.Context, in *DashDeleteDatasetItemInput) (*EmptyOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	itemID, err := parseItemID(in.ItemID)
-	if err != nil {
-		return nil, err
-	}
-	if err := h.datasetItemSvc.Delete(ctx, itemID, datasetID, projectID); err != nil {
-		return nil, err
-	}
-	return &EmptyOutput{}, nil
-}
-
-type DashExportDatasetItemsInput = DashGetDatasetInput
-type DatasetItemsOutput struct {
-	Body []*DatasetItemResponse
-}
-
-func (h *handler) dashExportDatasetItems(ctx context.Context, in *DashExportDatasetItemsInput) (*DatasetItemsOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	items, err := h.datasetItemSvc.ExportItems(ctx, datasetID, projectID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*DatasetItemResponse, len(items))
-	for i, it := range items {
-		out[i] = toDatasetItemResponse(it)
-	}
-	return &DatasetItemsOutput{Body: out}, nil
-}
-
-type DashImportItemsJSONInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      ImportFromJSONRequest
-}
-type BulkImportOutput struct {
-	Body *BulkImportResponse
-}
-
-func (h *handler) dashImportItemsJSON(ctx context.Context, in *DashImportItemsJSONInput) (*BulkImportOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	return h.importItemsJSON(ctx, datasetID, projectID, &in.Body)
-}
-
-type DashImportItemsCSVInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      ImportFromCSVRequest
-}
-
-func (h *handler) dashImportItemsCSV(ctx context.Context, in *DashImportItemsCSVInput) (*BulkImportOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	return h.importItemsCSV(ctx, datasetID, projectID, &in.Body)
-}
-
-type DashItemsFromTracesInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateFromTracesRequest
-}
-
-func (h *handler) dashItemsFromTraces(ctx context.Context, in *DashItemsFromTracesInput) (*BulkImportOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	return h.itemsFromTraces(ctx, datasetID, projectID, &in.Body)
-}
-
-type DashItemsFromSpansInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateFromSpansRequest
-}
-
-func (h *handler) dashItemsFromSpans(ctx context.Context, in *DashItemsFromSpansInput) (*BulkImportOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	return h.itemsFromSpans(ctx, datasetID, projectID, &in.Body)
-}
-
 // ---- shared import bodies -------------------------------------------
 
-func (h *handler) importItemsJSON(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromJSONRequest) (*BulkImportOutput, error) {
+func (h *handler) importItemsJSONCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromJSONRequest) (*BulkImportResponse, error) {
 	if body.Source != "" {
 		src := evaluationDomain.DatasetItemSource(body.Source)
 		if !src.IsValid() {
@@ -744,10 +165,10 @@ func (h *handler) importItemsJSON(ctx context.Context, datasetID, projectID uuid
 	if err != nil {
 		return nil, err
 	}
-	return &BulkImportOutput{Body: toBulkImportResponse(result)}, nil
+	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) importItemsCSV(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromCSVRequest) (*BulkImportOutput, error) {
+func (h *handler) importItemsCSVCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromCSVRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.ImportDatasetItemsFromCSVRequest{
 		Content:     body.Content,
 		HasHeader:   body.HasHeader,
@@ -762,10 +183,10 @@ func (h *handler) importItemsCSV(ctx context.Context, datasetID, projectID uuid.
 	if err != nil {
 		return nil, err
 	}
-	return &BulkImportOutput{Body: toBulkImportResponse(result)}, nil
+	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) itemsFromTraces(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromTracesRequest) (*BulkImportOutput, error) {
+func (h *handler) itemsFromTracesCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromTracesRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetItemsFromTracesRequest{
 		TraceIDs:    body.TraceIDs,
 		Deduplicate: body.Deduplicate,
@@ -775,10 +196,10 @@ func (h *handler) itemsFromTraces(ctx context.Context, datasetID, projectID uuid
 	if err != nil {
 		return nil, err
 	}
-	return &BulkImportOutput{Body: toBulkImportResponse(result)}, nil
+	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) itemsFromSpans(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromSpansRequest) (*BulkImportOutput, error) {
+func (h *handler) itemsFromSpansCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromSpansRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetItemsFromSpansRequest{
 		SpanIDs:     body.SpanIDs,
 		Deduplicate: body.Deduplicate,
@@ -788,495 +209,770 @@ func (h *handler) itemsFromSpans(ctx context.Context, datasetID, projectID uuid.
 	if err != nil {
 		return nil, err
 	}
-	return &BulkImportOutput{Body: toBulkImportResponse(result)}, nil
+	return toBulkImportResponse(result), nil
 }
 
-// ---- dashboard dataset versions -------------------------------------
+// ---- dashboard handlers ---------------------------------------------
 
-type DashCreateDatasetVersionInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateDatasetVersionRequest
-}
-type DatasetVersionOutput struct {
-	Body *evaluationDomain.DatasetVersionResponse
-}
-
-func (h *handler) dashCreateDatasetVersion(ctx context.Context, in *DashCreateDatasetVersionInput) (*DatasetVersionOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) dashCreateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	datasetID, err := parseDatasetID(in.DatasetID)
+	var body CreateDatasetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.createDatasetCore(r.Context(), projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	v, err := h.datasetVersionSvc.CreateVersion(ctx, datasetID, projectID, &body)
-	if err != nil {
-		return nil, err
-	}
-	h.logger.InfoContext(ctx, "evaluation: dataset version created",
-		"version_id", v.ID, "dataset_id", datasetID, "project_id", projectID, "version", v.Version)
-	return &DatasetVersionOutput{Body: v.ToResponse()}, nil
+	response.Created(w, ds)
 }
 
-type DashListDatasetVersionsInput = DashGetDatasetInput
-type DatasetVersionListOutput struct {
-	Body []*evaluationDomain.DatasetVersionResponse
-}
-
-func (h *handler) dashListDatasetVersions(ctx context.Context, in *DashListDatasetVersionsInput) (*DatasetVersionListOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
+func (h *handler) dashListDatasets(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	datasetID, err := parseDatasetID(in.DatasetID)
+	page, limit, err := readPagination(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	versions, err := h.datasetVersionSvc.ListVersions(ctx, datasetID, projectID)
+	q := r.URL.Query()
+	out, total, params, err := h.listDatasetsCore(r.Context(), projectID,
+		q.Get("search"), q.Get("sort_by"), q.Get("sort_dir"), page, limit)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	out := make([]*evaluationDomain.DatasetVersionResponse, len(versions))
-	for i, v := range versions {
-		out[i] = v.ToResponse()
-	}
-	return &DatasetVersionListOutput{Body: out}, nil
-}
-
-type DashGetDatasetVersionInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	VersionID string `path:"versionId" format:"uuid"`
-}
-
-func (h *handler) dashGetDatasetVersion(ctx context.Context, in *DashGetDatasetVersionInput) (*DatasetVersionOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	versionID, err := parseVersionID(in.VersionID)
-	if err != nil {
-		return nil, err
-	}
-	v, err := h.datasetVersionSvc.GetVersion(ctx, versionID, datasetID, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetVersionOutput{Body: v.ToResponse()}, nil
-}
-
-type DashGetDatasetVersionItemsInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	VersionID string `path:"versionId" format:"uuid"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-}
-
-func (h *handler) dashGetDatasetVersionItems(ctx context.Context, in *DashGetDatasetVersionItemsInput) (*DatasetItemListOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	versionID, err := parseVersionID(in.VersionID)
-	if err != nil {
-		return nil, err
-	}
-	page, limit := normalizePagination(in.Page, in.Limit)
-	offset := (page - 1) * limit
-	items, total, err := h.datasetVersionSvc.GetVersionItems(ctx, versionID, datasetID, projectID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*DatasetItemResponse, len(items))
-	for i, it := range items {
-		out[i] = toDatasetItemResponse(it)
-	}
-	return &DatasetItemListOutput{Body: pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
-	}}, nil
-}
-
-type DashPinDatasetVersionInput struct {
-	ProjectID string `path:"projectId" format:"uuid"`
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      PinDatasetVersionRequest
-}
-
-func (h *handler) dashPinDatasetVersion(ctx context.Context, in *DashPinDatasetVersionInput) (*DatasetOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	body := in.Body
-	ds, err := h.datasetVersionSvc.PinVersion(ctx, datasetID, projectID, body.VersionID)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetOutput{Body: ds.ToResponse()}, nil
-}
-
-type DashGetDatasetWithVersionInfoInput = DashGetDatasetInput
-type DatasetWithVersionInfoOutput struct {
-	Body *evaluationDomain.DatasetWithVersionResponse
-}
-
-func (h *handler) dashGetDatasetWithVersionInfo(ctx context.Context, in *DashGetDatasetWithVersionInfoInput) (*DatasetWithVersionInfoOutput, error) {
-	projectID, err := parseProjectID(in.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := h.datasetVersionSvc.GetDatasetWithVersionInfo(ctx, datasetID, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetWithVersionInfoOutput{Body: resp}, nil
-}
-
-// ---- SDK dataset methods ---------------------------------------------
-
-type SDKCreateDatasetInput struct {
-	Body CreateDatasetRequest
-}
-
-func (h *handler) sdkCreateDataset(ctx context.Context, in *SDKCreateDatasetInput) (*DatasetOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	resp, err := h.createDataset(ctx, projectID, &in.Body)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetOutput{Body: resp}, nil
-}
-
-type SDKListDatasetsInput struct {
-	Search  string `query:"search" required:"false"`
-	SortBy  string `query:"sort_by" required:"false"`
-	SortDir string `query:"sort_dir" required:"false" enum:"asc,desc"`
-	Page    int    `query:"page" required:"false" minimum:"1"`
-	Limit   int    `query:"limit" required:"false"`
-}
-
-func (h *handler) sdkListDatasets(ctx context.Context, in *SDKListDatasetsInput) (*DatasetListOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	out, total, params, err := h.listDatasets(ctx, projectID, in.Search, in.SortBy, in.SortDir, in.Page, in.Limit)
-	if err != nil {
-		return nil, err
-	}
-	return &DatasetListOutput{Body: pageList[*evaluationDomain.DatasetWithItemCountResponse]{
+	response.Success(w, pageList[*evaluationDomain.DatasetWithItemCountResponse]{
 		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
-	}}, nil
+	})
 }
 
-type SDKDatasetInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-}
-
-func (h *handler) sdkGetDataset(ctx context.Context, in *SDKDatasetInput) (*DatasetOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashGetDataset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	ds, err := h.datasetSvc.GetByID(ctx, datasetID, projectID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetOutput{Body: ds.ToResponse()}, nil
+	ds, err := h.datasetSvc.GetByID(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds.ToResponse())
 }
 
-type SDKUpdateDatasetInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      UpdateDatasetRequest
+func (h *handler) dashUpdateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body UpdateDatasetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.updateDatasetCore(r.Context(), projectID, datasetID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds)
 }
 
-func (h *handler) sdkUpdateDataset(ctx context.Context, in *SDKUpdateDatasetInput) (*DatasetOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashDeleteDataset(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	resp, err := h.updateDataset(ctx, projectID, datasetID, &in.Body)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetOutput{Body: resp}, nil
+	if err := h.datasetSvc.Delete(r.Context(), datasetID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.NoContent(w)
 }
 
-func (h *handler) sdkDeleteDataset(ctx context.Context, in *SDKDatasetInput) (*EmptyOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashListDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.datasetSvc.Delete(ctx, datasetID, projectID); err != nil {
-		return nil, err
-	}
-	return &EmptyOutput{}, nil
-}
-
-type SDKBatchCreateDatasetItemsInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      BatchCreateDatasetItemsRequest
-}
-type CountOutput struct {
-	Body *CountResponse
-}
-
-func (h *handler) sdkBatchCreateDatasetItems(ctx context.Context, in *SDKBatchCreateDatasetItemsInput) (*CountOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	count, err := h.datasetItemSvc.CreateBatch(ctx, datasetID, projectID, &body)
+	page, limit, err := readPagination(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	h.logger.InfoContext(ctx, "evaluation: dataset items created (SDK)",
-		"dataset_id", datasetID, "project_id", projectID, "count", count)
-	return &CountOutput{Body: &CountResponse{Created: count}}, nil
-}
-
-type SDKListDatasetItemsInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-}
-
-func (h *handler) sdkListDatasetItems(ctx context.Context, in *SDKListDatasetItemsInput) (*DatasetItemListOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
-	}
-	page, limit := normalizePagination(in.Page, in.Limit)
 	offset := (page - 1) * limit
-	items, total, err := h.datasetItemSvc.List(ctx, datasetID, projectID, limit, offset)
+	items, total, err := h.datasetItemSvc.List(r.Context(), datasetID, projectID, limit, offset)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*DatasetItemResponse, len(items))
 	for i, it := range items {
 		out[i] = toDatasetItemResponse(it)
 	}
-	return &DatasetItemListOutput{Body: pageList[*DatasetItemResponse]{
+	response.Success(w, pageList[*DatasetItemResponse]{
 		Data: out, Total: total, Page: page, Limit: limit,
-	}}, nil
+	})
 }
 
-func (h *handler) sdkExportDatasetItems(ctx context.Context, in *SDKDatasetInput) (*DatasetItemsOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashCreateDatasetItem(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	items, err := h.datasetItemSvc.ExportItems(ctx, datasetID, projectID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
+	}
+	var body CreateDatasetItemRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	item, err := h.datasetItemSvc.Create(r.Context(), datasetID, projectID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Created(w, toDatasetItemResponse(item))
+}
+
+func (h *handler) dashDeleteDatasetItem(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	itemID, err := request.URLParamUUID(r, "itemId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	if err := h.datasetItemSvc.Delete(r.Context(), itemID, datasetID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *handler) dashExportDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	items, err := h.datasetItemSvc.ExportItems(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*DatasetItemResponse, len(items))
 	for i, it := range items {
 		out[i] = toDatasetItemResponse(it)
 	}
-	return &DatasetItemsOutput{Body: out}, nil
+	response.Success(w, out)
 }
 
-type SDKImportItemsJSONInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      ImportFromJSONRequest
+// ---- dashboard import flows ----------------------------------------
+
+func (h *handler) dashImportItemsJSON(w http.ResponseWriter, r *http.Request) {
+	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body ImportFromJSONRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.importItemsJSONCore(ctx, datasetID, projectID, &body)
+	})
 }
 
-func (h *handler) sdkImportItemsJSON(ctx context.Context, in *SDKImportItemsJSONInput) (*BulkImportOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashImportItemsCSV(w http.ResponseWriter, r *http.Request) {
+	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body ImportFromCSVRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.importItemsCSVCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) dashItemsFromTraces(w http.ResponseWriter, r *http.Request) {
+	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body CreateFromTracesRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.itemsFromTracesCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) dashItemsFromSpans(w http.ResponseWriter, r *http.Request) {
+	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body CreateFromSpansRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.itemsFromSpansCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) runDashImport(
+	w http.ResponseWriter,
+	r *http.Request,
+	do func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error),
+) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return h.importItemsJSON(ctx, datasetID, projectID, &in.Body)
-}
-
-type SDKImportItemsCSVInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      ImportFromCSVRequest
-}
-
-func (h *handler) sdkImportItemsCSV(ctx context.Context, in *SDKImportItemsCSVInput) (*BulkImportOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return h.importItemsCSV(ctx, datasetID, projectID, &in.Body)
-}
-
-type SDKItemsFromTracesInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateFromTracesRequest
-}
-
-func (h *handler) sdkItemsFromTraces(ctx context.Context, in *SDKItemsFromTracesInput) (*BulkImportOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+	res, err := do(r.Context(), datasetID, projectID)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return h.itemsFromTraces(ctx, datasetID, projectID, &in.Body)
+	response.Success(w, res)
 }
 
-type SDKItemsFromSpansInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateFromSpansRequest
-}
+// ---- dashboard dataset versions ------------------------------------
 
-func (h *handler) sdkItemsFromSpans(ctx context.Context, in *SDKItemsFromSpansInput) (*BulkImportOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return h.itemsFromSpans(ctx, datasetID, projectID, &in.Body)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body CreateDatasetVersionRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	v, err := h.datasetVersionSvc.CreateVersion(r.Context(), datasetID, projectID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	h.logger.InfoContext(r.Context(), "evaluation: dataset version created",
+		"version_id", v.ID, "dataset_id", datasetID, "project_id", projectID, "version", v.Version)
+	response.Created(w, v.ToResponse())
 }
 
-// ---- SDK dataset versions --------------------------------------------
-
-type SDKCreateDatasetVersionInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      CreateDatasetVersionRequest
-}
-
-func (h *handler) sdkCreateDatasetVersion(ctx context.Context, in *SDKCreateDatasetVersionInput) (*DatasetVersionOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashListDatasetVersions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	v, err := h.datasetVersionSvc.CreateVersion(ctx, datasetID, projectID, &body)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetVersionOutput{Body: v.ToResponse()}, nil
-}
-
-func (h *handler) sdkListDatasetVersions(ctx context.Context, in *SDKDatasetInput) (*DatasetVersionListOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+	versions, err := h.datasetVersionSvc.ListVersions(r.Context(), datasetID, projectID)
 	if err != nil {
-		return nil, err
-	}
-	versions, err := h.datasetVersionSvc.ListVersions(ctx, datasetID, projectID)
-	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*evaluationDomain.DatasetVersionResponse, len(versions))
 	for i, v := range versions {
 		out[i] = v.ToResponse()
 	}
-	return &DatasetVersionListOutput{Body: out}, nil
+	response.Success(w, out)
 }
 
-type SDKGetDatasetVersionInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	VersionID string `path:"versionId" format:"uuid"`
+func (h *handler) dashGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	versionID, err := request.URLParamUUID(r, "versionId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	v, err := h.datasetVersionSvc.GetVersion(r.Context(), versionID, datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, v.ToResponse())
 }
 
-func (h *handler) sdkGetDatasetVersion(ctx context.Context, in *SDKGetDatasetVersionInput) (*DatasetVersionOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	versionID, err := parseVersionID(in.VersionID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	v, err := h.datasetVersionSvc.GetVersion(ctx, versionID, datasetID, projectID)
+	versionID, err := request.URLParamUUID(r, "versionId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetVersionOutput{Body: v.ToResponse()}, nil
-}
-
-type SDKGetDatasetVersionItemsInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	VersionID string `path:"versionId" format:"uuid"`
-	Page      int    `query:"page" required:"false" minimum:"1"`
-	Limit     int    `query:"limit" required:"false"`
-}
-
-func (h *handler) sdkGetDatasetVersionItems(ctx context.Context, in *SDKGetDatasetVersionItemsInput) (*DatasetItemListOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+	page, limit, err := readPagination(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	versionID, err := parseVersionID(in.VersionID)
-	if err != nil {
-		return nil, err
-	}
-	page, limit := normalizePagination(in.Page, in.Limit)
 	offset := (page - 1) * limit
-	items, total, err := h.datasetVersionSvc.GetVersionItems(ctx, versionID, datasetID, projectID, limit, offset)
+	items, total, err := h.datasetVersionSvc.GetVersionItems(r.Context(), versionID, datasetID, projectID, limit, offset)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 	out := make([]*DatasetItemResponse, len(items))
 	for i, it := range items {
 		out[i] = toDatasetItemResponse(it)
 	}
-	return &DatasetItemListOutput{Body: pageList[*DatasetItemResponse]{
+	response.Success(w, pageList[*DatasetItemResponse]{
 		Data: out, Total: total, Page: page, Limit: limit,
-	}}, nil
+	})
 }
 
-type SDKPinDatasetVersionInput struct {
-	DatasetID string `path:"datasetId" format:"uuid"`
-	Body      PinDatasetVersionRequest
+func (h *handler) dashPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body PinDatasetVersionRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.datasetVersionSvc.PinVersion(r.Context(), datasetID, projectID, body.VersionID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds.ToResponse())
 }
 
-func (h *handler) sdkPinDatasetVersion(ctx context.Context, in *SDKPinDatasetVersionInput) (*DatasetOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
+func (h *handler) dashGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	body := in.Body
-	ds, err := h.datasetVersionSvc.PinVersion(ctx, datasetID, projectID, body.VersionID)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetOutput{Body: ds.ToResponse()}, nil
+	resp, err := h.datasetVersionSvc.GetDatasetWithVersionInfo(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, resp)
 }
 
-func (h *handler) sdkGetDatasetWithVersionInfo(ctx context.Context, in *SDKDatasetInput) (*DatasetWithVersionInfoOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	datasetID, err := parseDatasetID(in.DatasetID)
-	if err != nil {
-		return nil, err
+// ---- SDK dataset handlers -------------------------------------------
+
+func (h *handler) sdkCreateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	var body CreateDatasetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	resp, err := h.datasetVersionSvc.GetDatasetWithVersionInfo(ctx, datasetID, projectID)
+	ds, err := h.createDatasetCore(r.Context(), projectID, &body)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DatasetWithVersionInfoOutput{Body: resp}, nil
+	response.Created(w, ds)
+}
+
+func (h *handler) sdkListDatasets(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	page, limit, err := readPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	q := r.URL.Query()
+	out, total, params, err := h.listDatasetsCore(r.Context(), projectID,
+		q.Get("search"), q.Get("sort_by"), q.Get("sort_dir"), page, limit)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, pageList[*evaluationDomain.DatasetWithItemCountResponse]{
+		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
+	})
+}
+
+func (h *handler) sdkGetDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.datasetSvc.GetByID(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds.ToResponse())
+}
+
+func (h *handler) sdkUpdateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body UpdateDatasetRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.updateDatasetCore(r.Context(), projectID, datasetID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds)
+}
+
+func (h *handler) sdkDeleteDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	if err := h.datasetSvc.Delete(r.Context(), datasetID, projectID); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *handler) sdkBatchCreateDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body BatchCreateDatasetItemsRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	count, err := h.datasetItemSvc.CreateBatch(r.Context(), datasetID, projectID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	h.logger.InfoContext(r.Context(), "evaluation: dataset items created (SDK)",
+		"dataset_id", datasetID, "project_id", projectID, "count", count)
+	response.Created(w, &CountResponse{Created: count})
+}
+
+func (h *handler) sdkListDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	page, limit, err := readPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	offset := (page - 1) * limit
+	items, total, err := h.datasetItemSvc.List(r.Context(), datasetID, projectID, limit, offset)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	out := make([]*DatasetItemResponse, len(items))
+	for i, it := range items {
+		out[i] = toDatasetItemResponse(it)
+	}
+	response.Success(w, pageList[*DatasetItemResponse]{
+		Data: out, Total: total, Page: page, Limit: limit,
+	})
+}
+
+func (h *handler) sdkExportDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	items, err := h.datasetItemSvc.ExportItems(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	out := make([]*DatasetItemResponse, len(items))
+	for i, it := range items {
+		out[i] = toDatasetItemResponse(it)
+	}
+	response.Success(w, out)
+}
+
+func (h *handler) sdkImportItemsJSON(w http.ResponseWriter, r *http.Request) {
+	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body ImportFromJSONRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.importItemsJSONCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) sdkImportItemsCSV(w http.ResponseWriter, r *http.Request) {
+	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body ImportFromCSVRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.importItemsCSVCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) sdkItemsFromTraces(w http.ResponseWriter, r *http.Request) {
+	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body CreateFromTracesRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.itemsFromTracesCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) sdkItemsFromSpans(w http.ResponseWriter, r *http.Request) {
+	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
+		var body CreateFromSpansRequest
+		if err := request.DecodeJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return h.itemsFromSpansCore(ctx, datasetID, projectID, &body)
+	})
+}
+
+func (h *handler) runSDKImport(
+	w http.ResponseWriter,
+	r *http.Request,
+	do func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error),
+) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	res, err := do(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, res)
+}
+
+// ---- SDK dataset versions ------------------------------------------
+
+func (h *handler) sdkCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body CreateDatasetVersionRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	v, err := h.datasetVersionSvc.CreateVersion(r.Context(), datasetID, projectID, &body)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Created(w, v.ToResponse())
+}
+
+func (h *handler) sdkListDatasetVersions(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	versions, err := h.datasetVersionSvc.ListVersions(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	out := make([]*evaluationDomain.DatasetVersionResponse, len(versions))
+	for i, v := range versions {
+		out[i] = v.ToResponse()
+	}
+	response.Success(w, out)
+}
+
+func (h *handler) sdkGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	versionID, err := request.URLParamUUID(r, "versionId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	v, err := h.datasetVersionSvc.GetVersion(r.Context(), versionID, datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, v.ToResponse())
+}
+
+func (h *handler) sdkGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	versionID, err := request.URLParamUUID(r, "versionId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	page, limit, err := readPagination(r)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	offset := (page - 1) * limit
+	items, total, err := h.datasetVersionSvc.GetVersionItems(r.Context(), versionID, datasetID, projectID, limit, offset)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	out := make([]*DatasetItemResponse, len(items))
+	for i, it := range items {
+		out[i] = toDatasetItemResponse(it)
+	}
+	response.Success(w, pageList[*DatasetItemResponse]{
+		Data: out, Total: total, Page: page, Limit: limit,
+	})
+}
+
+func (h *handler) sdkPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body PinDatasetVersionRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	ds, err := h.datasetVersionSvc.PinVersion(r.Context(), datasetID, projectID, body.VersionID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, ds.ToResponse())
+}
+
+func (h *handler) sdkGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
+	projectID := projectIDForSDK(r)
+	datasetID, err := request.URLParamUUID(r, "datasetId")
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	resp, err := h.datasetVersionSvc.GetDatasetWithVersionInfo(r.Context(), datasetID, projectID)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, resp)
 }

@@ -4,23 +4,14 @@ import (
 	"brokle/internal/core/domain/observability"
 )
 
-// SDK-plane Huma operation types + span-query request/response DTOs.
-// Consumed only by sdk.go.
+// SDK-plane request/response DTOs.
 
 type SpanQueryRequest struct {
-	Filter    string `json:"filter" minLength:"1" maxLength:"2000" doc:"Filter expression, e.g. service.name=chatbot AND gen_ai.system=openai"`
-	StartTime string `json:"start_time,omitempty" doc:"RFC3339 timestamp"`
-	EndTime   string `json:"end_time,omitempty" doc:"RFC3339 timestamp"`
-	Limit     int    `json:"limit,omitempty" minimum:"0" maximum:"10000"`
-	Page      int    `json:"page,omitempty" minimum:"0"`
-}
-
-type QuerySpansInput struct {
-	Body SpanQueryRequest
-}
-
-type QuerySpansOutput struct {
-	Body SpanQueryResponse
+	Filter    string `json:"filter"               validate:"required,min=1,max=2000"`
+	StartTime string `json:"start_time,omitempty"`
+	EndTime   string `json:"end_time,omitempty"`
+	Limit     int    `json:"limit,omitempty"      validate:"omitempty,min=0,max=10000"`
+	Page      int    `json:"page,omitempty"       validate:"omitempty,min=0"`
 }
 
 type SpanQueryResponse struct {
@@ -30,16 +21,5 @@ type SpanQueryResponse struct {
 }
 
 type ValidateFilterRequest struct {
-	Filter string `json:"filter" minLength:"1" maxLength:"2000"`
-}
-
-type ValidateFilterInput struct {
-	Body ValidateFilterRequest
-}
-
-type ValidateFilterOutput struct {
-	Body struct {
-		Valid   bool   `json:"valid"`
-		Message string `json:"message"`
-	}
+	Filter string `json:"filter" validate:"required,min=1,max=2000"`
 }

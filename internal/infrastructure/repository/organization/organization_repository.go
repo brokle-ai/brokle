@@ -9,6 +9,7 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // organizationRepository is the pgx+sqlc implementation of
@@ -34,6 +35,9 @@ func (r *organizationRepository) Create(ctx context.Context, org *orgDomain.Orga
 		CreatedAt:          org.CreatedAt,
 		UpdatedAt:          org.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create organization: %w", orgDomain.ErrAlreadyExists)
+		}
 		return fmt.Errorf("create organization: %w", err)
 	}
 	return nil

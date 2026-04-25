@@ -1,3 +1,4 @@
+// Package units defines byte/token/span unit constants used in billing and metrics.
 package units
 
 // Billing unit sizes for usage-based pricing.

@@ -9,6 +9,7 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // projectRepository is the pgx+sqlc implementation of
@@ -32,6 +33,9 @@ func (r *projectRepository) Create(ctx context.Context, project *orgDomain.Proje
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create project: %w", orgDomain.ErrProjectAlreadyExists)
+		}
 		return fmt.Errorf("create project: %w", err)
 	}
 	return nil

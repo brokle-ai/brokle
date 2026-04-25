@@ -10,6 +10,7 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // memberRepository is the pgx+sqlc implementation of orgDomain.MemberRepository.
@@ -49,6 +50,9 @@ func (r *memberRepository) Create(ctx context.Context, m *orgDomain.Member) erro
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, orgDomain.ErrMemberAlreadyExists)
+		}
 		return fmt.Errorf("create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
 	}
 	return nil

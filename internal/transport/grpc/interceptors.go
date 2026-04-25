@@ -10,18 +10,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 )
 
 // AuthInterceptor validates API keys from gRPC metadata
 type AuthInterceptor struct {
-	apiKeyService auth.APIKeyService
+	apiKeyService *authService.APIKeyService
 	logger        *slog.Logger
 }
 
 // NewAuthInterceptor creates a new gRPC auth interceptor
 func NewAuthInterceptor(
-	apiKeyService auth.APIKeyService,
+	apiKeyService *authService.APIKeyService,
 	logger *slog.Logger,
 ) *AuthInterceptor {
 	return &AuthInterceptor{

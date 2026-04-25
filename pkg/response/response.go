@@ -1,14 +1,16 @@
-// Package response defines the canonical error-response DTO and
-// supporting machinery:
+// Package response defines the canonical HTTP response helpers and
+// error-envelope DTO for Brokle's chi-native handlers.
+//
+// Public surface:
 //
 //   - APIError / ErrorDetail / Pagination — wire types shared by
 //     every Brokle HTTP response that has an error body or a list
 //     pagination block.
-//   - WriteError — stdlib-http helper used by chi middleware that rejects
-//     a request before it reaches a Huma operation.
-//   - ErrorResponse + InstallHumaErrorFactory — the huma.StatusError
-//     implementation and the explicit installer that wires it into
-//     Huma's global huma.NewError extension point (see humaerror.go).
+//   - ErrorResponse — the top-level `{"error": {...}}` wrapper
+//     consumed by WriteError.
+//   - WriteError / JSON / Success / Created / NoContent — stdlib
+//     http helpers called by every handler.
+//   - BuildPagination — constructs the canonical Pagination metadata.
 //
 // Wire contract (Stripe / OpenAI / Anthropic style):
 //
@@ -25,8 +27,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
-
 	appErrors "brokle/pkg/errors"
 )
 
@@ -36,10 +36,9 @@ import (
 //     retry / alert behaviour (e.g. "validation_error", "rate_limit").
 //   - Code   — open fine-grained domain code (snake_case) for SDK
 //     subclassing (e.g. "project_not_found", "quota_exceeded").
-//   - Errors — per-field diagnostics lifted from Huma's native
-//     ErrorDetailer. Populated on validation failures so clients render
-//     "body.items[3].tags: required" next to the offending field;
-//     empty on domain-level errors where a single Message suffices.
+//   - Errors — per-field validation diagnostics populated by
+//     pkg/request.DecodeJSON. Empty on domain-level errors where a
+//     single Message suffices.
 //   - Details — free-form human-readable elaboration. Kept alongside
 //     Errors (not replaced by it) because many AppError call sites
 //     populate a single-string detail; machine-readable Errors is
@@ -48,53 +47,48 @@ import (
 //     predate the Errors array. New handler code should prefer
 //     Errors[].Location.
 type APIError struct {
-	Type    string        `json:"type" example:"validation_error" description:"Closed coarse error classification"`
-	Code    string        `json:"code,omitempty" example:"project_not_found" description:"Open fine-grained domain code (snake_case)"`
-	Message string        `json:"message" example:"Invalid request data" description:"Human-readable error message"`
-	Details string        `json:"details,omitempty" example:"projectId must be a valid UUID" description:"Additional error context"`
-	Param   string        `json:"param,omitempty" example:"projectId" description:"Input field that triggered the error, when applicable"`
-	Errors  []ErrorDetail `json:"errors,omitempty" description:"Per-field validation diagnostics (location + message + value)"`
+	Type    string        `json:"type"`
+	Code    string        `json:"code,omitempty"`
+	Message string        `json:"message"`
+	Details string        `json:"details,omitempty"`
+	Param   string        `json:"param,omitempty"`
+	Errors  []ErrorDetail `json:"errors,omitempty"`
 }
 
-// ErrorDetail carries per-field validation diagnostics. Mirror of
-// huma.ErrorDetail — kept local so our OpenAPI spec exposes it under
-// our own component name and we control the JSON tags. Lossless
-// conversion happens in fromHumaErrors.
-type ErrorDetail struct {
-	Location string `json:"location,omitempty" example:"body.items[3].tags" description:"Dotted path to the offending input field"`
-	Message  string `json:"message" example:"expected string length >= 1" description:"Validation diagnostic"`
-	Value    any    `json:"value,omitempty" description:"The value that failed validation, echoed back verbatim to aid debugging"`
+// ErrorResponse is the top-level wrapper around APIError. Emitted by
+// WriteError and mirrored by AppError.MarshalJSON so both paths
+// produce byte-identical output.
+type ErrorResponse struct {
+	Error *APIError `json:"error"`
 }
+
+// ErrorDetail is re-exported from pkg/errors. Callers that already
+// import pkg/response keep compiling; new code is free to import the
+// type directly from pkg/errors.
+type ErrorDetail = appErrors.ErrorDetail
 
 // Pagination is the offset-paginated list metadata published inline
 // on list-response bodies: `{"data": [...], "pagination": {...}}`.
-//
-// Cursor-based pagination (Stripe-style `has_more` + `url`) is a
-// deferred migration — see the Option B plan. For now, offset-based
-// is the canonical shape.
 type Pagination struct {
-	Page       int   `json:"page" example:"1" description:"Current page number (1-indexed)"`
-	Limit      int   `json:"limit" example:"50" description:"Items per page"`
-	Total      int64 `json:"total" example:"1234" description:"Total number of items"`
-	TotalPages int   `json:"total_pages" example:"25" description:"Total number of pages"`
-	HasNext    bool  `json:"has_next" example:"true" description:"Whether there are more pages"`
-	HasPrev    bool  `json:"has_prev" example:"false" description:"Whether there are previous pages"`
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+	HasNext    bool  `json:"has_next"`
+	HasPrev    bool  `json:"has_prev"`
 }
 
 // BuildPagination constructs the canonical Pagination metadata from
 // the raw pagination inputs (page + limit) and the authoritative
-// total count. Used by list handlers so every list endpoint emits
-// the same inline `{data, pagination}` shape with identical field
-// semantics.
+// total count.
 //
 // Edge cases:
 //
-//   - limit == 0: TotalPages is 0 (undefined pagination, e.g. when
-//     the caller passed no limit — the endpoint should have defaulted
-//     already; this branch just keeps Division by Zero at bay).
+//   - limit == 0: TotalPages is 0 (undefined pagination — the endpoint
+//     should have defaulted already; this branch just keeps division
+//     by zero at bay).
 //   - total == 0: TotalPages is 0, HasNext/HasPrev both false.
-//   - page > totalPages (client asking beyond the end): HasNext is
-//     false, HasPrev is true when page > 1 — the caller can walk back.
+//   - page > totalPages: HasNext is false, HasPrev is true when page > 1.
 func BuildPagination(page, limit int, total int64) *Pagination {
 	totalPages := 0
 	if limit > 0 && total > 0 {
@@ -111,11 +105,11 @@ func BuildPagination(page, limit int, total int64) *Pagination {
 }
 
 // WriteError writes the canonical Brokle error envelope directly to a
-// stdlib http.ResponseWriter. Used by chi middleware that rejects a
-// request (auth failure, rate limit, panic) before it reaches a Huma
-// operation, where there is no Huma Context in scope.
+// stdlib http.ResponseWriter. Used by every chi handler + every chi
+// middleware that rejects a request (auth failure, rate limit, panic).
 //
-// Output shape matches the Huma path exactly:
+// Output shape matches AppError.MarshalJSON exactly — bytes pinned by
+// error_shape_test.go:
 //
 //	{"error":{"type":"...","code":"...","message":"...",...}}
 //
@@ -133,9 +127,43 @@ func WriteError(w http.ResponseWriter, err error) {
 	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: apiError})
 }
 
+// JSON writes status + payload as JSON. The generic 2xx helper.
+//
+// Prefer the semantic helpers (Success, Created, NoContent) where one
+// matches the intended status; JSON is the escape hatch for the less
+// common 2xx codes (e.g. 202 Accepted, 207 Multi-Status). Writes an
+// empty body on 204 per RFC 9110 §15.3.5. JSON-encode errors are
+// swallowed because the response line is already committed.
+func JSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if status == http.StatusNoContent || payload == nil {
+		return
+	}
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// Success writes 200 OK with a JSON-encoded body. Canonical helper
+// for GET / PUT / PATCH happy paths.
+func Success(w http.ResponseWriter, payload any) {
+	JSON(w, http.StatusOK, payload)
+}
+
+// Created writes 201 Created with a JSON-encoded body. Canonical
+// helper for POST operations that create a resource.
+func Created(w http.ResponseWriter, payload any) {
+	JSON(w, http.StatusCreated, payload)
+}
+
+// NoContent writes 204 No Content with no body. Canonical helper
+// for DELETE operations and for PUT/PATCH where the caller
+// explicitly opts out of an echo body.
+func NoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // buildAPIError renders an arbitrary error into the wire APIError plus
-// the HTTP status to write. Shared between WriteError and the Huma
-// NewError override in humaerror.go.
+// the HTTP status to write.
 func buildAPIError(err error) (*APIError, int) {
 	if appErr := appErrors.AsAppError(err); appErr != nil {
 		return &APIError{
@@ -144,6 +172,7 @@ func buildAPIError(err error) (*APIError, int) {
 			Message: appErr.Message,
 			Details: appErr.Details,
 			Param:   appErr.Param,
+			Errors:  appErr.Errors,
 		}, appErr.HTTPStatus()
 	}
 	return &APIError{
@@ -151,35 +180,4 @@ func buildAPIError(err error) (*APIError, int) {
 		Code:    string(appErrors.TypeAPIError),
 		Message: "Internal server error",
 	}, http.StatusInternalServerError
-}
-
-// fromHumaErrors distils a variadic slice of errors into zero or more
-// ErrorDetail entries. Huma validation passes each per-field failure
-// as a separate error that implements huma.ErrorDetailer; we unwrap
-// those into structured entries. Plain errors are included with only
-// Message populated. Nil entries are skipped.
-func fromHumaErrors(errs []error) []ErrorDetail {
-	if len(errs) == 0 {
-		return nil
-	}
-	out := make([]ErrorDetail, 0, len(errs))
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		if d, ok := err.(huma.ErrorDetailer); ok {
-			ed := d.ErrorDetail()
-			out = append(out, ErrorDetail{
-				Location: ed.Location,
-				Message:  ed.Message,
-				Value:    ed.Value,
-			})
-			continue
-		}
-		out = append(out, ErrorDetail{Message: err.Error()})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }

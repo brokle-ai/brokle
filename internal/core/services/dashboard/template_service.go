@@ -12,7 +12,7 @@ import (
 	"brokle/pkg/uid"
 )
 
-type templateService struct {
+type TemplateService struct {
 	templateRepo  dashboardDomain.TemplateRepository
 	dashboardRepo dashboardDomain.DashboardRepository
 	logger        *slog.Logger
@@ -22,15 +22,15 @@ func NewTemplateService(
 	templateRepo dashboardDomain.TemplateRepository,
 	dashboardRepo dashboardDomain.DashboardRepository,
 	logger *slog.Logger,
-) dashboardDomain.TemplateService {
-	return &templateService{
+) *TemplateService {
+	return &TemplateService{
 		templateRepo:  templateRepo,
 		dashboardRepo: dashboardRepo,
 		logger:        logger,
 	}
 }
 
-func (s *templateService) ListTemplates(ctx context.Context) ([]*dashboardDomain.Template, error) {
+func (s *TemplateService) ListTemplates(ctx context.Context) ([]*dashboardDomain.Template, error) {
 	templates, err := s.templateRepo.List(ctx, nil)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to list templates", err)
@@ -38,7 +38,7 @@ func (s *templateService) ListTemplates(ctx context.Context) ([]*dashboardDomain
 	return templates, nil
 }
 
-func (s *templateService) GetTemplate(ctx context.Context, id uuid.UUID) (*dashboardDomain.Template, error) {
+func (s *TemplateService) GetTemplate(ctx context.Context, id uuid.UUID) (*dashboardDomain.Template, error) {
 	template, err := s.templateRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, dashboardDomain.ErrTemplateNotFound) {
@@ -49,7 +49,7 @@ func (s *templateService) GetTemplate(ctx context.Context, id uuid.UUID) (*dashb
 	return template, nil
 }
 
-func (s *templateService) CreateFromTemplate(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateFromTemplateRequest) (*dashboardDomain.Dashboard, error) {
+func (s *TemplateService) CreateFromTemplate(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateFromTemplateRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
 		return nil, appErrors.NewValidationError("name", "dashboard name is required")
 	}
@@ -111,7 +111,7 @@ func (s *templateService) CreateFromTemplate(ctx context.Context, projectID uuid
 	return dashboard, nil
 }
 
-func (s *templateService) copyConfig(src dashboardDomain.DashboardConfig) dashboardDomain.DashboardConfig {
+func (s *TemplateService) copyConfig(src dashboardDomain.DashboardConfig) dashboardDomain.DashboardConfig {
 	dst := dashboardDomain.DashboardConfig{
 		RefreshRate: src.RefreshRate,
 	}
@@ -156,7 +156,7 @@ func (s *templateService) copyConfig(src dashboardDomain.DashboardConfig) dashbo
 	return dst
 }
 
-func (s *templateService) copyQuery(src dashboardDomain.WidgetQuery) dashboardDomain.WidgetQuery {
+func (s *TemplateService) copyQuery(src dashboardDomain.WidgetQuery) dashboardDomain.WidgetQuery {
 	dst := dashboardDomain.WidgetQuery{
 		View:     src.View,
 		Limit:    src.Limit,
@@ -196,7 +196,7 @@ func (s *templateService) copyQuery(src dashboardDomain.WidgetQuery) dashboardDo
 	return dst
 }
 
-func (s *templateService) copyLayout(src []dashboardDomain.LayoutItem) []dashboardDomain.LayoutItem {
+func (s *TemplateService) copyLayout(src []dashboardDomain.LayoutItem) []dashboardDomain.LayoutItem {
 	if src == nil {
 		return nil
 	}

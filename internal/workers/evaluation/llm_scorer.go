@@ -9,22 +9,23 @@ import (
 
 	"github.com/google/uuid"
 
-	"brokle/internal/core/domain/credentials"
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/prompt"
+	credentialsService "brokle/internal/core/services/credentials"
+	promptService "brokle/internal/core/services/prompt"
 )
 
 // LLMScorer implements LLM-as-a-judge scoring using project credentials
 type LLMScorer struct {
-	credentialsService credentials.ProviderCredentialService
-	executionService   prompt.ExecutionService
+	credentialsService *credentialsService.ProviderCredentialService
+	executionService   *promptService.ExecutionService
 	logger             *slog.Logger
 }
 
 // NewLLMScorer creates a new LLM scorer
 func NewLLMScorer(
-	credentialsService credentials.ProviderCredentialService,
-	executionService prompt.ExecutionService,
+	credentialsService *credentialsService.ProviderCredentialService,
+	executionService *promptService.ExecutionService,
 	logger *slog.Logger,
 ) *LLMScorer {
 	return &LLMScorer{

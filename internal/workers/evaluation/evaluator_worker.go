@@ -19,6 +19,7 @@ import (
 
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
+	evaluationService "brokle/internal/core/services/evaluation"
 	"brokle/internal/infrastructure/database"
 	"brokle/internal/infrastructure/streams"
 	"brokle/pkg/uid"
@@ -31,17 +32,17 @@ const (
 
 // EvaluationJob represents a matched span-evaluator pair to be processed by EvaluationWorker
 type EvaluationJob struct {
-	JobID        uuid.UUID              `json:"job_id"`
-	EvaluatorID  uuid.UUID              `json:"evaluator_id"`
-	ProjectID    uuid.UUID              `json:"project_id"`
-	ExecutionID  *uuid.UUID             `json:"execution_id,omitempty"` // Optional: links job to an evaluator execution (for manual triggers)
-	SpanData     map[string]any `json:"span_data"`
-	TraceID      string                 `json:"trace_id"`
-	SpanID       string                 `json:"span_id"`
-	ScorerType   evaluation.ScorerType  `json:"scorer_type"`
-	ScorerConfig map[string]any         `json:"scorer_config"`
-	Variables    map[string]string      `json:"variables"` // Extracted variables from span
-	CreatedAt    time.Time              `json:"created_at"`
+	JobID        uuid.UUID             `json:"job_id"`
+	EvaluatorID  uuid.UUID             `json:"evaluator_id"`
+	ProjectID    uuid.UUID             `json:"project_id"`
+	ExecutionID  *uuid.UUID            `json:"execution_id,omitempty"` // Optional: links job to an evaluator execution (for manual triggers)
+	SpanData     map[string]any        `json:"span_data"`
+	TraceID      string                `json:"trace_id"`
+	SpanID       string                `json:"span_id"`
+	ScorerType   evaluation.ScorerType `json:"scorer_type"`
+	ScorerConfig map[string]any        `json:"scorer_config"`
+	Variables    map[string]string     `json:"variables"` // Extracted variables from span
+	CreatedAt    time.Time             `json:"created_at"`
 }
 
 // EvaluatorWorkerConfig holds configuration for the evaluator worker
@@ -109,8 +110,8 @@ func (c *EvaluatorCache) Invalidate(projectID string) {
 // EvaluatorWorker consumes spans from telemetry streams, matches against active evaluators, and emits evaluation jobs
 type EvaluatorWorker struct {
 	redis            *database.RedisDB
-	evaluatorService evaluation.EvaluatorService
-	executionService evaluation.EvaluatorExecutionService
+	evaluatorService *evaluationService.EvaluatorService
+	executionService *evaluationService.EvaluatorExecutionService
 	evaluatorCache   *EvaluatorCache
 	logger           *slog.Logger
 
@@ -144,8 +145,8 @@ type EvaluatorWorker struct {
 // NewEvaluatorWorker creates a new evaluator worker
 func NewEvaluatorWorker(
 	redis *database.RedisDB,
-	evaluatorService evaluation.EvaluatorService,
-	executionService evaluation.EvaluatorExecutionService,
+	evaluatorService *evaluationService.EvaluatorService,
+	executionService *evaluationService.EvaluatorExecutionService,
 	logger *slog.Logger,
 	config *EvaluatorWorkerConfig,
 ) *EvaluatorWorker {
@@ -515,7 +516,7 @@ func (w *EvaluatorWorker) processMessage(ctx context.Context, streamKey string, 
 				len(jobs),
 			)
 			if err != nil {
-				w.logger.Error("failed to create execution for automatic evaluator",
+				w.logger.Error("Failed to create execution for automatic evaluator",
 					"evaluator_id", evaluatorID,
 					"project_id", batch.ProjectID,
 					"error", err,

@@ -16,11 +16,18 @@ import (
 	"brokle/pkg/uid"
 )
 
-type experimentItemService struct {
+// ScoreWriter is the narrow observability dependency the experiment-item
+// service consumes (Go idiom: accept interfaces). Prod wires in the
+// concrete *observabilityService.ScoreService; tests pass a mock.
+type ScoreWriter interface {
+	CreateScoreBatch(ctx context.Context, scores []*observability.Score) error
+}
+
+type ExperimentItemService struct {
 	itemRepo        evaluation.ExperimentItemRepository
 	experimentRepo  evaluation.ExperimentRepository
 	datasetItemRepo evaluation.DatasetItemRepository
-	scoreService    observability.ScoreService
+	scoreService    ScoreWriter
 	logger          *slog.Logger
 }
 
@@ -34,10 +41,10 @@ func NewExperimentItemService(
 	itemRepo evaluation.ExperimentItemRepository,
 	experimentRepo evaluation.ExperimentRepository,
 	datasetItemRepo evaluation.DatasetItemRepository,
-	scoreService observability.ScoreService,
+	scoreService ScoreWriter,
 	logger *slog.Logger,
-) evaluation.ExperimentItemService {
-	return &experimentItemService{
+) *ExperimentItemService {
+	return &ExperimentItemService{
 		itemRepo:        itemRepo,
 		experimentRepo:  experimentRepo,
 		datasetItemRepo: datasetItemRepo,
@@ -46,7 +53,7 @@ func NewExperimentItemService(
 	}
 }
 
-func (s *experimentItemService) CreateBatch(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateExperimentItemsBatchRequest) (int, error) {
+func (s *ExperimentItemService) CreateBatch(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateExperimentItemsBatchRequest) (int, error) {
 	experiment, err := s.experimentRepo.GetByID(ctx, experimentID, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrExperimentNotFound) {
@@ -146,7 +153,7 @@ func (s *experimentItemService) CreateBatch(ctx context.Context, experimentID uu
 }
 
 // createExperimentScores creates scores for experiment items using the ScoreService
-func (s *experimentItemService) createExperimentScores(
+func (s *ExperimentItemService) createExperimentScores(
 	ctx context.Context,
 	experimentID uuid.UUID,
 	projectID uuid.UUID,
@@ -203,7 +210,7 @@ func (s *experimentItemService) createExperimentScores(
 	return s.scoreService.CreateScoreBatch(ctx, scores)
 }
 
-func (s *experimentItemService) List(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.ExperimentItem, int64, error) {
+func (s *ExperimentItemService) List(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.ExperimentItem, int64, error) {
 	if _, err := s.experimentRepo.GetByID(ctx, experimentID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrExperimentNotFound) {
 			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))

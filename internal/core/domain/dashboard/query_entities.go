@@ -9,12 +9,12 @@ import (
 
 // QueryExecutionRequest represents a request to execute widget queries
 type QueryExecutionRequest struct {
-	ProjectID      uuid.UUID              `json:"project_id"`
-	DashboardID    uuid.UUID              `json:"dashboard_id"`
-	WidgetID       *string                `json:"widget_id,omitempty"` // nil = all widgets
-	DashboardTimeRange      *DashboardTimeRange             `json:"time_range,omitempty"`
-	ForceRefresh   bool                   `json:"force_refresh,omitempty"`
-	VariableValues map[string]any `json:"variable_values,omitempty" swaggertype:"object"`
+	ProjectID          uuid.UUID           `json:"project_id"`
+	DashboardID        uuid.UUID           `json:"dashboard_id"`
+	WidgetID           *string             `json:"widget_id,omitempty"` // nil = all widgets
+	DashboardTimeRange *DashboardTimeRange `json:"time_range,omitempty"`
+	ForceRefresh       bool                `json:"force_refresh,omitempty"`
+	VariableValues     map[string]any      `json:"variable_values,omitempty" swaggertype:"object"`
 }
 
 // VariableOptionsRequest represents a request to get variable options
@@ -32,10 +32,10 @@ type VariableOptionsResponse struct {
 
 // DashboardQueryResult represents the result of a widget query
 type DashboardQueryResult struct {
-	WidgetID string                   `json:"widget_id"`
+	WidgetID string           `json:"widget_id"`
 	Data     []map[string]any `json:"data" swaggertype:"array,object"`
-	Metadata *QueryMetadata           `json:"metadata,omitempty"`
-	Error    string                   `json:"error,omitempty"`
+	Metadata *QueryMetadata   `json:"metadata,omitempty"`
+	Error    string           `json:"error,omitempty"`
 }
 
 // QueryMetadata contains metadata about the query execution
@@ -49,9 +49,9 @@ type QueryMetadata struct {
 
 // DashboardQueryResults contains results for all widgets in a dashboard
 type DashboardQueryResults struct {
-	DashboardID uuid.UUID               `json:"dashboard_id"`
+	DashboardID uuid.UUID                        `json:"dashboard_id"`
 	Results     map[string]*DashboardQueryResult `json:"results"` // keyed by widget_id
-	ExecutedAt  time.Time               `json:"executed_at"`
+	ExecutedAt  time.Time                        `json:"executed_at"`
 }
 
 // TraceListItem represents a single trace in trace_list widget
@@ -119,21 +119,6 @@ type DimensionPublic struct {
 	Description string `json:"description"`
 	ColumnType  string `json:"column_type"`
 	Bucketable  bool   `json:"bucketable"`
-}
-
-// WidgetQueryService defines the interface for executing widget queries
-type WidgetQueryService interface {
-	// ExecuteWidgetQuery executes a single widget query
-	ExecuteWidgetQuery(ctx context.Context, projectID uuid.UUID, widget *Widget, timeRange *DashboardTimeRange) (*DashboardQueryResult, error)
-
-	// ExecuteDashboardQueries executes all widget queries for a dashboard
-	ExecuteDashboardQueries(ctx context.Context, req *QueryExecutionRequest) (*DashboardQueryResults, error)
-
-	// GetViewDefinitions returns available view definitions for the query builder
-	GetViewDefinitions(ctx context.Context) (*ViewDefinitionResponse, error)
-
-	// GetVariableOptions returns distinct values for a dimension to populate variable dropdowns
-	GetVariableOptions(ctx context.Context, req *VariableOptionsRequest) (*VariableOptionsResponse, error)
 }
 
 // WidgetQueryRepository defines the interface for widget query data access

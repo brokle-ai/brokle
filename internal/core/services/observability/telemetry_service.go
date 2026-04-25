@@ -13,7 +13,7 @@ import (
 // TelemetryService aggregates all telemetry-related services with Redis Streams-based async processing
 type TelemetryService struct {
 	lastProcessingTime   time.Time
-	deduplicationService observability.TelemetryDeduplicationService
+	dedup *TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
 	logger               *slog.Logger
 	batchesProcessed     uint64
@@ -24,12 +24,12 @@ type TelemetryService struct {
 
 // NewTelemetryService creates a new telemetry service with Redis Streams and deduplication
 func NewTelemetryService(
-	deduplicationService observability.TelemetryDeduplicationService,
+	dedup *TelemetryDeduplicationService,
 	streamProducer *streams.TelemetryStreamProducer,
 	logger *slog.Logger,
-) observability.TelemetryService {
+) *TelemetryService {
 	return &TelemetryService{
-		deduplicationService: deduplicationService,
+		dedup: dedup,
 		streamProducer:       streamProducer,
 		logger:               logger,
 		lastProcessingTime:   time.Now(),
@@ -37,8 +37,8 @@ func NewTelemetryService(
 }
 
 // Deduplication returns the deduplication service
-func (s *TelemetryService) Deduplication() observability.TelemetryDeduplicationService {
-	return s.deduplicationService
+func (s *TelemetryService) Deduplication() *TelemetryDeduplicationService {
+	return s.dedup
 }
 
 // GetHealth returns the health status of all telemetry services

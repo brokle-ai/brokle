@@ -1,10 +1,10 @@
 // Package prompt exposes the prompt-management operations on both planes:
-//   - Dashboard plane (apiAdmin, RequireAuth) — full CRUD over prompts,
-//     versions, labels, protected-label settings, and compiler helpers
+//   - Dashboard plane (RequireAuth) — full CRUD over prompts, versions,
+//     labels, protected-label settings, and compiler helpers
 //     (validate / preview / detect-dialect) under
 //     /api/v1/projects/{projectId}/prompts.
-//   - SDK plane (apiPublic, RequireSDKAuth) — upsert, list, and fetch-by-name
-//     under /v1/prompts. Project ID is derived from the API key.
+//   - SDK plane (RequireSDKAuth) — upsert, list, and fetch-by-name under
+//     /v1/prompts. Project ID is derived from the API key.
 package prompt
 
 import (
@@ -14,235 +14,76 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	promptService "brokle/internal/core/services/prompt"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
+	"brokle/pkg/response"
 )
 
 type handler struct {
-	promptSvc   promptDomain.PromptService
-	compilerSvc promptDomain.CompilerService
+	promptSvc   *promptService.PromptService
+	compilerSvc *promptService.CompilerService
 	logger      *slog.Logger
 }
 
-// RegisterRoutes wires the dashboard-plane prompt operations.
+// RegisterRoutes mounts the dashboard-plane prompt routes on r.
 func RegisterRoutes(
-	api huma.API,
-	promptSvc promptDomain.PromptService,
-	compilerSvc promptDomain.CompilerService,
+	r chi.Router,
+	promptSvc *promptService.PromptService,
+	compilerSvc *promptService.CompilerService,
 	logger *slog.Logger,
 ) {
 	h := &handler{promptSvc: promptSvc, compilerSvc: compilerSvc, logger: logger}
 
-	// ---- prompts -------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-prompts",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts",
-		Tags:        []string{"prompts"},
-		Summary:     "List prompts for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listPrompts)
+	r.Route("/api/v1/projects/{projectId}/prompts", func(r chi.Router) {
+		r.Get("/", h.listPrompts)
+		r.Post("/", h.createPrompt)
 
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-prompt",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/prompts",
-		Tags:          []string{"prompts"},
-		Summary:       "Create a new prompt with initial version",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createPrompt)
+		// settings + compiler helpers live under the prompts root.
+		r.Get("/settings/protected-labels", h.getProtectedLabels)
+		r.Put("/settings/protected-labels", h.setProtectedLabels)
+		r.Post("/validate-template", h.validateTemplate)
+		r.Post("/preview-template", h.previewTemplate)
+		r.Post("/detect-dialect", h.detectDialect)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-prompt",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}",
-		Tags:        []string{"prompts"},
-		Summary:     "Get a prompt with its latest version",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getPrompt)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-prompt",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}",
-		Tags:        []string{"prompts"},
-		Summary:     "Update prompt metadata",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.updatePrompt)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-prompt",
-		Method:        http.MethodDelete,
-		Path:          "/api/v1/projects/{projectId}/prompts/{promptId}",
-		Tags:          []string{"prompts"},
-		Summary:       "Soft-delete a prompt and its versions",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusNoContent,
-	}, h.deletePrompt)
-
-	// ---- versions ------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "list-prompt-versions",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}/versions",
-		Tags:        []string{"prompt-versions"},
-		Summary:     "List all versions of a prompt",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.listVersions)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "create-prompt-version",
-		Method:        http.MethodPost,
-		Path:          "/api/v1/projects/{projectId}/prompts/{promptId}/versions",
-		Tags:          []string{"prompt-versions"},
-		Summary:       "Create a new version of a prompt",
-		Security:      []map[string][]string{{"bearerAuth": {}}},
-		DefaultStatus: http.StatusCreated,
-	}, h.createVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-prompt-version",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}",
-		Tags:        []string{"prompt-versions"},
-		Summary:     "Get a specific version by ID or version number",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-prompt-version-diff",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}/diff",
-		Tags:        []string{"prompt-versions"},
-		Summary:     "Diff two versions of a prompt",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getVersionDiff)
-
-	// ---- labels --------------------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "set-prompt-version-labels",
-		Method:      http.MethodPatch,
-		Path:        "/api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/labels",
-		Tags:        []string{"prompt-labels"},
-		Summary:     "Set labels on a specific version",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.setLabels)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-protected-labels",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/projects/{projectId}/prompts/settings/protected-labels",
-		Tags:        []string{"prompt-labels"},
-		Summary:     "Get protected labels for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.getProtectedLabels)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "set-protected-labels",
-		Method:      http.MethodPut,
-		Path:        "/api/v1/projects/{projectId}/prompts/settings/protected-labels",
-		Tags:        []string{"prompt-labels"},
-		Summary:     "Set protected labels for a project",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.setProtectedLabels)
-
-	// ---- compiler helpers ---------------------------------------
-	huma.Register(api, huma.Operation{
-		OperationID: "validate-prompt-template",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/prompts/validate-template",
-		Tags:        []string{"prompt-compiler"},
-		Summary:     "Validate template syntax and extract variables",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.validateTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "preview-prompt-template",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/prompts/preview-template",
-		Tags:        []string{"prompt-compiler"},
-		Summary:     "Compile template with variables without saving",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.previewTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "detect-prompt-template-dialect",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/projects/{projectId}/prompts/detect-dialect",
-		Tags:        []string{"prompt-compiler"},
-		Summary:     "Auto-detect template dialect from content",
-		Security:    []map[string][]string{{"bearerAuth": {}}},
-	}, h.detectDialect)
+		r.Route("/{promptId}", func(r chi.Router) {
+			r.Get("/", h.getPrompt)
+			r.Put("/", h.updatePrompt)
+			r.Delete("/", h.deletePrompt)
+			r.Get("/diff", h.getVersionDiff)
+			r.Route("/versions", func(r chi.Router) {
+				r.Get("/", h.listVersions)
+				r.Post("/", h.createVersion)
+				r.Get("/{versionId}", h.getVersion)
+				r.Patch("/{versionId}/labels", h.setLabels)
+			})
+		})
+	})
 }
 
-// RegisterSDKRoutes wires the SDK-plane prompt operations (project derived
-// from the API key).
+// RegisterSDKRoutes mounts the SDK-plane prompt routes on r. Project ID is
+// derived from the API key.
 func RegisterSDKRoutes(
-	api huma.API,
-	promptSvc promptDomain.PromptService,
+	r chi.Router,
+	promptSvc *promptService.PromptService,
 	logger *slog.Logger,
 ) {
 	h := &handler{promptSvc: promptSvc, logger: logger}
 
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-upsert-prompt",
-		Method:      http.MethodPost,
-		Path:        "/v1/prompts",
-		Tags:        []string{"SDK - prompts"},
-		Summary:     "Create or add a new version to a prompt (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.upsertPrompt)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-list-prompts",
-		Method:      http.MethodGet,
-		Path:        "/v1/prompts",
-		Tags:        []string{"SDK - prompts"},
-		Summary:     "List prompts for the authenticated project (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.listPromptsSDK)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "sdk-get-prompt-by-name",
-		Method:      http.MethodGet,
-		Path:        "/v1/prompts/{name}",
-		Tags:        []string{"SDK - prompts"},
-		Summary:     "Resolve a prompt by name with optional label or version (SDK)",
-		Security:    []map[string][]string{{"apiKey": {}}},
-	}, h.getPromptByName)
+	r.Route("/v1/prompts", func(r chi.Router) {
+		r.Post("/", h.upsertPrompt)
+		r.Get("/", h.listPromptsSDK)
+		r.Get("/{name}", h.getPromptByName)
+	})
 }
 
-// ---- shared parsers --------------------------------------------------
-
-func parseProject(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parsePrompt(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid prompt ID", "promptId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseVersionID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid version ID", "versionId must be a valid UUID")
-	}
-	return id, nil
-}
+// ---- shared helpers --------------------------------------------------
 
 func userIDPtr(ctx context.Context) *uuid.UUID {
 	uid, ok := httpctx.UserID(ctx)
@@ -252,28 +93,41 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 	return &uid
 }
 
-// ---- pagination / list helpers --------------------------------------
-
-func buildPromptFilters(typeStr, tagsStr, search string, page, limit int, sortBy, sortDir string) (*promptDomain.PromptFilters, error) {
+// buildPromptFilters translates raw query-string values into a
+// PromptFilters struct. Called from both the dashboard and SDK list
+// endpoints; returns a typed validation error on bad input.
+func buildPromptFilters(r *http.Request) (*promptDomain.PromptFilters, error) {
+	q := r.URL.Query()
 	filters := &promptDomain.PromptFilters{}
 
-	if typeStr != "" {
-		pt := promptDomain.PromptType(typeStr)
+	if t := q.Get("type"); t != "" {
+		pt := promptDomain.PromptType(t)
 		if pt != promptDomain.PromptTypeText && pt != promptDomain.PromptTypeChat {
-			return nil, appErrors.NewValidationError("Invalid type", "type must be 'text' or 'chat'")
+			return nil, appErrors.NewValidationError(
+				"Invalid type", "type must be 'text' or 'chat'",
+				appErrors.WithParam("type"),
+			)
 		}
 		filters.Type = &pt
 	}
-	if tagsStr != "" {
-		filters.Tags = strings.Split(tagsStr, ",")
+	if tags := q.Get("tags"); tags != "" {
+		filters.Tags = strings.Split(tags, ",")
 	}
-	if search != "" {
+	if search := q.Get("search"); search != "" {
 		s := search
 		filters.Search = &s
 	}
 
+	page, err := request.QueryInt(r, "page", 1)
+	if err != nil {
+		return nil, err
+	}
 	if page < 1 {
 		page = 1
+	}
+	limit, err := request.QueryInt(r, "limit", 50)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 {
 		limit = 50
@@ -281,300 +135,415 @@ func buildPromptFilters(typeStr, tagsStr, search string, page, limit int, sortBy
 	filters.Params = pagination.Params{
 		Page:    page,
 		Limit:   limit,
-		SortBy:  sortBy,
-		SortDir: sortDir,
+		SortBy:  q.Get("sort_by"),
+		SortDir: q.Get("sort_dir"),
 	}
 	return filters, nil
 }
 
-// ---- prompts: list --------------------------------------------------
+// ---- prompts: list ---------------------------------------------------
 
-func (h *handler) listPrompts(ctx context.Context, in *ListPromptsInput) (*ListPromptsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) listPrompts(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	filters, err := buildPromptFilters(in.Type, in.Tags, in.Search, in.Page, in.Limit, in.SortBy, in.SortDir)
+	filters, err := buildPromptFilters(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	prompts, total, err := h.promptSvc.ListPrompts(ctx, projectID, filters)
+	prompts, total, err := h.promptSvc.ListPrompts(r.Context(), projectID, filters)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: list failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: list failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &ListPromptsOutput{Body: listPromptsResponse{
+	response.Success(w, listPromptsResponse{
 		Data:  prompts,
 		Total: total,
 		Page:  filters.Params.Page,
 		Limit: filters.Params.Limit,
-	}}, nil
+	})
 }
 
-// ---- prompts: create ------------------------------------------------
+// ---- prompts: create -------------------------------------------------
 
-func (h *handler) createPrompt(ctx context.Context, in *CreatePromptInput) (*CreatePromptOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) createPrompt(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Name == "" {
-		return nil, appErrors.NewValidationError("Missing name", "prompt name is required")
+	var body promptDomain.CreatePromptRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "prompt template is required")
+	if body.Name == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing name", "prompt name is required",
+			appErrors.WithParam("name"),
+		))
+		return
 	}
-	prompt, version, labels, err := h.promptSvc.CreatePrompt(ctx, projectID, userIDPtr(ctx), &in.Body)
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "prompt template is required",
+			appErrors.WithParam("template"),
+		))
+		return
+	}
+	prompt, version, labels, err := h.promptSvc.CreatePrompt(r.Context(), projectID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: create failed", "name", in.Body.Name, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: create failed", "name", body.Name, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &CreatePromptOutput{Body: buildPromptResponse(prompt, version, labels)}, nil
+	response.Created(w, buildPromptResponse(prompt, version, labels))
 }
 
-// ---- prompts: get ---------------------------------------------------
+// ---- prompts: get ----------------------------------------------------
 
-func (h *handler) getPrompt(ctx context.Context, in *GetPromptInput) (*GetPromptOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) getPrompt(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	p, err := h.promptSvc.GetPromptByID(ctx, projectID, promptID)
+	p, err := h.promptSvc.GetPromptByID(r.Context(), projectID, promptID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: get-by-id failed", "prompt_id", promptID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: get-by-id failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	full, err := h.promptSvc.GetPrompt(ctx, p.ProjectID, p.Name, &promptDomain.GetPromptOptions{Label: "latest"})
+	full, err := h.promptSvc.GetPrompt(r.Context(), p.ProjectID, p.Name,
+		&promptDomain.GetPromptOptions{Label: "latest"})
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: get-with-version failed", "prompt_id", promptID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: get-with-version failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &GetPromptOutput{Body: full}, nil
+	response.Success(w, full)
 }
 
-// ---- prompts: update ------------------------------------------------
+// ---- prompts: update -------------------------------------------------
 
-func (h *handler) updatePrompt(ctx context.Context, in *UpdatePromptInput) (*UpdatePromptOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) updatePrompt(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	p, err := h.promptSvc.UpdatePrompt(ctx, projectID, promptID, &in.Body)
+	var body promptDomain.UpdatePromptRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	p, err := h.promptSvc.UpdatePrompt(r.Context(), projectID, promptID, &body)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: update failed", "prompt_id", promptID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: update failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &UpdatePromptOutput{Body: p}, nil
+	response.Success(w, p)
 }
 
-// ---- prompts: delete ------------------------------------------------
+// ---- prompts: delete -------------------------------------------------
 
-func (h *handler) deletePrompt(ctx context.Context, in *DeletePromptInput) (*DeletePromptOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) deletePrompt(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if err := h.promptSvc.DeletePrompt(ctx, projectID, promptID); err != nil {
-		h.logger.ErrorContext(ctx, "prompt: delete failed", "prompt_id", promptID, "error", err)
-		return nil, err
+	if err := h.promptSvc.DeletePrompt(r.Context(), projectID, promptID); err != nil {
+		h.logger.ErrorContext(r.Context(), "prompt: delete failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &DeletePromptOutput{}, nil
+	response.NoContent(w)
 }
 
-// ---- versions: list -------------------------------------------------
+// ---- versions: list --------------------------------------------------
 
-func (h *handler) listVersions(ctx context.Context, in *ListVersionsInput) (*ListVersionsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) listVersions(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	versions, err := h.promptSvc.ListVersions(ctx, projectID, promptID)
+	versions, err := h.promptSvc.ListVersions(r.Context(), projectID, promptID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: list-versions failed", "prompt_id", promptID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: list-versions failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &ListVersionsOutput{Body: versions}, nil
+	response.Success(w, versions)
 }
 
-// ---- versions: create -----------------------------------------------
+// ---- versions: create ------------------------------------------------
 
-func (h *handler) createVersion(ctx context.Context, in *CreateVersionInput) (*CreateVersionOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) createVersion(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "template is required")
+	var body promptDomain.CreateVersionRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	version, labels, err := h.promptSvc.CreateVersion(ctx, projectID, promptID, userIDPtr(ctx), &in.Body)
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "template is required",
+			appErrors.WithParam("template"),
+		))
+		return
+	}
+	version, labels, err := h.promptSvc.CreateVersion(r.Context(), projectID, promptID, userIDPtr(r.Context()), &body)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: create-version failed", "prompt_id", promptID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: create-version failed",
+			"prompt_id", promptID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &CreateVersionOutput{Body: buildVersionResponse(version, labels)}, nil
+	response.Created(w, buildVersionResponse(version, labels))
 }
 
 // ---- versions: get (ID or version-number) ---------------------------
 
-func (h *handler) getVersion(ctx context.Context, in *GetVersionInput) (*GetVersionOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) getVersion(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	if versionNum, cerr := strconv.Atoi(in.VersionID); cerr == nil {
-		resp, err := h.promptSvc.GetVersion(ctx, projectID, promptID, versionNum)
+	raw := chi.URLParam(r, "versionId")
+	if versionNum, cerr := strconv.Atoi(raw); cerr == nil {
+		resp, err := h.promptSvc.GetVersion(r.Context(), projectID, promptID, versionNum)
 		if err != nil {
-			h.logger.ErrorContext(ctx, "prompt: get-version failed", "prompt_id", promptID, "version", versionNum, "error", err)
-			return nil, err
+			h.logger.ErrorContext(r.Context(), "prompt: get-version failed",
+				"prompt_id", promptID, "version", versionNum, "error", err)
+			response.WriteError(w, err)
+			return
 		}
-		return &GetVersionOutput{Body: resp}, nil
+		response.Success(w, resp)
+		return
 	}
-	versionID, err := uuid.Parse(in.VersionID)
+	versionID, err := uuid.Parse(raw)
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid version ID", "versionId must be a valid UUID or integer version number")
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid version ID",
+			"versionId must be a valid UUID or integer version number",
+			appErrors.WithParam("versionId"),
+		))
+		return
 	}
-	resp, err := h.promptSvc.GetVersionByID(ctx, projectID, promptID, versionID)
+	resp, err := h.promptSvc.GetVersionByID(r.Context(), projectID, promptID, versionID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: get-version-by-id failed", "version_id", versionID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: get-version-by-id failed",
+			"version_id", versionID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &GetVersionOutput{Body: resp}, nil
+	response.Success(w, resp)
 }
 
-// ---- versions: diff -------------------------------------------------
+// ---- versions: diff --------------------------------------------------
 
-func (h *handler) getVersionDiff(ctx context.Context, in *GetVersionDiffInput) (*GetVersionDiffOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) getVersionDiff(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	diff, err := h.promptSvc.GetVersionDiff(ctx, projectID, promptID, in.From, in.To)
+	from, err := request.QueryInt(r, "from", 0)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: diff failed", "prompt_id", promptID, "from", in.From, "to", in.To, "error", err)
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &GetVersionDiffOutput{Body: diff}, nil
+	to, err := request.QueryInt(r, "to", 0)
+	if err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	diff, err := h.promptSvc.GetVersionDiff(r.Context(), projectID, promptID, from, to)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "prompt: diff failed",
+			"prompt_id", promptID, "from", from, "to", to, "error", err)
+		response.WriteError(w, err)
+		return
+	}
+	response.Success(w, diff)
 }
 
 // ---- labels: set on version -----------------------------------------
 
-func (h *handler) setLabels(ctx context.Context, in *SetLabelsInput) (*SetLabelsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) setLabels(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	promptID, err := parsePrompt(in.PromptID)
+	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	versionID, err := parseVersionID(in.VersionID)
+	versionID, err := request.URLParamUUID(r, "versionId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	labels, err := h.promptSvc.SetLabels(ctx, projectID, promptID, versionID, userIDPtr(ctx), in.Body.Labels)
+	var body promptDomain.SetLabelsRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	labels, err := h.promptSvc.SetLabels(r.Context(), projectID, promptID, versionID, userIDPtr(r.Context()), body.Labels)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: set-labels failed", "version_id", versionID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: set-labels failed",
+			"version_id", versionID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 	if labels == nil {
 		labels = []string{}
 	}
-	return &SetLabelsOutput{Body: labelsResponse{Labels: labels}}, nil
+	response.Success(w, labelsResponse{Labels: labels})
 }
 
 // ---- labels: protected (get / set) ----------------------------------
 
-func (h *handler) getProtectedLabels(ctx context.Context, in *ProtectedLabelsPathInput) (*GetProtectedLabelsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) getProtectedLabels(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	labels, err := h.promptSvc.GetProtectedLabels(ctx, projectID)
+	labels, err := h.promptSvc.GetProtectedLabels(r.Context(), projectID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: get-protected-labels failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: get-protected-labels failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 	if labels == nil {
 		labels = []string{}
 	}
-	return &GetProtectedLabelsOutput{Body: protectedLabelsResponse{ProtectedLabels: labels}}, nil
+	response.Success(w, protectedLabelsResponse{ProtectedLabels: labels})
 }
 
-func (h *handler) setProtectedLabels(ctx context.Context, in *SetProtectedLabelsInput) (*SetProtectedLabelsOutput, error) {
-	projectID, err := parseProject(in.ProjectID)
+func (h *handler) setProtectedLabels(w http.ResponseWriter, r *http.Request) {
+	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	labels, err := h.promptSvc.SetProtectedLabels(ctx, projectID, userIDPtr(ctx), in.Body.ProtectedLabels)
+	var body promptDomain.ProtectedLabelsRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	labels, err := h.promptSvc.SetProtectedLabels(r.Context(), projectID, userIDPtr(r.Context()), body.ProtectedLabels)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: set-protected-labels failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: set-protected-labels failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 	if labels == nil {
 		labels = []string{}
 	}
-	return &SetProtectedLabelsOutput{Body: protectedLabelsResponse{ProtectedLabels: labels}}, nil
+	response.Success(w, protectedLabelsResponse{ProtectedLabels: labels})
 }
 
 // ---- compiler helpers: validate / preview / detect-dialect ---------
 
-// ValidateTemplateRequest / PreviewTemplateRequest / DetectDialectRequest
-// stay in this package — they are handler-plane shapes that wrap the
-// compiler service. Kept exported so the generated OpenAPI schema has
-// stable names on the SDK side.
+func (h *handler) validateTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	var body ValidateTemplateRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
+	}
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "template is required",
+			appErrors.WithParam("template"),
+		))
+		return
+	}
+	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid type", "type must be 'text' or 'chat'",
+			appErrors.WithParam("type"),
+		))
+		return
+	}
 
-func (h *handler) validateTemplate(ctx context.Context, in *ValidateTemplateInput) (*ValidateTemplateOutput, error) {
-	if _, err := parseProject(in.ProjectID); err != nil {
-		return nil, err
-	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "template is required")
-	}
-	if in.Body.Type != promptDomain.PromptTypeText && in.Body.Type != promptDomain.PromptTypeChat {
-		return nil, appErrors.NewValidationError("Invalid type", "type must be 'text' or 'chat'")
-	}
-
-	dialect := in.Body.Dialect
+	dialect := body.Dialect
 	if dialect == "" || dialect == promptDomain.DialectAuto {
-		detected, err := h.compilerSvc.DetectDialect(in.Body.Template, in.Body.Type)
+		detected, err := h.compilerSvc.DetectDialect(body.Template, body.Type)
 		if err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 		dialect = detected
 	}
-	result, err := h.compilerSvc.ValidateSyntax(in.Body.Template, in.Body.Type, dialect)
+	result, err := h.compilerSvc.ValidateSyntax(body.Template, body.Type, dialect)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	variables, err := h.compilerSvc.ExtractVariablesWithDialect(in.Body.Template, in.Body.Type, dialect)
+	variables, err := h.compilerSvc.ExtractVariablesWithDialect(body.Template, body.Type, dialect)
 	if err != nil {
 		variables = []string{}
 	}
@@ -589,144 +558,228 @@ func (h *handler) validateTemplate(ctx context.Context, in *ValidateTemplateInpu
 	if warns == nil {
 		warns = []promptDomain.SyntaxWarning{}
 	}
-	return &ValidateTemplateOutput{Body: ValidateTemplateResponse{
+	response.Success(w, ValidateTemplateResponse{
 		Valid:     result.Valid,
 		Dialect:   result.Dialect,
 		Variables: variables,
 		Errors:    errs,
 		Warnings:  warns,
-	}}, nil
+	})
 }
 
-func (h *handler) previewTemplate(ctx context.Context, in *PreviewTemplateInput) (*PreviewTemplateOutput, error) {
-	if _, err := parseProject(in.ProjectID); err != nil {
-		return nil, err
+func (h *handler) previewTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "template is required")
+	var body PreviewTemplateRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Variables == nil {
-		return nil, appErrors.NewValidationError("Missing variables", "variables is required")
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "template is required",
+			appErrors.WithParam("template"),
+		))
+		return
 	}
-	if in.Body.Type != promptDomain.PromptTypeText && in.Body.Type != promptDomain.PromptTypeChat {
-		return nil, appErrors.NewValidationError("Invalid type", "type must be 'text' or 'chat'")
+	if body.Variables == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing variables", "variables is required",
+			appErrors.WithParam("variables"),
+		))
+		return
+	}
+	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid type", "type must be 'text' or 'chat'",
+			appErrors.WithParam("type"),
+		))
+		return
 	}
 
-	dialect := in.Body.Dialect
+	dialect := body.Dialect
 	if dialect == "" || dialect == promptDomain.DialectAuto {
-		detected, err := h.compilerSvc.DetectDialect(in.Body.Template, in.Body.Type)
+		detected, err := h.compilerSvc.DetectDialect(body.Template, body.Type)
 		if err != nil {
-			return nil, err
+			response.WriteError(w, err)
+			return
 		}
 		dialect = detected
 	}
-	compiled, err := h.compilerSvc.CompileWithDialect(in.Body.Template, in.Body.Type, in.Body.Variables, dialect)
+	compiled, err := h.compilerSvc.CompileWithDialect(body.Template, body.Type, body.Variables, dialect)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
 
 	var wrapped any
-	switch in.Body.Type {
+	switch body.Type {
 	case promptDomain.PromptTypeText:
 		content, ok := compiled.(string)
 		if !ok {
-			return nil, appErrors.NewInternalError("unexpected compilation result type for text template", nil)
+			response.WriteError(w, appErrors.NewInternalError(
+				"unexpected compilation result type for text template", nil))
+			return
 		}
 		wrapped = promptDomain.TextTemplate{Content: content}
 	case promptDomain.PromptTypeChat:
 		msgs, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, appErrors.NewInternalError("unexpected compilation result type for chat template", nil)
+			response.WriteError(w, appErrors.NewInternalError(
+				"unexpected compilation result type for chat template", nil))
+			return
 		}
 		wrapped = promptDomain.ChatTemplate{Messages: msgs}
 	default:
 		wrapped = compiled
 	}
-	return &PreviewTemplateOutput{Body: PreviewTemplateResponse{Compiled: wrapped, Dialect: dialect}}, nil
+	response.Success(w, PreviewTemplateResponse{Compiled: wrapped, Dialect: dialect})
 }
 
-func (h *handler) detectDialect(ctx context.Context, in *DetectDialectInput) (*DetectDialectOutput, error) {
-	if _, err := parseProject(in.ProjectID); err != nil {
-		return nil, err
+func (h *handler) detectDialect(w http.ResponseWriter, r *http.Request) {
+	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "template is required")
+	var body DetectDialectRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Type != promptDomain.PromptTypeText && in.Body.Type != promptDomain.PromptTypeChat {
-		return nil, appErrors.NewValidationError("Invalid type", "type must be 'text' or 'chat'")
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "template is required",
+			appErrors.WithParam("template"),
+		))
+		return
 	}
-	dialect, err := h.compilerSvc.DetectDialect(in.Body.Template, in.Body.Type)
+	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Invalid type", "type must be 'text' or 'chat'",
+			appErrors.WithParam("type"),
+		))
+		return
+	}
+	dialect, err := h.compilerSvc.DetectDialect(body.Template, body.Type)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	return &DetectDialectOutput{Body: DetectDialectResponse{Dialect: dialect}}, nil
+	response.Success(w, DetectDialectResponse{Dialect: dialect})
 }
 
 // ---- SDK: upsert ----------------------------------------------------
 
-func (h *handler) upsertPrompt(ctx context.Context, in *UpsertPromptInput) (*UpsertPromptOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	if in.Body.Name == "" {
-		return nil, appErrors.NewValidationError("Missing name", "prompt name is required")
+func (h *handler) upsertPrompt(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
+
+	var body promptDomain.UpsertPromptRequest
+	if err := request.DecodeJSON(r, &body); err != nil {
+		response.WriteError(w, err)
+		return
 	}
-	if in.Body.Template == nil {
-		return nil, appErrors.NewValidationError("Missing template", "prompt template is required")
+	if body.Name == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing name", "prompt name is required",
+			appErrors.WithParam("name"),
+		))
+		return
 	}
-	result, err := h.promptSvc.UpsertPrompt(ctx, projectID, nil, &in.Body)
+	if body.Template == nil {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing template", "prompt template is required",
+			appErrors.WithParam("template"),
+		))
+		return
+	}
+	result, err := h.promptSvc.UpsertPrompt(r.Context(), projectID, nil, &body)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: upsert failed", "name", in.Body.Name, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: upsert failed",
+			"name", body.Name, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &UpsertPromptOutput{Body: result}, nil
+	response.Success(w, result)
 }
 
 // ---- SDK: list ------------------------------------------------------
 
-func (h *handler) listPromptsSDK(ctx context.Context, in *ListPromptsSDKInput) (*ListPromptsOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	filters, err := buildPromptFilters(in.Type, in.Tags, in.Search, in.Page, in.Limit, in.SortBy, in.SortDir)
+func (h *handler) listPromptsSDK(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
+	filters, err := buildPromptFilters(r)
 	if err != nil {
-		return nil, err
+		response.WriteError(w, err)
+		return
 	}
-	prompts, total, err := h.promptSvc.ListPrompts(ctx, projectID, filters)
+	prompts, total, err := h.promptSvc.ListPrompts(r.Context(), projectID, filters)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: sdk-list failed", "project_id", projectID, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: sdk-list failed",
+			"project_id", projectID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &ListPromptsOutput{Body: listPromptsResponse{
+	response.Success(w, listPromptsResponse{
 		Data:  prompts,
 		Total: total,
 		Page:  filters.Params.Page,
 		Limit: filters.Params.Limit,
-	}}, nil
+	})
 }
 
 // ---- SDK: get by name ----------------------------------------------
 
-func (h *handler) getPromptByName(ctx context.Context, in *GetPromptByNameInput) (*GetPromptByNameOutput, error) {
-	projectID := httpctx.MustGetProjectID(ctx)
-	if in.Name == "" {
-		return nil, appErrors.NewValidationError("Missing name", "prompt name path parameter is required")
+func (h *handler) getPromptByName(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Missing name", "prompt name path parameter is required",
+			appErrors.WithParam("name"),
+		))
+		return
 	}
+
 	opts := &promptDomain.GetPromptOptions{Label: "latest"}
-	if in.Label != "" {
-		opts.Label = in.Label
+	if label := r.URL.Query().Get("label"); label != "" {
+		opts.Label = label
 	}
-	if in.Version > 0 {
-		v := in.Version
-		opts.Version = &v
-		opts.Label = ""
+	if versionStr := r.URL.Query().Get("version"); versionStr != "" {
+		v, err := strconv.Atoi(versionStr)
+		if err != nil {
+			response.WriteError(w, appErrors.NewValidationError(
+				"Invalid version", "version must be an integer",
+				appErrors.WithParam("version"),
+			))
+			return
+		}
+		if v > 0 {
+			opts.Version = &v
+			opts.Label = ""
+		}
 	}
-	if in.CacheTTL > 0 {
-		t := in.CacheTTL
-		opts.CacheTTL = &t
+	if cacheTTLStr := r.URL.Query().Get("cache_ttl"); cacheTTLStr != "" {
+		t, err := strconv.Atoi(cacheTTLStr)
+		if err != nil {
+			response.WriteError(w, appErrors.NewValidationError(
+				"Invalid cache_ttl", "cache_ttl must be an integer",
+				appErrors.WithParam("cache_ttl"),
+			))
+			return
+		}
+		if t > 0 {
+			opts.CacheTTL = &t
+		}
 	}
-	resp, err := h.promptSvc.GetPrompt(ctx, projectID, in.Name, opts)
+	resp, err := h.promptSvc.GetPrompt(r.Context(), projectID, name, opts)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "prompt: sdk-get-by-name failed", "name", in.Name, "error", err)
-		return nil, err
+		h.logger.ErrorContext(r.Context(), "prompt: sdk-get-by-name failed",
+			"name", name, "error", err)
+		response.WriteError(w, err)
+		return
 	}
-	return &GetPromptByNameOutput{Body: resp}, nil
+	response.Success(w, resp)
 }
 
 // ---- response builders ---------------------------------------------

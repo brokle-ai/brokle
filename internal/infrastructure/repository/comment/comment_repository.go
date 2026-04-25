@@ -11,15 +11,15 @@ import (
 	"brokle/internal/infrastructure/db/gen"
 )
 
-type CommentRepository struct {
+type commentRepository struct {
 	tm *db.TxManager
 }
 
-func NewCommentRepository(tm *db.TxManager) *CommentRepository {
-	return &CommentRepository{tm: tm}
+func NewCommentRepository(tm *db.TxManager) commentDomain.Repository {
+	return &commentRepository{tm: tm}
 }
 
-func (r *CommentRepository) Create(ctx context.Context, c *commentDomain.Comment) error {
+func (r *commentRepository) Create(ctx context.Context, c *commentDomain.Comment) error {
 	if err := r.tm.Queries(ctx).CreateComment(ctx, gen.CreateCommentParams{
 		ID:         c.ID,
 		EntityType: gen.CommentEntityType(c.EntityType),
@@ -35,7 +35,7 @@ func (r *CommentRepository) Create(ctx context.Context, c *commentDomain.Comment
 	return nil
 }
 
-func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (*commentDomain.Comment, error) {
+func (r *commentRepository) GetByID(ctx context.Context, id uuid.UUID) (*commentDomain.Comment, error) {
 	row, err := r.tm.Queries(ctx).GetCommentByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -46,7 +46,7 @@ func (r *CommentRepository) GetByID(ctx context.Context, id uuid.UUID) (*comment
 	return commentFromRow(&row), nil
 }
 
-func (r *CommentRepository) GetByIDWithUser(ctx context.Context, id uuid.UUID) (*commentDomain.CommentWithUser, error) {
+func (r *commentRepository) GetByIDWithUser(ctx context.Context, id uuid.UUID) (*commentDomain.CommentWithUser, error) {
 	c, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (r *CommentRepository) GetByIDWithUser(ctx context.Context, id uuid.UUID) (
 	return withUser(c, users), nil
 }
 
-func (r *CommentRepository) Update(ctx context.Context, c *commentDomain.Comment) error {
+func (r *commentRepository) Update(ctx context.Context, c *commentDomain.Comment) error {
 	n, err := r.tm.Queries(ctx).UpdateComment(ctx, gen.UpdateCommentParams{
 		ID:        c.ID,
 		Content:   c.Content,
@@ -74,7 +74,7 @@ func (r *CommentRepository) Update(ctx context.Context, c *commentDomain.Comment
 	return nil
 }
 
-func (r *CommentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *commentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).SoftDeleteComment(ctx, id)
 	if err != nil {
 		return err
@@ -85,11 +85,11 @@ func (r *CommentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *CommentRepository) HasActiveReplies(ctx context.Context, parentID uuid.UUID) (bool, error) {
+func (r *commentRepository) HasActiveReplies(ctx context.Context, parentID uuid.UUID) (bool, error) {
 	return r.tm.Queries(ctx).HasActiveReplies(ctx, &parentID)
 }
 
-func (r *CommentRepository) ListByEntity(ctx context.Context, entityType commentDomain.EntityType, entityID string, projectID uuid.UUID) ([]*commentDomain.CommentWithUser, error) {
+func (r *commentRepository) ListByEntity(ctx context.Context, entityType commentDomain.EntityType, entityID string, projectID uuid.UUID) ([]*commentDomain.CommentWithUser, error) {
 	rows, err := r.tm.Queries(ctx).ListCommentsByEntity(ctx, gen.ListCommentsByEntityParams{
 		EntityType: gen.CommentEntityType(entityType),
 		EntityID:   entityID,
@@ -113,7 +113,7 @@ func (r *CommentRepository) ListByEntity(ctx context.Context, entityType comment
 	return out, nil
 }
 
-func (r *CommentRepository) CountByEntity(ctx context.Context, entityType commentDomain.EntityType, entityID string, projectID uuid.UUID) (int64, error) {
+func (r *commentRepository) CountByEntity(ctx context.Context, entityType commentDomain.EntityType, entityID string, projectID uuid.UUID) (int64, error) {
 	return r.tm.Queries(ctx).CountCommentsByEntity(ctx, gen.CountCommentsByEntityParams{
 		EntityType: gen.CommentEntityType(entityType),
 		EntityID:   entityID,
@@ -121,7 +121,7 @@ func (r *CommentRepository) CountByEntity(ctx context.Context, entityType commen
 	})
 }
 
-func (r *CommentRepository) ListReplies(ctx context.Context, parentIDs []uuid.UUID) (map[string][]*commentDomain.CommentWithUser, error) {
+func (r *commentRepository) ListReplies(ctx context.Context, parentIDs []uuid.UUID) (map[string][]*commentDomain.CommentWithUser, error) {
 	out := make(map[string][]*commentDomain.CommentWithUser, len(parentIDs))
 	for _, id := range parentIDs {
 		out[id.String()] = []*commentDomain.CommentWithUser{}
@@ -148,7 +148,7 @@ func (r *CommentRepository) ListReplies(ctx context.Context, parentIDs []uuid.UU
 	return out, nil
 }
 
-func (r *CommentRepository) CountReplies(ctx context.Context, parentIDs []uuid.UUID) (map[string]int, error) {
+func (r *commentRepository) CountReplies(ctx context.Context, parentIDs []uuid.UUID) (map[string]int, error) {
 	out := make(map[string]int, len(parentIDs))
 	for _, id := range parentIDs {
 		out[id.String()] = 0
@@ -187,7 +187,7 @@ func collectUserIDs(comments []*commentDomain.Comment) []uuid.UUID {
 	return out
 }
 
-func (r *CommentRepository) loadUsers(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*commentDomain.CommentUser, error) {
+func (r *commentRepository) loadUsers(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*commentDomain.CommentUser, error) {
 	out := make(map[uuid.UUID]*commentDomain.CommentUser)
 	if len(ids) == 0 {
 		return out, nil

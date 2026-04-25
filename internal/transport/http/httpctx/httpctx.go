@@ -216,10 +216,10 @@ func Environment(ctx context.Context) (string, bool) {
 // ----- Client IP + User-Agent (set by RequestMetadata middleware) -----
 //
 // These carry the trusted-proxy-resolved client IP and the raw
-// User-Agent header through the request context so Huma operation
-// handlers (which receive only context.Context, not *http.Request)
+// User-Agent header through the request context so service-layer
+// callers (which receive only context.Context, not *http.Request)
 // can emit audit-log rows with the real caller metadata without
-// reaching for an http.ResponseWriter.
+// reaching back into *http.Request.
 //
 // Both values are always present once the global middleware chain
 // has run (ClientIP falls back to r.RemoteAddr host, UserAgent

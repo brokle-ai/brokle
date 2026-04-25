@@ -10,19 +10,19 @@ import (
 	"brokle/internal/infrastructure/db/gen"
 )
 
-type DatasetItemRepository struct {
+type datasetItemRepository struct {
 	tm *db.TxManager
 }
 
-func NewDatasetItemRepository(tm *db.TxManager) *DatasetItemRepository {
-	return &DatasetItemRepository{tm: tm}
+func NewDatasetItemRepository(tm *db.TxManager) evalDomain.DatasetItemRepository {
+	return &datasetItemRepository{tm: tm}
 }
 
-func (r *DatasetItemRepository) Create(ctx context.Context, item *evalDomain.DatasetItem) error {
+func (r *datasetItemRepository) Create(ctx context.Context, item *evalDomain.DatasetItem) error {
 	return r.insertOne(ctx, item)
 }
 
-func (r *DatasetItemRepository) CreateBatch(ctx context.Context, items []*evalDomain.DatasetItem) error {
+func (r *datasetItemRepository) CreateBatch(ctx context.Context, items []*evalDomain.DatasetItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -36,7 +36,7 @@ func (r *DatasetItemRepository) CreateBatch(ctx context.Context, items []*evalDo
 	})
 }
 
-func (r *DatasetItemRepository) insertOne(ctx context.Context, item *evalDomain.DatasetItem) error {
+func (r *datasetItemRepository) insertOne(ctx context.Context, item *evalDomain.DatasetItem) error {
 	input, err := marshalEvalJSON(item.Input)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (r *DatasetItemRepository) insertOne(ctx context.Context, item *evalDomain.
 	})
 }
 
-func (r *DatasetItemRepository) GetByID(ctx context.Context, id, datasetID uuid.UUID) (*evalDomain.DatasetItem, error) {
+func (r *datasetItemRepository) GetByID(ctx context.Context, id, datasetID uuid.UUID) (*evalDomain.DatasetItem, error) {
 	row, err := r.tm.Queries(ctx).GetDatasetItemByID(ctx, gen.GetDatasetItemByIDParams{
 		ID:        id,
 		DatasetID: datasetID,
@@ -76,7 +76,7 @@ func (r *DatasetItemRepository) GetByID(ctx context.Context, id, datasetID uuid.
 	return datasetItemFromRow(&row)
 }
 
-func (r *DatasetItemRepository) GetByIDForProject(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.DatasetItem, error) {
+func (r *datasetItemRepository) GetByIDForProject(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.DatasetItem, error) {
 	row, err := r.tm.Queries(ctx).GetDatasetItemByIDForProject(ctx, gen.GetDatasetItemByIDForProjectParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -90,7 +90,7 @@ func (r *DatasetItemRepository) GetByIDForProject(ctx context.Context, id, proje
 	return datasetItemFromRow(&row)
 }
 
-func (r *DatasetItemRepository) List(ctx context.Context, datasetID uuid.UUID, limit, offset int) ([]*evalDomain.DatasetItem, int64, error) {
+func (r *datasetItemRepository) List(ctx context.Context, datasetID uuid.UUID, limit, offset int) ([]*evalDomain.DatasetItem, int64, error) {
 	total, err := r.tm.Queries(ctx).CountDatasetItems(ctx, datasetID)
 	if err != nil {
 		return nil, 0, err
@@ -106,7 +106,7 @@ func (r *DatasetItemRepository) List(ctx context.Context, datasetID uuid.UUID, l
 	return datasetItemsFromRows(rows, total)
 }
 
-func (r *DatasetItemRepository) Delete(ctx context.Context, id, datasetID uuid.UUID) error {
+func (r *datasetItemRepository) Delete(ctx context.Context, id, datasetID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteDatasetItem(ctx, gen.DeleteDatasetItemParams{
 		ID:        id,
 		DatasetID: datasetID,
@@ -120,11 +120,11 @@ func (r *DatasetItemRepository) Delete(ctx context.Context, id, datasetID uuid.U
 	return nil
 }
 
-func (r *DatasetItemRepository) CountByDataset(ctx context.Context, datasetID uuid.UUID) (int64, error) {
+func (r *datasetItemRepository) CountByDataset(ctx context.Context, datasetID uuid.UUID) (int64, error) {
 	return r.tm.Queries(ctx).CountDatasetItems(ctx, datasetID)
 }
 
-func (r *DatasetItemRepository) FindByContentHash(ctx context.Context, datasetID uuid.UUID, contentHash string) (*evalDomain.DatasetItem, error) {
+func (r *datasetItemRepository) FindByContentHash(ctx context.Context, datasetID uuid.UUID, contentHash string) (*evalDomain.DatasetItem, error) {
 	row, err := r.tm.Queries(ctx).FindDatasetItemByContentHash(ctx, gen.FindDatasetItemByContentHashParams{
 		DatasetID:   datasetID,
 		ContentHash: &contentHash,
@@ -138,7 +138,7 @@ func (r *DatasetItemRepository) FindByContentHash(ctx context.Context, datasetID
 	return datasetItemFromRow(&row)
 }
 
-func (r *DatasetItemRepository) FindByContentHashes(ctx context.Context, datasetID uuid.UUID, contentHashes []string) (map[string]bool, error) {
+func (r *datasetItemRepository) FindByContentHashes(ctx context.Context, datasetID uuid.UUID, contentHashes []string) (map[string]bool, error) {
 	if len(contentHashes) == 0 {
 		return map[string]bool{}, nil
 	}
@@ -158,7 +158,7 @@ func (r *DatasetItemRepository) FindByContentHashes(ctx context.Context, dataset
 	return out, nil
 }
 
-func (r *DatasetItemRepository) ListAll(ctx context.Context, datasetID uuid.UUID) ([]*evalDomain.DatasetItem, error) {
+func (r *datasetItemRepository) ListAll(ctx context.Context, datasetID uuid.UUID) ([]*evalDomain.DatasetItem, error) {
 	rows, err := r.tm.Queries(ctx).ListAllDatasetItems(ctx, datasetID)
 	if err != nil {
 		return nil, err

@@ -13,11 +13,10 @@ import (
 )
 
 // installGlobalMiddleware applies the process-wide middleware stack
-// on mux. Called from server.New EXACTLY ONCE, before any route is
-// registered on mux — and critically, before humachi.New constructs
-// the Huma APIs (humachi's constructor registers /openapi, /docs,
-// and /schemas routes immediately, sealing the mux for further
-// chi.Mux.Use calls at go-chi/chi/v5/mux.go:100-104).
+// on mux. Called from server.New EXACTLY ONCE, before addRoutes
+// registers any route. chi panics once the mux has any route
+// (go-chi/chi/v5/mux.go:100-104), so mux-level middleware MUST
+// precede all route registration.
 //
 // Two layers of middleware are installed here:
 //
@@ -43,11 +42,10 @@ import (
 //     the matched route, not an intermediate wrapper.
 //
 //  2. Path-prefix-scoped cross-cutting middleware for the two API
-//     surfaces — CORS + CSRF on /api/v1/*. These MUST live at the
-//     mux level rather than on chi subrouters because humachi binds
-//     its adapter to the captured router reference at construction
-//     time; routes registered via huma.Register land on the mux, not
-//     on any subrouter built later via r.Route / r.Group.
+//     surfaces — CORS + CSRF on /api/v1/*. These live at the mux
+//     level (not on a chi subrouter) so any handler registered under
+//     /api/v1 inherits them regardless of the sub-routing used to
+//     reach it.
 //
 //     The /api/v1 stack is, outer-to-inner:
 //     - corsAdmin — CORS preflight handling + allow headers on
@@ -67,7 +65,7 @@ import (
 // all shared-egress callers (corporate NAT, CGNAT, mobile carriers,
 // Next.js SSR pods, serverless functions) into one bucket. That's
 // the SSR-loopback 429 bug class. IP limits therefore live on the
-// PUBLIC Huma groups only (dashPublic, sdkPublic) in addRoutes;
+// pre-auth chi groups only (dashPublic, sdkPublic) in addRoutes;
 // authed groups (dashAuth, sdkAuth) run with LimitByUser /
 // LimitByAPIKey alone.
 //
@@ -87,9 +85,9 @@ func installGlobalMiddleware(mux *chi.Mux, deps Deps) {
 	csrf := crossOriginProtection(deps)
 
 	// Dashboard plane (/api/v1/*) — CORS + CSRF only. Rate limiting
-	// is attached per-Huma-group in addRoutes.
-	mux.Use(pathPrefix(adminAPIPrefix, corsAdmin.Wrap))
-	mux.Use(pathPrefix(adminAPIPrefix, csrf.Handler))
+	// is attached per-chi-group in addRoutes.
+	mux.Use(pathPrefix("/api/v1", corsAdmin.Wrap))
+	mux.Use(pathPrefix("/api/v1", csrf.Handler))
 }
 
 // echoRequestID copies the request ID out of the chi context (set by

@@ -1,3 +1,4 @@
+// Package utils provides small cross-cutting helpers (string, slice, map utilities).
 package utils
 
 import (

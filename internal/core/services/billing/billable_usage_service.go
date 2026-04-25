@@ -1,8 +1,8 @@
+// Package billing implements billing and usage aggregation: plans, budgets, contracts, and usage-based pricing.
 package billing
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -11,35 +11,35 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/billing"
-	pkgErrors "brokle/pkg/errors"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/units"
 )
 
-type billableUsageService struct {
-	usageRepo      billing.BillableUsageRepository
-	billingRepo    billing.OrganizationBillingRepository
-	pricingService billing.PricingService
-	planRepo       billing.PlanRepository
-	logger         *slog.Logger
+type BillableUsageService struct {
+	usageRepo   billing.BillableUsageRepository
+	billingRepo billing.OrganizationBillingRepository
+	pricing     *PricingService
+	planRepo    billing.PlanRepository
+	logger      *slog.Logger
 }
 
 func NewBillableUsageService(
 	usageRepo billing.BillableUsageRepository,
 	billingRepo billing.OrganizationBillingRepository,
-	pricingService billing.PricingService,
+	pricing *PricingService,
 	planRepo billing.PlanRepository,
 	logger *slog.Logger,
-) billing.BillableUsageService {
-	return &billableUsageService{
-		usageRepo:      usageRepo,
-		billingRepo:    billingRepo,
-		pricingService: pricingService,
-		planRepo:       planRepo,
-		logger:         logger,
+) *BillableUsageService {
+	return &BillableUsageService{
+		usageRepo:   usageRepo,
+		billingRepo: billingRepo,
+		pricing:     pricing,
+		planRepo:    planRepo,
+		logger:      logger,
 	}
 }
 
-func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.UUID) (*billing.UsageOverview, error) {
+func (s *BillableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.UUID) (*billing.UsageOverview, error) {
 	// 1. Get billing metadata from PostgreSQL (pricing config, free tier, period dates)
 	orgBilling, err := s.billingRepo.GetByOrgID(ctx, orgID)
 	if err != nil {
@@ -51,7 +51,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.
 	}
 
 	// Get effective pricing (contract overrides > plan defaults)
-	effectivePricing, err := s.pricingService.GetEffectivePricing(ctx, orgID)
+	effectivePricing, err := s.pricing.GetEffectivePricing(ctx, orgID)
 	if err != nil {
 		s.logger.Error("failed to get effective pricing",
 			"error", err,
@@ -66,7 +66,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.
 	filter := &billing.BillableUsageFilter{
 		OrganizationID: orgID,
 		Start:          orgBilling.BillingCycleStart,
-		End:            time.Now().UTC(),
+		End:            time.Now(),
 		Granularity:    "hourly",
 	}
 
@@ -85,7 +85,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.
 	}
 
 	// 3. Calculate real-time cost with tier support (delegates to pricing service)
-	estimatedCost, err := s.pricingService.CalculateCostWithTiers(ctx, orgID, usageSummary)
+	estimatedCost, err := s.pricing.CalculateCostWithTiers(ctx, orgID, usageSummary)
 	if err != nil {
 		s.logger.Error("failed to calculate cost",
 			"error", err,
@@ -122,7 +122,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID uuid.
 	}, nil
 }
 
-func (s *billableUsageService) GetUsageTimeSeries(ctx context.Context, orgID uuid.UUID, start, end time.Time, granularity string) ([]*billing.BillableUsage, error) {
+func (s *BillableUsageService) GetUsageTimeSeries(ctx context.Context, orgID uuid.UUID, start, end time.Time, granularity string) ([]*billing.BillableUsage, error) {
 	filter := &billing.BillableUsageFilter{
 		OrganizationID: orgID,
 		Start:          start,
@@ -142,7 +142,7 @@ func (s *billableUsageService) GetUsageTimeSeries(ctx context.Context, orgID uui
 	return usage, nil
 }
 
-func (s *billableUsageService) GetUsageByProject(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billing.BillableUsageSummary, error) {
+func (s *BillableUsageService) GetUsageByProject(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*billing.BillableUsageSummary, error) {
 	summaries, err := s.usageRepo.GetUsageByProject(ctx, orgID, start, end)
 	if err != nil {
 		s.logger.Error("failed to get usage by project",
@@ -157,13 +157,13 @@ func (s *billableUsageService) GetUsageByProject(ctx context.Context, orgID uuid
 
 // CalculateCost delegates to pricing service for tier-aware cost calculation
 // This maintains the interface contract while supporting enterprise custom pricing
-func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing.BillableUsageSummary, plan *billing.Plan) float64 {
+func (s *BillableUsageService) CalculateCost(ctx context.Context, usage *billing.BillableUsageSummary, plan *billing.Plan) float64 {
 	// For backward compatibility with interface, we still accept plan parameter
 	// but delegate to pricing service which handles contracts and volume tiers
 
 	// Extract orgID from usage summary if available, otherwise use simple calculation
-	// This is a transitional method - new code should use pricingService directly
-	s.logger.Warn("CalculateCost called with plan parameter - consider using pricingService.CalculateCostWithTiers directly")
+	// This is a transitional method - new code should use pricing directly
+	s.logger.Warn("calculateCost called with plan parameter - consider using pricing.CalculateCostWithTiers directly")
 
 	// Simple flat calculation without contract awareness (legacy behavior)
 	totalCost := decimal.Zero
@@ -192,7 +192,7 @@ func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing
 	return result
 }
 
-func (s *billableUsageService) calculatePeriodEnd(cycleStart time.Time, anchorDay int) time.Time {
+func (s *BillableUsageService) calculatePeriodEnd(cycleStart time.Time, anchorDay int) time.Time {
 	nextMonth := cycleStart.AddDate(0, 1, 0)
 
 	year, month, _ := nextMonth.Date()
@@ -208,7 +208,7 @@ func (s *billableUsageService) calculatePeriodEnd(cycleStart time.Time, anchorDa
 	return time.Date(year, month, day, 0, 0, 0, 0, loc)
 }
 
-func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context, orgID uuid.UUID) error {
+func (s *BillableUsageService) ProvisionOrganizationBilling(ctx context.Context, orgID uuid.UUID) error {
 	// Get default plan
 	defaultPlan, err := s.planRepo.GetDefault(ctx)
 	if err != nil {
@@ -216,7 +216,7 @@ func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 			"error", err,
 			"organization_id", orgID,
 		)
-		return fmt.Errorf("get default pricing plan: %w", err)
+		return appErrors.NewInternalError("failed to get default pricing plan", err)
 	}
 
 	now := time.Now()
@@ -239,11 +239,11 @@ func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 
 	if err := s.billingRepo.Create(ctx, billingRecord); err != nil {
 		// Idempotency check
-		if pkgErrors.IsUniqueViolation(err) {
+		if appErrors.IsUniqueViolation(err) {
 			s.logger.Info("billing record already exists", "organization_id", orgID)
 			return nil // Success - already provisioned
 		}
-		return fmt.Errorf("create billing record: %w", err)
+		return appErrors.NewInternalError("failed to create billing record", err)
 	}
 
 	s.logger.Info("provisioned billing",

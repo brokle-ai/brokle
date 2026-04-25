@@ -20,17 +20,17 @@ const (
 // ScoreConfig defines metadata and validation rules for a score type.
 // Stored in PostgreSQL for transactional consistency.
 type ScoreConfig struct {
-	ID          uuid.UUID              `json:"id"`
-	ProjectID   uuid.UUID              `json:"project_id"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description,omitempty"`
-	Type        ScoreType              `json:"type"`
-	MinValue    *float64               `json:"min_value,omitempty"`
-	MaxValue    *float64               `json:"max_value,omitempty"`
-	Categories  []string               `json:"categories,omitempty"`
+	ID          uuid.UUID      `json:"id"`
+	ProjectID   uuid.UUID      `json:"project_id"`
+	Name        string         `json:"name"`
+	Description *string        `json:"description,omitempty"`
+	Type        ScoreType      `json:"type"`
+	MinValue    *float64       `json:"min_value,omitempty"`
+	MaxValue    *float64       `json:"max_value,omitempty"`
+	Categories  []string       `json:"categories,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 func NewScoreConfig(projectID uuid.UUID, name string, scoreType ScoreType) *ScoreConfig {
@@ -79,22 +79,22 @@ func (sc *ScoreConfig) Validate() []EvaluationValidationError {
 }
 
 type CreateScoreConfigRequest struct {
-	Name        string                 `json:"name" binding:"required,min=1,max=100"`
-	Description *string                `json:"description,omitempty"`
-	Type        ScoreType              `json:"type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
-	MinValue    *float64               `json:"min_value,omitempty"`
-	MaxValue    *float64               `json:"max_value,omitempty"`
-	Categories  []string               `json:"categories,omitempty"`
+	Name        string         `json:"name" binding:"required,min=1,max=100"`
+	Description *string        `json:"description,omitempty"`
+	Type        ScoreType      `json:"type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	MinValue    *float64       `json:"min_value,omitempty"`
+	MaxValue    *float64       `json:"max_value,omitempty"`
+	Categories  []string       `json:"categories,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 type UpdateScoreConfigRequest struct {
-	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
-	Description *string                `json:"description,omitempty"`
-	Type        *ScoreType             `json:"type,omitempty" binding:"omitempty,oneof=NUMERIC CATEGORICAL BOOLEAN"`
-	MinValue    *float64               `json:"min_value,omitempty"`
-	MaxValue    *float64               `json:"max_value,omitempty"`
-	Categories  []string               `json:"categories,omitempty"`
+	Name        *string        `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
+	Description *string        `json:"description,omitempty"`
+	Type        *ScoreType     `json:"type,omitempty" binding:"omitempty,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	MinValue    *float64       `json:"min_value,omitempty"`
+	MaxValue    *float64       `json:"max_value,omitempty"`
+	Categories  []string       `json:"categories,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
@@ -130,14 +130,14 @@ func (sc *ScoreConfig) ToResponse() *ScoreConfigResponse {
 
 // Dataset represents a collection of test cases for evaluation.
 type Dataset struct {
-	ID               uuid.UUID              `json:"id"`
-	ProjectID        uuid.UUID              `json:"project_id"`
-	Name             string                 `json:"name"`
-	Description      *string                `json:"description,omitempty"`
+	ID               uuid.UUID      `json:"id"`
+	ProjectID        uuid.UUID      `json:"project_id"`
+	Name             string         `json:"name"`
+	Description      *string        `json:"description,omitempty"`
 	Metadata         map[string]any `json:"metadata,omitempty"`
-	CurrentVersionID *uuid.UUID             `json:"current_version_id,omitempty"` // Pinned version (nil = use latest)
-	CreatedAt        time.Time              `json:"created_at"`
-	UpdatedAt        time.Time              `json:"updated_at"`
+	CurrentVersionID *uuid.UUID     `json:"current_version_id,omitempty"` // Pinned version (nil = use latest)
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 func NewDataset(projectID uuid.UUID, name string) *Dataset {
@@ -166,14 +166,14 @@ func (d *Dataset) Validate() []EvaluationValidationError {
 }
 
 type CreateDatasetRequest struct {
-	Name        string                 `json:"name" binding:"required,min=1,max=255"`
-	Description *string                `json:"description,omitempty"`
+	Name        string         `json:"name" binding:"required,min=1,max=255"`
+	Description *string        `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 type UpdateDatasetRequest struct {
-	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
-	Description *string                `json:"description,omitempty"`
+	Name        *string        `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
+	Description *string        `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
@@ -226,16 +226,16 @@ func (s DatasetItemSource) IsValid() bool {
 
 // DatasetItem represents an individual test case within a dataset.
 type DatasetItem struct {
-	ID            uuid.UUID              `json:"id"`
-	DatasetID     uuid.UUID              `json:"dataset_id"`
-	Input         map[string]any `json:"input"`
-	Expected      map[string]any `json:"expected,omitempty"`
-	Metadata      map[string]any `json:"metadata,omitempty"`
-	Source        DatasetItemSource      `json:"source"`
-	SourceTraceID *string                `json:"source_trace_id,omitempty"`
-	SourceSpanID  *string                `json:"source_span_id,omitempty"`
-	ContentHash   *string                `json:"content_hash,omitempty"`
-	CreatedAt     time.Time              `json:"created_at"`
+	ID            uuid.UUID         `json:"id"`
+	DatasetID     uuid.UUID         `json:"dataset_id"`
+	Input         map[string]any    `json:"input"`
+	Expected      map[string]any    `json:"expected,omitempty"`
+	Metadata      map[string]any    `json:"metadata,omitempty"`
+	Source        DatasetItemSource `json:"source"`
+	SourceTraceID *string           `json:"source_trace_id,omitempty"`
+	SourceSpanID  *string           `json:"source_span_id,omitempty"`
+	ContentHash   *string           `json:"content_hash,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
 }
 
 func NewDatasetItem(datasetID uuid.UUID, input map[string]any) *DatasetItem {
@@ -316,10 +316,10 @@ type CreateDatasetItemsFromSpansRequest struct {
 
 // ImportDatasetItemsFromJSONRequest is the request to import dataset items from JSON data.
 type ImportDatasetItemsFromJSONRequest struct {
-	Items       []map[string]any `json:"items" binding:"required,min=1"`
-	KeysMapping *KeysMapping             `json:"keys_mapping,omitempty"`
-	Deduplicate bool                     `json:"deduplicate"`
-	Source      DatasetItemSource        `json:"source,omitempty"`
+	Items       []map[string]any  `json:"items" binding:"required,min=1"`
+	KeysMapping *KeysMapping      `json:"keys_mapping,omitempty"`
+	Deduplicate bool              `json:"deduplicate"`
+	Source      DatasetItemSource `json:"source,omitempty"`
 }
 
 // CSVColumnMapping defines how CSV columns map to dataset item fields.
@@ -390,15 +390,15 @@ const (
 
 // Experiment represents a batch evaluation run.
 type Experiment struct {
-	ID          uuid.UUID              `json:"id"`
-	ProjectID   uuid.UUID              `json:"project_id"`
-	DatasetID   *uuid.UUID             `json:"dataset_id,omitempty"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description,omitempty"`
-	Status      ExperimentStatus       `json:"status"`
-	Source      ExperimentSource       `json:"source"`
-	ConfigID    *uuid.UUID             `json:"config_id,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
+	ID          uuid.UUID        `json:"id"`
+	ProjectID   uuid.UUID        `json:"project_id"`
+	DatasetID   *uuid.UUID       `json:"dataset_id,omitempty"`
+	Name        string           `json:"name"`
+	Description *string          `json:"description,omitempty"`
+	Status      ExperimentStatus `json:"status"`
+	Source      ExperimentSource `json:"source"`
+	ConfigID    *uuid.UUID       `json:"config_id,omitempty"`
+	Metadata    map[string]any   `json:"metadata,omitempty"`
 	// Progress tracking fields
 	TotalItems     int        `json:"total_items"`
 	CompletedItems int        `json:"completed_items"`
@@ -470,16 +470,16 @@ type CreateExperimentRequest struct {
 // RerunExperimentRequest is the request to create a new experiment based on an existing one.
 // The new experiment will have the same dataset but can have a different name and metadata.
 type RerunExperimentRequest struct {
-	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
-	Description *string                `json:"description,omitempty"`
+	Name        *string        `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
+	Description *string        `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 type UpdateExperimentRequest struct {
-	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
-	Description *string                `json:"description,omitempty"`
-	Status      *ExperimentStatus      `json:"status,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
+	Name        *string           `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
+	Description *string           `json:"description,omitempty"`
+	Status      *ExperimentStatus `json:"status,omitempty"`
+	Metadata    map[string]any    `json:"metadata,omitempty"`
 }
 
 type ExperimentFilter struct {
@@ -601,17 +601,17 @@ func (e *Experiment) ToProgressResponse() *ExperimentProgressResponse {
 
 // ExperimentItem represents an individual result from an experiment run.
 type ExperimentItem struct {
-	ID            uuid.UUID              `json:"id"`
-	ExperimentID  uuid.UUID              `json:"experiment_id"`
-	DatasetItemID *uuid.UUID             `json:"dataset_item_id,omitempty"`
-	TraceID       *string                `json:"trace_id,omitempty"`
+	ID            uuid.UUID      `json:"id"`
+	ExperimentID  uuid.UUID      `json:"experiment_id"`
+	DatasetItemID *uuid.UUID     `json:"dataset_item_id,omitempty"`
+	TraceID       *string        `json:"trace_id,omitempty"`
 	Input         map[string]any `json:"input"`
 	Output        any            `json:"output,omitempty"`
 	Expected      any            `json:"expected,omitempty"`
-	TrialNumber   int                    `json:"trial_number"`
+	TrialNumber   int            `json:"trial_number"`
 	Metadata      map[string]any `json:"metadata,omitempty"`
-	Error         *string                `json:"error,omitempty"`
-	CreatedAt     time.Time              `json:"created_at"`
+	Error         *string        `json:"error,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 func NewExperimentItem(experimentID uuid.UUID, input map[string]any) *ExperimentItem {
@@ -641,22 +641,22 @@ func (ei *ExperimentItem) Validate() []EvaluationValidationError {
 // ExperimentItemScore represents a score submitted with an experiment item from SDK.
 // These scores are computed by SDK evaluators and bundled with experiment items.
 type ExperimentItemScore struct {
-	Name          string                 `json:"name" binding:"required"`
-	Value         *float64               `json:"value,omitempty"`
-	Type          string                 `json:"type,omitempty"` // NUMERIC, CATEGORICAL, BOOLEAN
-	StringValue   *string                `json:"string_value,omitempty"`
-	Reason        *string                `json:"reason,omitempty"`
+	Name          string         `json:"name" binding:"required"`
+	Value         *float64       `json:"value,omitempty"`
+	Type          string         `json:"type,omitempty"` // NUMERIC, CATEGORICAL, BOOLEAN
+	StringValue   *string        `json:"string_value,omitempty"`
+	Reason        *string        `json:"reason,omitempty"`
 	Metadata      map[string]any `json:"metadata,omitempty"`
-	ScoringFailed *bool                  `json:"scoring_failed,omitempty"`
+	ScoringFailed *bool          `json:"scoring_failed,omitempty"`
 }
 
 type CreateExperimentItemRequest struct {
-	DatasetItemID *string                `json:"dataset_item_id,omitempty"`
-	TraceID       *string                `json:"trace_id,omitempty"`
+	DatasetItemID *string        `json:"dataset_item_id,omitempty"`
+	TraceID       *string        `json:"trace_id,omitempty"`
 	Input         map[string]any `json:"input" binding:"required"`
 	Output        any            `json:"output,omitempty"`
 	Expected      any            `json:"expected,omitempty"`
-	TrialNumber   *int                   `json:"trial_number,omitempty"`
+	TrialNumber   *int           `json:"trial_number,omitempty"`
 	Metadata      map[string]any `json:"metadata,omitempty"`
 	// Scores computed by SDK evaluators, bundled with the experiment item
 	Scores []ExperimentItemScore `json:"scores,omitempty"`
@@ -742,9 +742,9 @@ type CompareExperimentsRequest struct {
 
 // CompareExperimentsResponse contains the comparison results.
 type CompareExperimentsResponse struct {
-	Experiments map[string]*ExperimentSummary           `json:"experiments"`
+	Experiments map[string]*ExperimentSummary                    `json:"experiments"`
 	Scores      map[string]map[string]*EvaluatorScoreAggregation `json:"scores"`          // scoreName -> experimentID -> aggregation
-	Diffs       map[string]map[string]*ScoreDiff        `json:"diffs,omitempty"` // scoreName -> experimentID -> diff (vs baseline)
+	Diffs       map[string]map[string]*ScoreDiff                 `json:"diffs,omitempty"` // scoreName -> experimentID -> diff (vs baseline)
 }
 
 // CalculateDiff computes the difference between two score aggregations.
@@ -780,14 +780,14 @@ func abs(x float64) float64 {
 // DatasetVersion represents a snapshot of a dataset at a point in time.
 // Versions are created automatically when items are added or removed.
 type DatasetVersion struct {
-	ID          uuid.UUID              `json:"id"`
-	DatasetID   uuid.UUID              `json:"dataset_id"`
-	Version     int                    `json:"version"`
-	ItemCount   int                    `json:"item_count"`
-	Description *string                `json:"description,omitempty"`
+	ID          uuid.UUID      `json:"id"`
+	DatasetID   uuid.UUID      `json:"dataset_id"`
+	Version     int            `json:"version"`
+	ItemCount   int            `json:"item_count"`
+	Description *string        `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
-	CreatedBy   *uuid.UUID             `json:"created_by,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
+	CreatedBy   *uuid.UUID     `json:"created_by,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
 }
 
 // NewDatasetVersion creates a new dataset version.
@@ -848,7 +848,7 @@ type DatasetItemVersion struct {
 
 // CreateDatasetVersionRequest is the request to create a new version manually.
 type CreateDatasetVersionRequest struct {
-	Description *string                `json:"description,omitempty"`
+	Description *string        `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 

@@ -19,20 +19,19 @@ import (
 // ProviderModel represents an AI provider's LLM model definition (OpenAI, Anthropic, Google)
 // Used to track provider pricing for cost analytics, NOT for billing users
 type ProviderModel struct {
-	ID              uuid.UUID              `json:"id"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
-	ProjectID       *uuid.UUID             `json:"project_id,omitempty"`
-	ModelName       string                 `json:"model_name"`
-	MatchPattern    string                 `json:"match_pattern"`
-	Provider        string                 `json:"provider"`
-	DisplayName     *string                `json:"display_name,omitempty"`
-	StartDate       time.Time              `json:"start_date"`
-	Unit            string                 `json:"unit"`
-	TokenizerID     *string                `json:"tokenizer_id,omitempty"`
+	ID              uuid.UUID      `json:"id"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	ProjectID       *uuid.UUID     `json:"project_id,omitempty"`
+	ModelName       string         `json:"model_name"`
+	MatchPattern    string         `json:"match_pattern"`
+	Provider        string         `json:"provider"`
+	DisplayName     *string        `json:"display_name,omitempty"`
+	StartDate       time.Time      `json:"start_date"`
+	Unit            string         `json:"unit"`
+	TokenizerID     *string        `json:"tokenizer_id,omitempty"`
 	TokenizerConfig map[string]any `json:"tokenizer_config,omitempty"`
 }
-
 
 // ProviderPrice represents AI provider pricing per usage type
 // Examples: OpenAI charges $2.50/1M input tokens, Anthropic charges $3.00/1M
@@ -46,7 +45,6 @@ type ProviderPrice struct {
 	UsageType       string          `json:"usage_type"`
 	Price           decimal.Decimal `json:"price"`
 }
-
 
 // ProviderPricingSnapshot represents provider pricing snapshot captured at ingestion time
 // Purpose: Audit trail for "What was OpenAI's pricing on Nov 22, 2025?"

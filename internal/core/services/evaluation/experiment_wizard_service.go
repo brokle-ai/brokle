@@ -17,7 +17,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type experimentWizardService struct {
+type ExperimentWizardService struct {
 	transactor         common.Transactor
 	experimentRepo     evaluation.ExperimentRepository
 	configRepo         evaluation.ExperimentConfigRepository
@@ -39,8 +39,8 @@ func NewExperimentWizardService(
 	promptRepo prompt.PromptRepository,
 	versionRepo prompt.VersionRepository,
 	logger *slog.Logger,
-) evaluation.ExperimentWizardService {
-	return &experimentWizardService{
+) *ExperimentWizardService {
+	return &ExperimentWizardService{
 		transactor:         transactor,
 		experimentRepo:     experimentRepo,
 		configRepo:         configRepo,
@@ -53,7 +53,7 @@ func NewExperimentWizardService(
 	}
 }
 
-func (s *experimentWizardService) CreateFromWizard(
+func (s *ExperimentWizardService) CreateFromWizard(
 	ctx context.Context,
 	projectID uuid.UUID,
 	userID *uuid.UUID,
@@ -187,7 +187,7 @@ func (s *experimentWizardService) CreateFromWizard(
 	return experiment, nil
 }
 
-func (s *experimentWizardService) ValidateStep(
+func (s *ExperimentWizardService) ValidateStep(
 	ctx context.Context,
 	projectID uuid.UUID,
 	req *evaluation.ValidateStepRequest,
@@ -220,7 +220,7 @@ func (s *experimentWizardService) ValidateStep(
 	return response, nil
 }
 
-func (s *experimentWizardService) validateStep1(
+func (s *ExperimentWizardService) validateStep1(
 	ctx context.Context,
 	projectID uuid.UUID,
 	data map[string]any,
@@ -310,7 +310,7 @@ func (s *experimentWizardService) validateStep1(
 	}
 }
 
-func (s *experimentWizardService) validateStep2(
+func (s *ExperimentWizardService) validateStep2(
 	ctx context.Context,
 	projectID uuid.UUID,
 	data map[string]any,
@@ -380,7 +380,7 @@ func (s *experimentWizardService) validateStep2(
 	}
 }
 
-func (s *experimentWizardService) validateStep3(
+func (s *ExperimentWizardService) validateStep3(
 	ctx context.Context,
 	data map[string]any,
 	response *evaluation.ValidateStepResponse,
@@ -431,7 +431,7 @@ func (s *experimentWizardService) validateStep3(
 	}
 }
 
-func (s *experimentWizardService) EstimateCost(
+func (s *ExperimentWizardService) EstimateCost(
 	ctx context.Context,
 	projectID uuid.UUID,
 	req *evaluation.EstimateCostRequest,
@@ -501,7 +501,7 @@ func (s *experimentWizardService) EstimateCost(
 	}, nil
 }
 
-func (s *experimentWizardService) GetDatasetFields(
+func (s *ExperimentWizardService) GetDatasetFields(
 	ctx context.Context,
 	projectID uuid.UUID,
 	datasetID uuid.UUID,
@@ -549,7 +549,7 @@ func (s *experimentWizardService) GetDatasetFields(
 	return response, nil
 }
 
-func (s *experimentWizardService) GetExperimentConfig(
+func (s *ExperimentWizardService) GetExperimentConfig(
 	ctx context.Context,
 	experimentID uuid.UUID,
 	projectID uuid.UUID,

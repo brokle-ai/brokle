@@ -4,9 +4,9 @@ import (
 	"log/slog"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
-	storageDomain "brokle/internal/core/domain/storage"
+	analyticsService "brokle/internal/core/services/analytics"
+	storageService "brokle/internal/core/services/storage"
 	infraStorage "brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
 )
@@ -18,7 +18,7 @@ type ServiceRegistry struct {
 	MetricsService        *MetricsService
 	LogsService           *LogsService
 	GenAIEventsService    *GenAIEventsService
-	BlobStorageService    storageDomain.BlobStorageService
+	BlobStorageService    *storageService.BlobStorageService
 	ArchiveService        *ArchiveService
 	SpanQueryService      *SpanQueryService
 	FilterPresetService   *FilterPresetService
@@ -29,8 +29,8 @@ type ServiceRegistry struct {
 	OTLPEventsConverterService  *OTLPEventsConverterService
 
 	StreamProducer       *streams.TelemetryStreamProducer
-	DeduplicationService observability.TelemetryDeduplicationService
-	TelemetryService     observability.TelemetryService
+	DeduplicationService *TelemetryDeduplicationService
+	TelemetryService     *TelemetryService
 }
 
 func NewServiceRegistry(
@@ -41,15 +41,15 @@ func NewServiceRegistry(
 	logsRepo observability.LogsRepository,
 	genaiEventsRepo observability.GenAIEventsRepository,
 	filterPresetRepo observability.FilterPresetRepository,
-	blobStorageService storageDomain.BlobStorageService,
+	blobStorageService *storageService.BlobStorageService,
 	s3Client *infraStorage.S3Client,
 	archiveConfig *config.ArchiveConfig,
 
 	streamProducer *streams.TelemetryStreamProducer,
-	deduplicationService observability.TelemetryDeduplicationService,
+	deduplicationService *TelemetryDeduplicationService,
 
-	telemetryService observability.TelemetryService,
-	providerPricingService analytics.ProviderPricingService,
+	telemetryService *TelemetryService,
+	providerPricingService *analyticsService.ProviderPricingService,
 	observabilityConfig *config.ObservabilityConfig,
 
 	logger *slog.Logger,
@@ -71,7 +71,7 @@ func NewServiceRegistry(
 	if archiveConfig != nil && archiveConfig.Enabled && s3Client != nil {
 		parquetWriter := NewParquetWriter(archiveConfig.CompressionLevel)
 		archiveService = NewArchiveService(s3Client, parquetWriter, blobStorageService, archiveConfig, logger)
-		logger.Info("Archive service initialized for S3 raw telemetry archival", "bucket", s3Client.GetBucketName(), "path_prefix", archiveConfig.PathPrefix, "compression_level", archiveConfig.CompressionLevel)
+		logger.Info("archive service initialized for S3 raw telemetry archival", "bucket", s3Client.GetBucketName(), "path_prefix", archiveConfig.PathPrefix, "compression_level", archiveConfig.CompressionLevel)
 	}
 
 	return &ServiceRegistry{
@@ -103,7 +103,7 @@ func (r *ServiceRegistry) GetScoreService() *ScoreService {
 	return r.ScoreService
 }
 
-func (r *ServiceRegistry) GetBlobStorageService() storageDomain.BlobStorageService {
+func (r *ServiceRegistry) GetBlobStorageService() *storageService.BlobStorageService {
 	return r.BlobStorageService
 }
 
@@ -111,7 +111,7 @@ func (r *ServiceRegistry) GetOTLPConverterService() *OTLPConverterService {
 	return r.OTLPConverterService
 }
 
-func (r *ServiceRegistry) GetTelemetryService() observability.TelemetryService {
+func (r *ServiceRegistry) GetTelemetryService() *TelemetryService {
 	return r.TelemetryService
 }
 

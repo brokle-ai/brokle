@@ -36,12 +36,12 @@ const (
 
 // TelemetryStreamConsumer consumes telemetry batches from Redis Streams and writes to ClickHouse
 type TelemetryStreamConsumer struct {
-	deduplicationSvc    observability.TelemetryDeduplicationService
-	traceService        observability.TraceService
-	scoreService        observability.ScoreService
-	metricsService      observability.MetricsService
-	logsService         observability.LogsService
-	genaiEventsService  observability.GenAIEventsService
+	deduplicationSvc    *observabilitySvc.TelemetryDeduplicationService
+	traceService        *observabilitySvc.TraceService
+	scoreService        *observabilitySvc.ScoreService
+	metricsService      *observabilitySvc.MetricsService
+	logsService         *observabilitySvc.LogsService
+	genaiEventsService  *observabilitySvc.GenAIEventsService
 	archiveService      *observabilitySvc.ArchiveService
 	archiveConfig       *config.ArchiveConfig
 	redis               *database.RedisDB
@@ -85,14 +85,14 @@ type TelemetryStreamConsumerConfig struct {
 // NewTelemetryStreamConsumer creates a new telemetry stream consumer
 func NewTelemetryStreamConsumer(
 	redis *database.RedisDB,
-	deduplicationSvc observability.TelemetryDeduplicationService,
+	deduplicationSvc *observabilitySvc.TelemetryDeduplicationService,
 	logger *slog.Logger,
 	consumerConfig *TelemetryStreamConsumerConfig,
-	traceService observability.TraceService,
-	scoreService observability.ScoreService,
-	metricsService observability.MetricsService,
-	logsService observability.LogsService,
-	genaiEventsService observability.GenAIEventsService,
+	traceService *observabilitySvc.TraceService,
+	scoreService *observabilitySvc.ScoreService,
+	metricsService *observabilitySvc.MetricsService,
+	logsService *observabilitySvc.LogsService,
+	genaiEventsService *observabilitySvc.GenAIEventsService,
 	archiveService *observabilitySvc.ArchiveService,
 	archiveConfig *config.ArchiveConfig,
 ) *TelemetryStreamConsumer {

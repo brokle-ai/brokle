@@ -8,13 +8,14 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/billing"
+	billingService "brokle/internal/core/services/billing"
 )
 
 // ContractExpirationWorker expires contracts that have passed their end date
 type ContractExpirationWorker struct {
 	config          *config.Config
 	logger          *slog.Logger
-	contractService billing.ContractService
+	contractService *billingService.ContractService
 	billingRepo     billing.OrganizationBillingRepository
 	quit            chan struct{}
 	wg              sync.WaitGroup
@@ -25,7 +26,7 @@ type ContractExpirationWorker struct {
 func NewContractExpirationWorker(
 	config *config.Config,
 	logger *slog.Logger,
-	contractService billing.ContractService,
+	contractService *billingService.ContractService,
 	billingRepo billing.OrganizationBillingRepository,
 ) *ContractExpirationWorker {
 	return &ContractExpirationWorker{
@@ -102,7 +103,7 @@ func (w *ContractExpirationWorker) run() {
 	// Max delay: 24 hours (acceptable for enterprise contracts)
 	contracts, err := w.contractService.GetExpiringContracts(ctx, 0)
 	if err != nil {
-		w.logger.Error("failed to get expiring contracts", "error", err)
+		w.logger.Error("Failed to get expiring contracts", "error", err)
 		return
 	}
 
@@ -118,7 +119,7 @@ func (w *ContractExpirationWorker) run() {
 
 		// Expire the contract
 		if err := w.contractService.ExpireContract(ctx, contract.ID); err != nil {
-			w.logger.Error("failed to expire contract",
+			w.logger.Error("Failed to expire contract",
 				"error", err,
 				"contract_id", contract.ID,
 				"organization_id", contract.OrganizationID,
@@ -129,7 +130,7 @@ func (w *ContractExpirationWorker) run() {
 
 		expiredCount++
 
-		w.logger.Info("contract expired successfully",
+		w.logger.Info("Contract expired successfully",
 			"contract_id", contract.ID,
 			"organization_id", contract.OrganizationID,
 		)

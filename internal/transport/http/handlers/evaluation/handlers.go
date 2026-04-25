@@ -1,11 +1,10 @@
 // Package evaluation exposes evaluation-domain operations on both surfaces:
 //
-//   - Dashboard plane (apiAdmin, RequireAuth) — score-configs, evaluators,
+//   - Dashboard plane (RequireAuth) — score-configs, evaluators,
 //     executions, experiment wizard, plus project-scoped dataset /
 //     experiment CRUD mounted under /api/v1/projects/{projectId}/...
-//   - SDK plane (apiPublic, RequireSDKAuth) — dataset + experiment +
-//     score ingestion under /v1/... with the project derived from the
-//     API key.
+//   - SDK plane (RequireSDKAuth) — dataset + experiment + score
+//     ingestion under /v1/... with the project derived from the API key.
 //
 // The two registration entrypoints (RegisterRoutes / RegisterSDKRoutes)
 // share handler-method implementations; the only difference is how the
@@ -15,45 +14,47 @@ package evaluation
 import (
 	"context"
 	"log/slog"
+	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	evaluationDomain "brokle/internal/core/domain/evaluation"
+	evaluationService "brokle/internal/core/services/evaluation"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/httpctx"
-	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
+	"brokle/pkg/request"
 )
 
 // ---- handler aggregate ----------------------------------------------
 
 type handler struct {
-	scoreConfigSvc      evaluationDomain.ScoreConfigService
-	datasetSvc          evaluationDomain.DatasetService
-	datasetItemSvc      evaluationDomain.DatasetItemService
-	datasetVersionSvc   evaluationDomain.DatasetVersionService
-	experimentSvc       evaluationDomain.ExperimentService
-	experimentItemSvc   evaluationDomain.ExperimentItemService
-	experimentWizardSvc evaluationDomain.ExperimentWizardService
-	evaluatorSvc        evaluationDomain.EvaluatorService
-	evaluatorExecSvc    evaluationDomain.EvaluatorExecutionService
+	scoreConfigSvc      *evaluationService.ScoreConfigService
+	datasetSvc          *evaluationService.DatasetService
+	datasetItemSvc      *evaluationService.DatasetItemService
+	datasetVersionSvc   *evaluationService.DatasetVersionService
+	experimentSvc       *evaluationService.ExperimentService
+	experimentItemSvc   *evaluationService.ExperimentItemService
+	experimentWizardSvc *evaluationService.ExperimentWizardService
+	evaluatorSvc        *evaluationService.EvaluatorService
+	evaluatorExecSvc    *evaluationService.EvaluatorExecutionService
 	scoreSvc            *obsServices.ScoreService
 	logger              *slog.Logger
 }
 
-// RegisterRoutes wires the dashboard-plane evaluation operations on apiAdmin.
+// RegisterRoutes mounts the dashboard-plane evaluation routes on r.
+// Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
-	api huma.API,
-	scoreConfigSvc evaluationDomain.ScoreConfigService,
-	datasetSvc evaluationDomain.DatasetService,
-	datasetItemSvc evaluationDomain.DatasetItemService,
-	datasetVersionSvc evaluationDomain.DatasetVersionService,
-	experimentSvc evaluationDomain.ExperimentService,
-	experimentItemSvc evaluationDomain.ExperimentItemService,
-	experimentWizardSvc evaluationDomain.ExperimentWizardService,
-	evaluatorSvc evaluationDomain.EvaluatorService,
-	evaluatorExecSvc evaluationDomain.EvaluatorExecutionService,
+	r chi.Router,
+	scoreConfigSvc *evaluationService.ScoreConfigService,
+	datasetSvc *evaluationService.DatasetService,
+	datasetItemSvc *evaluationService.DatasetItemService,
+	datasetVersionSvc *evaluationService.DatasetVersionService,
+	experimentSvc *evaluationService.ExperimentService,
+	experimentItemSvc *evaluationService.ExperimentItemService,
+	experimentWizardSvc *evaluationService.ExperimentWizardService,
+	evaluatorSvc *evaluationService.EvaluatorService,
+	evaluatorExecSvc *evaluationService.EvaluatorExecutionService,
 	logger *slog.Logger,
 ) {
 	h := &handler{
@@ -69,24 +70,40 @@ func RegisterRoutes(
 		logger:              logger,
 	}
 
-	registerScoreConfigRoutes(api, h)
-	registerDatasetRoutes(api, h)
-	registerExperimentRoutes(api, h)
-	registerEvaluatorRoutes(api, h)
-	registerExecutionRoutes(api, h)
-	registerWizardRoutes(api, h)
+	// All evaluation dashboard routes sit under a single
+	// r.Route("/api/v1/projects/{projectId}", ...) Mount. The wizard +
+	// execution sub-registrations reference each other's prefixes
+	// (/experiments/wizard, /datasets/{id}/fields,
+	// /evaluators/{id}/executions), so collapsing them into one Mount
+	// subrouter keeps the trie clean: each sub-file Mounts a distinct
+	// deeper prefix (/score-configs, /datasets, /experiments,
+	// /evaluators) and the cross-referencing wizard/execution nodes
+	// live as siblings inside that same subrouter.
+	//
+	// Observability's project-scoped routes (/scores, /sessions,
+	// /filter-presets) Mount as siblings on the parent tree with
+	// distinct deeper prefixes. chi's radix trie routes static-deeper
+	// before wildcard-shallower, so both coexist without collision.
+	r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
+		registerScoreConfigRoutes(r, h)
+		registerDashboardDatasetRoutes(r, h)
+		registerDashboardExperimentRoutes(r, h)
+		registerEvaluatorRoutes(r, h)
+		registerExecutionRoutes(r, h)
+		registerWizardRoutes(r, h)
+	})
 }
 
-// RegisterSDKRoutes wires the SDK-plane evaluation operations on apiPublic.
-// The project is derived from the API key (MustGetProjectID).
+// RegisterSDKRoutes mounts the SDK-plane evaluation routes on r. The
+// project is derived from the API key (MustGetProjectID).
 func RegisterSDKRoutes(
-	api huma.API,
-	scoreConfigSvc evaluationDomain.ScoreConfigService,
-	datasetSvc evaluationDomain.DatasetService,
-	datasetItemSvc evaluationDomain.DatasetItemService,
-	datasetVersionSvc evaluationDomain.DatasetVersionService,
-	experimentSvc evaluationDomain.ExperimentService,
-	experimentItemSvc evaluationDomain.ExperimentItemService,
+	r chi.Router,
+	scoreConfigSvc *evaluationService.ScoreConfigService,
+	datasetSvc *evaluationService.DatasetService,
+	datasetItemSvc *evaluationService.DatasetItemService,
+	datasetVersionSvc *evaluationService.DatasetVersionService,
+	experimentSvc *evaluationService.ExperimentService,
+	experimentItemSvc *evaluationService.ExperimentItemService,
 	scoreSvc *obsServices.ScoreService,
 	logger *slog.Logger,
 ) {
@@ -101,76 +118,12 @@ func RegisterSDKRoutes(
 		logger:            logger,
 	}
 
-	registerSDKDatasetRoutes(api, h)
-	registerSDKExperimentRoutes(api, h)
-	registerSDKScoreRoutes(api, h)
+	registerSDKDatasetRoutes(r, h)
+	registerSDKExperimentRoutes(r, h)
+	registerSDKScoreRoutes(r, h)
 }
 
-// ---- shared parsers ---------------------------------------------------
-
-func parseProjectID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseDatasetID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid dataset ID", "datasetId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseVersionID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid version ID", "versionId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseItemID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid item ID", "itemId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseExperimentID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid experiment ID", "experimentId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseEvaluatorID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid evaluator ID", "evaluatorId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseExecutionID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid execution ID", "executionId must be a valid UUID")
-	}
-	return id, nil
-}
-
-func parseScoreConfigID(s string) (uuid.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError("Invalid score config ID", "configId must be a valid UUID")
-	}
-	return id, nil
-}
+// ---- shared helpers -------------------------------------------------
 
 func userIDPtr(ctx context.Context) *uuid.UUID {
 	id, ok := httpctx.UserID(ctx)
@@ -180,18 +133,30 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 	return &id
 }
 
-func normalizePagination(page, limit int) (int, int) {
+// projectIDForSDK returns the project UUID stored in the SDK auth
+// context. The RequireSDKAuth middleware guarantees it is set.
+func projectIDForSDK(r *http.Request) uuid.UUID {
+	return httpctx.MustGetProjectID(r.Context())
+}
+
+// readPagination reads ?page=&limit= with evaluation-specific defaults
+// (PageSize ≈ pagination.DefaultPageSize). Kept here because
+// pkg/request.QueryPagination uses limit 1..1000 which is too
+// permissive for the evaluation endpoints.
+func readPagination(r *http.Request) (page, limit int, err error) {
+	page, err = request.QueryInt(r, "page", 1)
+	if err != nil {
+		return 0, 0, err
+	}
 	if page < 1 {
 		page = 1
+	}
+	limit, err = request.QueryInt(r, "limit", 0)
+	if err != nil {
+		return 0, 0, err
 	}
 	if limit <= 0 || !pagination.IsValidPageSize(limit) {
 		limit = pagination.DefaultPageSize
 	}
-	return page, limit
+	return page, limit, nil
 }
-
-// Shared cross-feature DTOs (pageList, ScoreType, DatasetItemResponse,
-// ExperimentItemResponse, BulkImportResponse, KeysMappingRequest,
-// CountResponse, EmptyOutput) live in types.go.
-// Feature ops live in their own files: dataset.go, experiment.go,
-// evaluator.go, execution.go, wizard.go, score_config.go, score.go.

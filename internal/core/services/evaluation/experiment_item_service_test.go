@@ -175,7 +175,7 @@ func (m *MockDatasetItemRepository) FindByContentHashes(ctx context.Context, dat
 	return args.Get(0).(map[string]bool), args.Error(1)
 }
 
-// MockScoreService mocks the observability.ScoreService interface
+// MockScoreService mocks the *observabilityService.ScoreService interface
 type MockScoreService struct {
 	mock.Mock
 }
