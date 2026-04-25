@@ -11,6 +11,21 @@ export interface Organization {
   updated_at: string
 }
 
+export interface CreateOrganizationRequest {
+  name: string
+}
+
+export async function createOrganization(
+  data: CreateOrganizationRequest,
+): Promise<Organization> {
+  const resp = await rawFetch('/api/v1/organizations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as Organization
+}
+
 export interface ListResponse<T> {
   data: T[]
   pagination: {

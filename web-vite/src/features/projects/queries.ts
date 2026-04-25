@@ -18,6 +18,23 @@ export interface UpdateProjectRequest {
   description?: string
 }
 
+export interface CreateProjectRequest {
+  organization_id: string
+  name: string
+  description?: string
+}
+
+export async function createProject(
+  data: CreateProjectRequest,
+): Promise<Project> {
+  const resp = await rawFetch('/api/v1/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return (await resp.json()) as Project
+}
+
 export async function updateProject(
   projectId: string,
   data: UpdateProjectRequest,

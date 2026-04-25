@@ -1,184 +1,199 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { rawFetch } from '@/lib/api/client'
-import { BrokleError, ValidationError } from '@/lib/api/errors'
-import { useAuthStore, type SessionUser } from '@/stores/auth-store'
+import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { AuthLayout } from '@/components/layout/auth-layout'
+import {
+  InvitationBanner,
+  TwoStepSignUpForm,
+  validateInvitation,
+} from '@/features/authentication'
+import type { InvitationDetails } from '@/features/authentication'
+
+const searchSchema = z.object({
+  token: z.string().optional().catch(undefined),
+  session: z.string().optional().catch(undefined),
+  redirect: z.string().optional().catch(undefined),
+})
 
 export const Route = createFileRoute('/signup')({
+  validateSearch: searchSchema,
   component: SignUpPage,
 })
 
-const ROLES = [
-  { value: 'engineer', label: 'Engineer' },
-  { value: 'product', label: 'Product' },
-  { value: 'designer', label: 'Designer' },
-  { value: 'executive', label: 'Executive' },
-  { value: 'other', label: 'Other' },
-] as const
+type SignupStep = 'auth' | 'personalization'
 
 function SignUpPage() {
-  const navigate = useNavigate()
-  const setUser = useAuthStore((s) => s.setUser)
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [role, setRole] = useState<typeof ROLES[number]['value']>('engineer')
-  const [organizationName, setOrganizationName] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [fieldIssues, setFieldIssues] = useState<Record<string, string>>({})
-  const [pending, setPending] = useState(false)
+  const { token: invitationToken, session: oauthSessionId, redirect } = useSearch({
+    from: '/signup',
+  })
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError(null)
-    setFieldIssues({})
-    setPending(true)
-    try {
-      const resp = await rawFetch('/api/v1/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          first_name: firstName,
-          last_name: lastName,
-          role,
-          organization_name: organizationName,
-        }),
-      })
-      const body = (await resp.json()) as { user: SessionUser }
-      setUser(body.user)
-      await navigate({ to: '/' })
-    } catch (err) {
-      if (err instanceof ValidationError && err.fieldIssues) {
-        const byField: Record<string, string> = {}
-        for (const issue of err.fieldIssues) {
-          if (issue.location) byField[issue.location] = issue.message
+  const [currentStep, setCurrentStep] = useState<SignupStep>(
+    oauthSessionId ? 'personalization' : 'auth',
+  )
+
+  const [invitationDetails, setInvitationDetails] =
+    useState<InvitationDetails | null>(null)
+  const [invitationLoading, setInvitationLoading] = useState<boolean>(
+    Boolean(invitationToken),
+  )
+  const [invitationError, setInvitationError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!invitationToken) return
+
+    let cancelled = false
+    validateInvitation(invitationToken)
+      .then((data) => {
+        if (cancelled) return
+        if (data.is_expired) {
+          setInvitationError(
+            'This invitation has expired. Please ask for a new invitation.',
+          )
+          setInvitationDetails(null)
+        } else {
+          setInvitationDetails({
+            organizationName: data.organization_name,
+            organizationId: data.organization_id,
+            inviterName: data.inviter_name,
+            role: data.role,
+            email: data.email,
+            expiresAt: data.expires_at,
+            isExpired: data.is_expired,
+          })
+          setInvitationError(null)
         }
-        setFieldIssues(byField)
-        setError(err.body.error.message)
-      } else if (err instanceof BrokleError) {
-        setError(err.body.error.message)
-      } else {
-        setError('Sign-up failed.')
-      }
-    } finally {
-      setPending(false)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setInvitationError('Invalid or expired invitation link.')
+          setInvitationDetails(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setInvitationLoading(false)
+      })
+
+    return () => {
+      cancelled = true
     }
+  }, [invitationToken])
+
+  if (invitationLoading) {
+    return (
+      <AuthLayout>
+        <div className="flex min-h-[400px] items-center justify-center">
+          <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+        </div>
+      </AuthLayout>
+    )
   }
 
-  const issue = (field: string) => fieldIssues[field]
+  if (invitationToken && invitationError) {
+    return (
+      <AuthLayout>
+        <Card className="gap-4">
+          <CardHeader>
+            <CardTitle className="text-destructive text-lg tracking-tight">
+              Invalid Invitation
+            </CardTitle>
+            <CardDescription>{invitationError}</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button asChild variant="outline">
+              <Link to="/signin">Go to Sign In</Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </AuthLayout>
+    )
+  }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-lg border p-6">
-        <h1 className="text-lg font-semibold">Create your Brokle account</h1>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="First name" error={issue('body.first_name')}>
-            <input
-              name="firstName"
-              required
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2"
-            />
-          </Field>
-          <Field label="Last name" error={issue('body.last_name')}>
-            <input
-              name="lastName"
-              required
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2"
-            />
-          </Field>
-        </div>
-        <Field label="Email" error={issue('body.email')}>
-          <input
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2"
+    <AuthLayout>
+      <div className="w-full max-w-md">
+        {invitationDetails && (
+          <InvitationBanner
+            organizationName={invitationDetails.organizationName}
+            inviterName={invitationDetails.inviterName}
           />
-        </Field>
-        <Field label="Password" error={issue('body.password')}>
-          <input
-            name="password"
-            type="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2"
-          />
-        </Field>
-        <Field label="Your role" error={issue('body.role')}>
-          <select
-            name="role"
-            required
-            value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
-            className="mt-1 w-full rounded border px-3 py-2"
-          >
-            {ROLES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Organization name" error={issue('body.organization_name')}>
-          <input
-            name="organizationName"
-            required
-            value={organizationName}
-            onChange={(e) => setOrganizationName(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2"
-            placeholder="Acme Inc."
-          />
-        </Field>
-        {error && Object.keys(fieldIssues).length === 0 ? (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {pending ? 'Creating account…' : 'Sign up'}
-        </button>
-        <p className="text-sm">
-          Already have an account?{' '}
-          <Link to="/signin" className="underline">
-            Sign in
-          </Link>
-        </p>
-      </form>
-    </main>
-  )
-}
+        )}
 
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string
-  error: string | undefined
-  children: React.ReactNode
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
-    </label>
+        <Card className="gap-4">
+          <CardHeader>
+            <CardTitle className="text-lg tracking-tight">
+              {invitationDetails ? 'Join Organization' : 'Create your account'}
+            </CardTitle>
+            <CardDescription>
+              {invitationDetails ? (
+                <>
+                  A new account will be created for{' '}
+                  <strong>{invitationDetails.email}</strong>
+                </>
+              ) : (
+                'Get started with Brokle in seconds'
+              )}
+              <br />
+              Already have an account?{' '}
+              <Link
+                to="/signin"
+                className="hover:text-primary underline underline-offset-4"
+              >
+                Sign In
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TwoStepSignUpForm
+              invitationToken={invitationToken}
+              invitationDetails={invitationDetails}
+              oauthSessionId={oauthSessionId}
+              redirectTo={redirect}
+              onStepChange={setCurrentStep}
+            />
+          </CardContent>
+          <CardFooter className="flex flex-col items-center gap-4">
+            <p className="text-muted-foreground px-8 text-center text-sm">
+              By creating an account, you agree to our{' '}
+              <a
+                href="/terms"
+                className="hover:text-primary underline underline-offset-4"
+              >
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a
+                href="/privacy"
+                className="hover:text-primary underline underline-offset-4"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
+            {currentStep === 'personalization' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('signup-go-back'))
+                }}
+                className="text-muted-foreground"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
+    </AuthLayout>
   )
 }
