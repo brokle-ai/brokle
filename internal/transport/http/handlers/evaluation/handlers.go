@@ -19,7 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	evaluationDomain "brokle/internal/core/domain/evaluation"
+	evaluationService "brokle/internal/core/services/evaluation"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/pagination"
@@ -29,15 +29,15 @@ import (
 // ---- handler aggregate ----------------------------------------------
 
 type handler struct {
-	scoreConfigSvc      evaluationDomain.ScoreConfigService
-	datasetSvc          evaluationDomain.DatasetService
-	datasetItemSvc      evaluationDomain.DatasetItemService
-	datasetVersionSvc   evaluationDomain.DatasetVersionService
-	experimentSvc       evaluationDomain.ExperimentService
-	experimentItemSvc   evaluationDomain.ExperimentItemService
-	experimentWizardSvc evaluationDomain.ExperimentWizardService
-	evaluatorSvc        evaluationDomain.EvaluatorService
-	evaluatorExecSvc    evaluationDomain.EvaluatorExecutionService
+	scoreConfigSvc      *evaluationService.ScoreConfigService
+	datasetSvc          *evaluationService.DatasetService
+	datasetItemSvc      *evaluationService.DatasetItemService
+	datasetVersionSvc   *evaluationService.DatasetVersionService
+	experimentSvc       *evaluationService.ExperimentService
+	experimentItemSvc   *evaluationService.ExperimentItemService
+	experimentWizardSvc *evaluationService.ExperimentWizardService
+	evaluatorSvc        *evaluationService.EvaluatorService
+	evaluatorExecSvc    *evaluationService.EvaluatorExecutionService
 	scoreSvc            *obsServices.ScoreService
 	logger              *slog.Logger
 }
@@ -46,15 +46,15 @@ type handler struct {
 // Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	scoreConfigSvc evaluationDomain.ScoreConfigService,
-	datasetSvc evaluationDomain.DatasetService,
-	datasetItemSvc evaluationDomain.DatasetItemService,
-	datasetVersionSvc evaluationDomain.DatasetVersionService,
-	experimentSvc evaluationDomain.ExperimentService,
-	experimentItemSvc evaluationDomain.ExperimentItemService,
-	experimentWizardSvc evaluationDomain.ExperimentWizardService,
-	evaluatorSvc evaluationDomain.EvaluatorService,
-	evaluatorExecSvc evaluationDomain.EvaluatorExecutionService,
+	scoreConfigSvc *evaluationService.ScoreConfigService,
+	datasetSvc *evaluationService.DatasetService,
+	datasetItemSvc *evaluationService.DatasetItemService,
+	datasetVersionSvc *evaluationService.DatasetVersionService,
+	experimentSvc *evaluationService.ExperimentService,
+	experimentItemSvc *evaluationService.ExperimentItemService,
+	experimentWizardSvc *evaluationService.ExperimentWizardService,
+	evaluatorSvc *evaluationService.EvaluatorService,
+	evaluatorExecSvc *evaluationService.EvaluatorExecutionService,
 	logger *slog.Logger,
 ) {
 	h := &handler{
@@ -70,6 +70,20 @@ func RegisterRoutes(
 		logger:              logger,
 	}
 
+	// All evaluation dashboard routes sit under a single
+	// r.Route("/api/v1/projects/{projectId}", ...) Mount. The wizard +
+	// execution sub-registrations reference each other's prefixes
+	// (/experiments/wizard, /datasets/{id}/fields,
+	// /evaluators/{id}/executions), so collapsing them into one Mount
+	// subrouter keeps the trie clean: each sub-file Mounts a distinct
+	// deeper prefix (/score-configs, /datasets, /experiments,
+	// /evaluators) and the cross-referencing wizard/execution nodes
+	// live as siblings inside that same subrouter.
+	//
+	// Observability's project-scoped routes (/scores, /sessions,
+	// /filter-presets) Mount as siblings on the parent tree with
+	// distinct deeper prefixes. chi's radix trie routes static-deeper
+	// before wildcard-shallower, so both coexist without collision.
 	r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
 		registerScoreConfigRoutes(r, h)
 		registerDashboardDatasetRoutes(r, h)
@@ -84,12 +98,12 @@ func RegisterRoutes(
 // project is derived from the API key (MustGetProjectID).
 func RegisterSDKRoutes(
 	r chi.Router,
-	scoreConfigSvc evaluationDomain.ScoreConfigService,
-	datasetSvc evaluationDomain.DatasetService,
-	datasetItemSvc evaluationDomain.DatasetItemService,
-	datasetVersionSvc evaluationDomain.DatasetVersionService,
-	experimentSvc evaluationDomain.ExperimentService,
-	experimentItemSvc evaluationDomain.ExperimentItemService,
+	scoreConfigSvc *evaluationService.ScoreConfigService,
+	datasetSvc *evaluationService.DatasetService,
+	datasetItemSvc *evaluationService.DatasetItemService,
+	datasetVersionSvc *evaluationService.DatasetVersionService,
+	experimentSvc *evaluationService.ExperimentService,
+	experimentItemSvc *evaluationService.ExperimentItemService,
 	scoreSvc *obsServices.ScoreService,
 	logger *slog.Logger,
 ) {

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	authDomain "brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/pagination"
 	"brokle/pkg/request"
@@ -21,13 +21,13 @@ import (
 )
 
 type handler struct {
-	apiKeySvc authDomain.APIKeyService
+	apiKeySvc *authService.APIKeyService
 	logger    *slog.Logger
 }
 
 // RegisterRoutes mounts API-key routes on r. Expected mount context:
 // the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, apiKeySvc authDomain.APIKeyService, logger *slog.Logger) {
+func RegisterRoutes(r chi.Router, apiKeySvc *authService.APIKeyService, logger *slog.Logger) {
 	h := &handler{apiKeySvc: apiKeySvc, logger: logger}
 
 	r.Route("/api/v1/projects/{projectId}/api-keys", func(r chi.Router) {
@@ -35,25 +35,6 @@ func RegisterRoutes(r chi.Router, apiKeySvc authDomain.APIKeyService, logger *sl
 		r.Post("/", h.create)
 		r.Delete("/{keyId}", h.delete)
 	})
-}
-
-// apiKey is the wire shape returned by list/create.
-type apiKey struct {
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
-	Key        string     `json:"key,omitempty"`
-	KeyPreview string     `json:"key_preview"`
-	ProjectID  uuid.UUID  `json:"project_id"`
-	Status     string     `json:"status"`
-	LastUsed   *time.Time `json:"last_used,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	CreatedBy  uuid.UUID  `json:"created_by"`
-}
-
-type listAPIKeysResponse struct {
-	Data       []apiKey             `json:"data"`
-	Pagination *response.Pagination `json:"pagination"`
 }
 
 func keyStatus(k authDomain.APIKey) string {

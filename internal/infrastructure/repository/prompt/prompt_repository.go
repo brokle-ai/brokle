@@ -11,6 +11,7 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type promptRepository struct {
@@ -30,6 +31,9 @@ func (r *promptRepository) Create(ctx context.Context, p *promptDomain.Prompt) e
 		Type:        string(p.Type),
 		Tags:        db.NonNilStrings(p.Tags),
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create prompt %s: %w", p.Name, promptDomain.ErrPromptAlreadyExists)
+		}
 		return fmt.Errorf("create prompt: %w", err)
 	}
 	return nil
@@ -69,6 +73,9 @@ func (r *promptRepository) Update(ctx context.Context, p *promptDomain.Prompt) e
 		Type:        string(p.Type),
 		Tags:        db.NonNilStrings(p.Tags),
 	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("update prompt %s: %w", p.Name, promptDomain.ErrPromptAlreadyExists)
+		}
 		return fmt.Errorf("update prompt: %w", err)
 	}
 	return nil

@@ -15,7 +15,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type widgetQueryService struct {
+type WidgetQueryService struct {
 	dashboardRepo dashboardDomain.DashboardRepository
 	queryRepo     dashboardDomain.WidgetQueryRepository
 	queryBuilder  *WidgetQueryBuilder
@@ -26,8 +26,8 @@ func NewWidgetQueryService(
 	dashboardRepo dashboardDomain.DashboardRepository,
 	queryRepo dashboardDomain.WidgetQueryRepository,
 	logger *slog.Logger,
-) dashboardDomain.WidgetQueryService {
-	return &widgetQueryService{
+) *WidgetQueryService {
+	return &WidgetQueryService{
 		dashboardRepo: dashboardRepo,
 		queryRepo:     queryRepo,
 		queryBuilder:  NewWidgetQueryBuilder(),
@@ -35,7 +35,7 @@ func NewWidgetQueryService(
 	}
 }
 
-func (s *widgetQueryService) ExecuteWidgetQuery(
+func (s *WidgetQueryService) ExecuteWidgetQuery(
 	ctx context.Context,
 	projectID uuid.UUID,
 	widget *dashboardDomain.Widget,
@@ -74,7 +74,7 @@ func (s *widgetQueryService) ExecuteWidgetQuery(
 	}
 }
 
-func (s *widgetQueryService) executeStandardQuery(
+func (s *WidgetQueryService) executeStandardQuery(
 	ctx context.Context,
 	projectID uuid.UUID,
 	widget *dashboardDomain.Widget,
@@ -129,7 +129,7 @@ func (s *widgetQueryService) executeStandardQuery(
 	return result, nil
 }
 
-func (s *widgetQueryService) executeTraceListQuery(
+func (s *WidgetQueryService) executeTraceListQuery(
 	ctx context.Context,
 	projectID uuid.UUID,
 	widget *dashboardDomain.Widget,
@@ -200,7 +200,7 @@ func (s *widgetQueryService) executeTraceListQuery(
 	return result, nil
 }
 
-func (s *widgetQueryService) executeHistogramQuery(
+func (s *WidgetQueryService) executeHistogramQuery(
 	ctx context.Context,
 	projectID uuid.UUID,
 	widget *dashboardDomain.Widget,
@@ -274,7 +274,7 @@ func (s *widgetQueryService) executeHistogramQuery(
 	return result, nil
 }
 
-func (s *widgetQueryService) ExecuteDashboardQueries(
+func (s *WidgetQueryService) ExecuteDashboardQueries(
 	ctx context.Context,
 	req *dashboardDomain.QueryExecutionRequest,
 ) (*dashboardDomain.DashboardQueryResults, error) {
@@ -367,7 +367,7 @@ func (s *widgetQueryService) ExecuteDashboardQueries(
 	return results, nil
 }
 
-func (s *widgetQueryService) GetViewDefinitions(ctx context.Context) (*dashboardDomain.ViewDefinitionResponse, error) {
+func (s *WidgetQueryService) GetViewDefinitions(ctx context.Context) (*dashboardDomain.ViewDefinitionResponse, error) {
 	allViews := dashboardDomain.GetAllViewDefinitions()
 
 	response := &dashboardDomain.ViewDefinitionResponse{
@@ -408,7 +408,7 @@ func (s *widgetQueryService) GetViewDefinitions(ctx context.Context) (*dashboard
 	return response, nil
 }
 
-func (s *widgetQueryService) GetVariableOptions(
+func (s *WidgetQueryService) GetVariableOptions(
 	ctx context.Context,
 	req *dashboardDomain.VariableOptionsRequest,
 ) (*dashboardDomain.VariableOptionsResponse, error) {
@@ -492,7 +492,7 @@ func (s *widgetQueryService) GetVariableOptions(
 	}, nil
 }
 
-func (s *widgetQueryService) resolveTimeRange(tr *dashboardDomain.DashboardTimeRange) (*time.Time, *time.Time) {
+func (s *WidgetQueryService) resolveTimeRange(tr *dashboardDomain.DashboardTimeRange) (*time.Time, *time.Time) {
 	if tr == nil {
 		// Default to last 24 hours
 		end := time.Now()

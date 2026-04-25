@@ -1,3 +1,4 @@
+// Package observability implements telemetry ingestion: traces, spans, scores, metrics, logs, OTLP conversion, deduplication, and S3 archival.
 package observability
 
 import (
@@ -11,6 +12,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
 	storageDomain "brokle/internal/core/domain/storage"
+	storageService "brokle/internal/core/services/storage"
 	infraStorage "brokle/internal/infrastructure/storage"
 	"brokle/pkg/uid"
 )
@@ -19,23 +21,23 @@ import (
 type ArchiveService struct {
 	s3Client           *infraStorage.S3Client
 	parquetWriter      *ParquetWriter
-	blobStorageService storageDomain.BlobStorageService
-	config             *config.ArchiveConfig
+	blobStore *storageService.BlobStorageService
+	cfg             *config.ArchiveConfig
 	logger             *slog.Logger
 }
 
 func NewArchiveService(
 	s3Client *infraStorage.S3Client,
 	parquetWriter *ParquetWriter,
-	blobStorageService storageDomain.BlobStorageService,
+	blobStore *storageService.BlobStorageService,
 	cfg *config.ArchiveConfig,
 	logger *slog.Logger,
 ) *ArchiveService {
 	return &ArchiveService{
 		s3Client:           s3Client,
 		parquetWriter:      parquetWriter,
-		blobStorageService: blobStorageService,
-		config:             cfg,
+		blobStore: blobStore,
+		cfg:             cfg,
 		logger:             logger,
 	}
 }
@@ -88,8 +90,8 @@ func (s *ArchiveService) ArchiveBatch(
 		CreatedAt: now,
 	}
 
-	if err := s.blobStorageService.CreateBlobReference(ctx, blobRef); err != nil {
-		s.logger.Warn("Failed to create blob reference (S3 upload succeeded)", "error", err, "batch_id", batchID.String(), "s3_path", s3Path)
+	if err := s.blobStore.CreateBlobReference(ctx, blobRef); err != nil {
+		s.logger.Warn("failed to create blob reference (S3 upload succeeded)", "error", err, "batch_id", batchID.String(), "s3_path", s3Path)
 	}
 
 	return &observability.ArchiveBatchResult{
@@ -105,7 +107,7 @@ func (s *ArchiveService) ArchiveBatch(
 func (s *ArchiveService) GenerateS3Path(projectID uuid.UUID, signalType string, timestamp time.Time, batchID uuid.UUID) string {
 	return fmt.Sprintf(
 		"%sproject_id=%s/signal=%s/year=%04d/month=%02d/day=%02d/%s.parquet",
-		s.config.PathPrefix,
+		s.cfg.PathPrefix,
 		projectID,
 		signalType,
 		timestamp.Year(),
@@ -116,5 +118,5 @@ func (s *ArchiveService) GenerateS3Path(projectID uuid.UUID, signalType string, 
 }
 
 func (s *ArchiveService) IsEnabled() bool {
-	return s.config != nil && s.config.Enabled
+	return s.cfg != nil && s.cfg.Enabled
 }

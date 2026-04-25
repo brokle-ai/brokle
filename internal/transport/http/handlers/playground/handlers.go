@@ -22,8 +22,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
+	organizationService "brokle/internal/core/services/organization"
+	playgroundService "brokle/internal/core/services/playground"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -31,8 +32,8 @@ import (
 )
 
 type handler struct {
-	svc            playgroundDomain.PlaygroundService
-	projectService organization.ProjectService
+	svc            *playgroundService.PlaygroundService
+	projectService *organizationService.ProjectService
 	logger         *slog.Logger
 }
 
@@ -40,8 +41,8 @@ type handler struct {
 // Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	svc playgroundDomain.PlaygroundService,
-	projectService organization.ProjectService,
+	svc *playgroundService.PlaygroundService,
+	projectService *organizationService.ProjectService,
 	logger *slog.Logger,
 ) {
 	h := &handler{svc: svc, projectService: projectService, logger: logger}
@@ -63,7 +64,7 @@ func RegisterRoutes(
 // taken from the authenticated API key, not the request body.
 func RegisterSDKRoutes(
 	r chi.Router,
-	svc playgroundDomain.PlaygroundService,
+	svc *playgroundService.PlaygroundService,
 	logger *slog.Logger,
 ) {
 	h := &handler{svc: svc, logger: logger}
@@ -96,7 +97,7 @@ func (h *handler) validateProjectAccess(ctx context.Context, projectIDStr *strin
 		if strings.Contains(err.Error(), "not found") {
 			return uuid.Nil, appErrors.NewNotFoundError("Project not found")
 		}
-		h.logger.Warn("user attempted to access project credentials without permission",
+		h.logger.Warn("User attempted to access project credentials without permission",
 			"user_id", userID.String(),
 			"project_id", projectID.String(),
 			"error", err,
@@ -126,7 +127,7 @@ func (h *handler) validateSessionAccess(ctx context.Context, sessionIDStr *strin
 	}
 	userID := httpctx.MustGetUserID(ctx)
 	if err := h.projectService.ValidateProjectAccess(ctx, userID, session.ProjectID); err != nil {
-		h.logger.Warn("user attempted to access session without project permission",
+		h.logger.Warn("User attempted to access session without project permission",
 			"user_id", userID.String(),
 			"session_id", sessionID.String(),
 			"project_id", session.ProjectID.String(),
@@ -232,11 +233,11 @@ func (h *handler) stream(w http.ResponseWriter, r *http.Request) {
 	sendEvent := func(chunk StreamChunk) bool {
 		data, jerr := json.Marshal(chunk)
 		if jerr != nil {
-			h.logger.Warn("sse marshal failed", "error", jerr)
+			h.logger.Warn("SSE marshal failed", "error", jerr)
 			return false
 		}
 		if _, werr := fmt.Fprintf(w, "event: message\ndata: %s\n\n", data); werr != nil {
-			h.logger.Warn("sse write failed, client likely disconnected", "error", werr)
+			h.logger.Warn("SSE write failed, client likely disconnected", "error", werr)
 			return false
 		}
 		flusher.Flush()
@@ -468,7 +469,7 @@ func (h *handler) sdkExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("prompt executed via SDK",
+	h.logger.Info("Prompt executed via SDK",
 		"project_id", projectID,
 		"prompt_type", body.PromptType,
 	)

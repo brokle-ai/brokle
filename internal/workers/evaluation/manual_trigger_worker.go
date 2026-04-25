@@ -18,6 +18,8 @@ import (
 
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
+	evaluationService "brokle/internal/core/services/evaluation"
+	observabilityService "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/database"
 	"brokle/pkg/pagination"
 	"brokle/pkg/uid"
@@ -43,8 +45,8 @@ type ManualTriggerWorkerConfig struct {
 // ManualTriggerWorker consumes manual trigger messages and processes historical spans
 type ManualTriggerWorker struct {
 	redis            *database.RedisDB
-	traceService     observability.TraceService
-	executionService evaluation.EvaluatorExecutionService
+	traceService     *observabilityService.TraceService
+	executionService *evaluationService.EvaluatorExecutionService
 	logger           *slog.Logger
 
 	// Consumer configuration
@@ -70,8 +72,8 @@ type ManualTriggerWorker struct {
 // NewManualTriggerWorker creates a new manual trigger worker
 func NewManualTriggerWorker(
 	redisDB *database.RedisDB,
-	traceService observability.TraceService,
-	executionService evaluation.EvaluatorExecutionService,
+	traceService *observabilityService.TraceService,
+	executionService *evaluationService.EvaluatorExecutionService,
 	logger *slog.Logger,
 	config *ManualTriggerWorkerConfig,
 ) *ManualTriggerWorker {

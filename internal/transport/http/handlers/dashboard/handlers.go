@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 
 	dashboardDomain "brokle/internal/core/domain/dashboard"
+	dashboardService "brokle/internal/core/services/dashboard"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -28,9 +29,9 @@ import (
 )
 
 type handler struct {
-	svc      dashboardDomain.DashboardService
-	query    dashboardDomain.WidgetQueryService
-	template dashboardDomain.TemplateService
+	svc      *dashboardService.DashboardService
+	query    *dashboardService.WidgetQueryService
+	template *dashboardService.TemplateService
 	logger   *slog.Logger
 }
 
@@ -38,9 +39,9 @@ type handler struct {
 // context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	svc dashboardDomain.DashboardService,
-	query dashboardDomain.WidgetQueryService,
-	template dashboardDomain.TemplateService,
+	svc *dashboardService.DashboardService,
+	query *dashboardService.WidgetQueryService,
+	template *dashboardService.TemplateService,
 	logger *slog.Logger,
 ) {
 	h := &handler{svc: svc, query: query, template: template, logger: logger}
@@ -104,14 +105,22 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 		Limit:  limit,
 		Offset: offset,
 	}
-	resp, err := h.svc.ListDashboards(r.Context(), projectID, filter)
+	items, total, err := h.svc.ListDashboards(r.Context(), projectID, filter)
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "dashboard: list failed",
 			"project_id", projectID, "error", err)
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, resp)
+	pageLimit := limit
+	if pageLimit <= 0 {
+		pageLimit = 50
+	}
+	page := offset/pageLimit + 1
+	response.Success(w, listDashboardsBody{
+		Data:       items,
+		Pagination: response.BuildPagination(page, pageLimit, total),
+	})
 }
 
 // ---- create -----------------------------------------------------------

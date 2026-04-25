@@ -129,4 +129,3 @@ func (k *KeysMappingRequest) toDomain() *evaluationDomain.KeysMapping {
 type CountResponse struct {
 	Created int `json:"created"`
 }
-

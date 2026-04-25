@@ -1,3 +1,4 @@
+// Package website implements public-facing website operations such as contact-form submissions.
 package website
 
 import (
@@ -10,7 +11,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type websiteService struct {
+type WebsiteService struct {
 	contactRepo website.ContactSubmissionRepository
 	emailSender email.EmailSender
 	notifyEmail string // from WEBSITE_NOTIFICATION_EMAIL env
@@ -22,8 +23,8 @@ func NewWebsiteService(
 	emailSender email.EmailSender,
 	notifyEmail string,
 	logger *slog.Logger,
-) website.WebsiteService {
-	return &websiteService{
+) *WebsiteService {
+	return &WebsiteService{
 		contactRepo: contactRepo,
 		emailSender: emailSender,
 		notifyEmail: notifyEmail,
@@ -31,7 +32,7 @@ func NewWebsiteService(
 	}
 }
 
-func (s *websiteService) SubmitContactForm(ctx context.Context, req *website.CreateContactSubmissionRequest, ipAddress, userAgent string) error {
+func (s *WebsiteService) SubmitContactForm(ctx context.Context, req *website.CreateContactSubmissionRequest, ipAddress, userAgent string) error {
 	submission := website.NewContactSubmission(req, ipAddress, userAgent)
 
 	if err := s.contactRepo.Create(ctx, submission); err != nil {
@@ -61,7 +62,7 @@ func (s *websiteService) SubmitContactForm(ctx context.Context, req *website.Cre
 	return nil
 }
 
-func (s *websiteService) sendNotificationEmail(ctx context.Context, req *website.CreateContactSubmissionRequest, ipAddress string) {
+func (s *WebsiteService) sendNotificationEmail(ctx context.Context, req *website.CreateContactSubmissionRequest, ipAddress string) {
 	htmlContent, textContent, err := email.BuildContactNotificationEmail(email.ContactNotificationEmailParams{
 		Name:        req.Name,
 		Email:       req.Email,

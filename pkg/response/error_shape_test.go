@@ -37,14 +37,14 @@ func buildAppError() *appErrors.AppError {
 }
 
 // TestErrorShape_HandlerAndWriteErrorByteIdentical pins that
-// AppError.MarshalJSON (handler path) and WriteError (chi-middleware
-// path) emit byte-identical envelope bytes for the same input.
-// These are the two "pure" AppError paths — no per-field Errors[]
-// augmentation from Huma's ErrorDetailer lift.
+// AppError.MarshalJSON (direct json.Marshal) and WriteError (chi
+// middleware path) emit byte-identical envelope bytes for the same
+// input. These are the two "pure" AppError paths — no per-field
+// Errors[] augmentation from a framework's validation layer.
 func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 	e := buildAppError()
 
-	// Path 1 — handler returns *AppError; Huma calls json.Marshal on it.
+	// Path 1 — handler returns *AppError; the encoder calls json.Marshal.
 	handlerBytes, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("json.Marshal(AppError): %v", err)
@@ -66,14 +66,13 @@ func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 }
 
 // TestErrorShape_StatusErrorMatchesAppError pins that statusError
-// (the internal wrapper Huma's NewError factory produces for pipeline
-// errors) produces byte-identical bytes to AppError.MarshalJSON when
+// (the internal wrapper NewError produces for status-only error
+// callers) produces byte-identical bytes to AppError.MarshalJSON when
 // no per-field Errors[] are present.
 //
 // We can't construct statusError directly (unexported) — we exercise
-// it by simulating a handler-returned AppError going through the
-// factory the same way Huma's handler-error path does. The factory's
-// behaviour for handler-returned AppErrors is: look up the first
+// it by routing a handler-returned AppError through NewError exactly
+// the way framework-boundary error paths do: look up the first
 // *AppError in errs, wrap it, emit.
 func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 	e := buildAppError()

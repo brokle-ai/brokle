@@ -13,11 +13,11 @@
 //
 // The HTTP status is a pure function of Type via ErrorType.HTTPStatus —
 // never derive status from a stored field, and never let callers
-// override it. Framework-level errors (Huma's pre-handler validation,
-// content-type negotiation, method routing) are categorised via
-// FromHTTPStatus, which uses an explicit map for documented statuses
-// plus an RFC 9110 §15.5/§15.6 class fallback so no 4xx is ever
-// miscategorised as a 5xx-flavoured Type.
+// override it. Framework-level errors arriving by status code (chi
+// middleware, request decoders) are categorised via FromHTTPStatus,
+// which uses an explicit map for documented statuses plus an
+// RFC 9110 §15.5/§15.6 class fallback so no 4xx is ever miscategorised
+// as a 5xx-flavoured Type.
 package errors
 
 import (
@@ -453,9 +453,9 @@ func IsNotFound(err error) bool {
 // ----- Framework-boundary categorisation -----
 
 // FromHTTPStatus synthesises an AppError from an HTTP status code,
-// used by the Huma adapter for framework-level errors that arrive
-// without an AppError context (pre-handler validation 422, content
-// negotiation 406/415, method routing 405, body size 413, …).
+// used by the framework boundary for errors that arrive without an
+// AppError context (request body decode 422, content-type negotiation
+// 406/415, method routing 405, body size 413, …).
 //
 // Class-fallback safe: any 4xx not in the explicit map becomes
 // TypeInvalidRequest, any 5xx becomes TypeAPIError. This eliminates

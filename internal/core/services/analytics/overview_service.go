@@ -1,3 +1,4 @@
+// Package analytics provides product analytics: overview metrics, provider models, and pricing snapshots.
 package analytics
 
 import (
@@ -9,14 +10,16 @@ import (
 
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/credentials"
-	"brokle/internal/core/domain/organization"
+
+	organizationService "brokle/internal/core/services/organization"
+	appErrors "brokle/pkg/errors"
 
 	"golang.org/x/sync/errgroup"
 )
 
-type overviewService struct {
+type OverviewService struct {
 	overviewRepo   analytics.OverviewRepository
-	projectService organization.ProjectService
+	projects       *organizationService.ProjectService
 	credentialRepo credentials.ProviderCredentialRepository
 	logger         *slog.Logger
 }
@@ -24,20 +27,20 @@ type overviewService struct {
 // NewOverviewService creates a new overview service instance
 func NewOverviewService(
 	overviewRepo analytics.OverviewRepository,
-	projectService organization.ProjectService,
+	projects *organizationService.ProjectService,
 	credentialRepo credentials.ProviderCredentialRepository,
 	logger *slog.Logger,
-) analytics.OverviewService {
-	return &overviewService{
+) *OverviewService {
+	return &OverviewService{
 		overviewRepo:   overviewRepo,
-		projectService: projectService,
+		projects:       projects,
 		credentialRepo: credentialRepo,
 		logger:         logger,
 	}
 }
 
 // GetOverview retrieves the complete overview data for a project
-func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.OverviewFilter) (*analytics.OverviewResponse, error) {
+func (s *OverviewService) GetOverview(ctx context.Context, filter *analytics.OverviewFilter) (*analytics.OverviewResponse, error) {
 	projectID := filter.ProjectID
 
 	// Result holders (protected by errgroup's synchronization)
@@ -163,9 +166,11 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 		return nil
 	})
 
-	// Wait for all goroutines to complete
+	// Wait for all goroutines to complete. Individual fan-out errors are
+	// already wrapped with context via fmt.Errorf %w inside each goroutine;
+	// translate the first error back to an AppError at the service boundary.
 	if err := g.Wait(); err != nil {
-		return nil, err
+		return nil, appErrors.NewInternalError("failed to load overview", err)
 	}
 
 	// Build response from collected results
@@ -186,7 +191,7 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 }
 
 // getChecklistStatus retrieves the onboarding checklist status for a project
-func (s *overviewService) getChecklistStatus(ctx context.Context, projectID uuid.UUID) (analytics.ChecklistStatus, error) {
+func (s *OverviewService) getChecklistStatus(ctx context.Context, projectID uuid.UUID) (analytics.ChecklistStatus, error) {
 	status := analytics.ChecklistStatus{
 		HasProject: true, // Always true - they're viewing the page
 	}
@@ -206,8 +211,8 @@ func (s *overviewService) getChecklistStatus(ctx context.Context, projectID uuid
 	status.HasEvaluations = hasScores
 
 	// Check if organization has AI provider credentials configured
-	if s.projectService != nil && s.credentialRepo != nil {
-		project, err := s.projectService.GetProject(ctx, projectID)
+	if s.projects != nil && s.credentialRepo != nil {
+		project, err := s.projects.GetProject(ctx, projectID)
 		if err != nil {
 			s.logger.Warn("failed to get project for checklist", "error", err, "project_id", projectID)
 		} else {

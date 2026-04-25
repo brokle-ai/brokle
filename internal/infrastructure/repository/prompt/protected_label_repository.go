@@ -9,6 +9,7 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type protectedLabelRepository struct {
@@ -20,12 +21,18 @@ func NewProtectedLabelRepository(tm *db.TxManager) promptDomain.ProtectedLabelRe
 }
 
 func (r *protectedLabelRepository) Create(ctx context.Context, l *promptDomain.ProtectedLabel) error {
-	return r.tm.Queries(ctx).CreateProtectedPromptLabel(ctx, gen.CreateProtectedPromptLabelParams{
+	if err := r.tm.Queries(ctx).CreateProtectedPromptLabel(ctx, gen.CreateProtectedPromptLabelParams{
 		ID:        l.ID,
 		ProjectID: l.ProjectID,
 		LabelName: l.LabelName,
 		CreatedBy: l.CreatedBy,
-	})
+	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create protected label %s: %w", l.LabelName, promptDomain.ErrProtectedLabelAlreadyExists)
+		}
+		return fmt.Errorf("create protected label %s: %w", l.LabelName, err)
+	}
+	return nil
 }
 
 func (r *protectedLabelRepository) Delete(ctx context.Context, id uuid.UUID) error {

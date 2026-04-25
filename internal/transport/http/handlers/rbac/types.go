@@ -4,6 +4,7 @@ import (
 	"github.com/google/uuid"
 
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/pkg/response"
 )
 
 // ---- list-roles ------------------------------------------------------
@@ -11,6 +12,13 @@ import (
 type listRolesResponse struct {
 	Roles      []*authDomain.Role `json:"roles"`
 	TotalCount int                `json:"total_count"`
+}
+
+// ---- list-permissions (canonical {data, pagination} envelope) --------
+
+type listPermissionsBody struct {
+	Data       []*authDomain.Permission `json:"data"`
+	Pagination *response.Pagination     `json:"pagination"`
 }
 
 // ---- custom-role lifecycle -------------------------------------------

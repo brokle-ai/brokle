@@ -9,8 +9,8 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// scopeService implements the authDomain.ScopeService interface
-type scopeService struct {
+// ScopeService resolves effective API-key scopes against role + permission data.
+type ScopeService struct {
 	orgMemberRepo  authDomain.OrganizationMemberRepository
 	roleRepo       authDomain.RoleRepository
 	permissionRepo authDomain.PermissionRepository
@@ -21,8 +21,8 @@ func NewScopeService(
 	orgMemberRepo authDomain.OrganizationMemberRepository,
 	roleRepo authDomain.RoleRepository,
 	permissionRepo authDomain.PermissionRepository,
-) authDomain.ScopeService {
-	return &scopeService{
+) *ScopeService {
+	return &ScopeService{
 		orgMemberRepo:  orgMemberRepo,
 		roleRepo:       roleRepo,
 		permissionRepo: permissionRepo,
@@ -44,7 +44,7 @@ func NewScopeService(
 // Owner/Admin Shortcuts:
 // - Owner role → automatically gets ALL scopes (no filter needed)
 // - Admin role → automatically gets ALL scopes EXCEPT delete org/project
-func (s *scopeService) GetUserScopes(
+func (s *ScopeService) GetUserScopes(
 	ctx context.Context,
 	userID uuid.UUID,
 	orgID *uuid.UUID,
@@ -72,7 +72,7 @@ func (s *scopeService) GetUserScopes(
 		// This already does the heavy lifting: org_members → roles → role_permissions → permissions
 		allOrgPermissions, err := s.orgMemberRepo.GetUserPermissionsInOrganization(ctx, userID, *orgID)
 		if err != nil {
-			return nil, appErrors.NewInternalError("Failed to resolve organization scopes", err)
+			return nil, appErrors.NewInternalError("failed to resolve organization scopes", err)
 		}
 
 		// Filter to organization-level scopes only
@@ -99,7 +99,7 @@ func (s *scopeService) GetUserScopes(
 		// Get user's org permissions again (we'll filter to project-level)
 		allOrgPermissions, err := s.orgMemberRepo.GetUserPermissionsInOrganization(ctx, userID, *orgID)
 		if err != nil {
-			return nil, appErrors.NewInternalError("Failed to resolve project scopes", err)
+			return nil, appErrors.NewInternalError("failed to resolve project scopes", err)
 		}
 
 		// Filter to project-level scopes only
@@ -129,17 +129,17 @@ func (s *scopeService) GetUserScopes(
 }
 
 // GetUserScopesInOrganization is a convenience method for org-only context
-func (s *scopeService) GetUserScopesInOrganization(ctx context.Context, userID, orgID uuid.UUID) (*authDomain.ScopeResolution, error) {
+func (s *ScopeService) GetUserScopesInOrganization(ctx context.Context, userID, orgID uuid.UUID) (*authDomain.ScopeResolution, error) {
 	return s.GetUserScopes(ctx, userID, &orgID, nil)
 }
 
 // GetUserScopesInProject is a convenience method for project context
-func (s *scopeService) GetUserScopesInProject(ctx context.Context, userID, orgID, projectID uuid.UUID) (*authDomain.ScopeResolution, error) {
+func (s *ScopeService) GetUserScopesInProject(ctx context.Context, userID, orgID, projectID uuid.UUID) (*authDomain.ScopeResolution, error) {
 	return s.GetUserScopes(ctx, userID, &orgID, &projectID)
 }
 
 // HasScope checks if user has a specific scope in the given context (O(1) lookup)
-func (s *scopeService) HasScope(
+func (s *ScopeService) HasScope(
 	ctx context.Context,
 	userID uuid.UUID,
 	scope string,
@@ -155,7 +155,7 @@ func (s *scopeService) HasScope(
 }
 
 // HasAnyScope checks if user has at least one of the specified scopes
-func (s *scopeService) HasAnyScope(
+func (s *ScopeService) HasAnyScope(
 	ctx context.Context,
 	userID uuid.UUID,
 	scopes []string,
@@ -171,7 +171,7 @@ func (s *scopeService) HasAnyScope(
 }
 
 // HasAllScopes checks if user has all of the specified scopes
-func (s *scopeService) HasAllScopes(
+func (s *ScopeService) HasAllScopes(
 	ctx context.Context,
 	userID uuid.UUID,
 	scopes []string,
@@ -187,7 +187,7 @@ func (s *scopeService) HasAllScopes(
 }
 
 // ValidateScope validates that a scope name is valid
-func (s *scopeService) ValidateScope(ctx context.Context, scope string) error {
+func (s *ScopeService) ValidateScope(ctx context.Context, scope string) error {
 	if !authDomain.IsValidScope(scope) {
 		return appErrors.NewValidationError("scope", "Invalid scope format: "+scope)
 	}
@@ -195,28 +195,28 @@ func (s *scopeService) ValidateScope(ctx context.Context, scope string) error {
 	// Check if scope exists in database
 	_, err := s.permissionRepo.GetByName(ctx, scope)
 	if err != nil {
-		return appErrors.NewNotFoundError("Scope not found: " + scope)
+		return appErrors.NewNotFoundError("scope not found: " + scope)
 	}
 
 	return nil
 }
 
 // GetScopeLevel returns the level of a scope (organization, project, global)
-func (s *scopeService) GetScopeLevel(ctx context.Context, scope string) (authDomain.ScopeLevel, error) {
+func (s *ScopeService) GetScopeLevel(ctx context.Context, scope string) (authDomain.ScopeLevel, error) {
 	perm, err := s.permissionRepo.GetByName(ctx, scope)
 	if err != nil {
-		return "", appErrors.NewNotFoundError("Scope not found: " + scope)
+		return "", appErrors.NewNotFoundError("scope not found: " + scope)
 	}
 
 	return perm.ScopeLevel, nil
 }
 
 // GetAvailableScopes returns all available scopes for a specific level
-func (s *scopeService) GetAvailableScopes(ctx context.Context, level authDomain.ScopeLevel) ([]string, error) {
+func (s *ScopeService) GetAvailableScopes(ctx context.Context, level authDomain.ScopeLevel) ([]string, error) {
 	// Get all permissions
 	allPermissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to fetch permissions", err)
+		return nil, appErrors.NewInternalError("failed to fetch permissions", err)
 	}
 
 	// Filter by scope level
@@ -231,11 +231,11 @@ func (s *scopeService) GetAvailableScopes(ctx context.Context, level authDomain.
 }
 
 // GetScopesByCategory returns scopes grouped by category for UI display
-func (s *scopeService) GetScopesByCategory(ctx context.Context) ([]authDomain.ScopeCategory, error) {
+func (s *ScopeService) GetScopesByCategory(ctx context.Context) ([]authDomain.ScopeCategory, error) {
 	// Get all permissions
 	allPermissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to fetch permissions", err)
+		return nil, appErrors.NewInternalError("failed to fetch permissions", err)
 	}
 
 	// Group by category

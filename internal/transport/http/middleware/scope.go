@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
@@ -15,7 +15,7 @@ import (
 // ScopeDeps groups the services and logger every scope-check middleware
 // needs. Same constructor-with-Deps pattern as AuthDeps.
 type ScopeDeps struct {
-	Scope  auth.ScopeService
+	Scope  *authService.ScopeService
 	Logger *slog.Logger
 }
 

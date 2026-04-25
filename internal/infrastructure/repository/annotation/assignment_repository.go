@@ -12,15 +12,15 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type AssignmentRepository struct {
+type assignmentRepository struct {
 	tm *db.TxManager
 }
 
-func NewAssignmentRepository(tm *db.TxManager) *AssignmentRepository {
-	return &AssignmentRepository{tm: tm}
+func NewAssignmentRepository(tm *db.TxManager) annotationDomain.AssignmentRepository {
+	return &assignmentRepository{tm: tm}
 }
 
-func (r *AssignmentRepository) Create(ctx context.Context, a *annotationDomain.QueueAssignment) error {
+func (r *assignmentRepository) Create(ctx context.Context, a *annotationDomain.QueueAssignment) error {
 	if err := r.tm.Queries(ctx).CreateAnnotationQueueAssignment(ctx, gen.CreateAnnotationQueueAssignmentParams{
 		ID:         a.ID,
 		QueueID:    a.QueueID,
@@ -36,7 +36,7 @@ func (r *AssignmentRepository) Create(ctx context.Context, a *annotationDomain.Q
 	return nil
 }
 
-func (r *AssignmentRepository) Delete(ctx context.Context, queueID, userID uuid.UUID) error {
+func (r *assignmentRepository) Delete(ctx context.Context, queueID, userID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteAnnotationQueueAssignment(ctx, gen.DeleteAnnotationQueueAssignmentParams{
 		QueueID: queueID,
 		UserID:  userID,
@@ -50,7 +50,7 @@ func (r *AssignmentRepository) Delete(ctx context.Context, queueID, userID uuid.
 	return nil
 }
 
-func (r *AssignmentRepository) GetByQueueAndUser(ctx context.Context, queueID, userID uuid.UUID) (*annotationDomain.QueueAssignment, error) {
+func (r *assignmentRepository) GetByQueueAndUser(ctx context.Context, queueID, userID uuid.UUID) (*annotationDomain.QueueAssignment, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueAssignmentByQueueAndUser(ctx, gen.GetAnnotationQueueAssignmentByQueueAndUserParams{
 		QueueID: queueID,
 		UserID:  userID,
@@ -64,7 +64,7 @@ func (r *AssignmentRepository) GetByQueueAndUser(ctx context.Context, queueID, u
 	return assignmentFromRow(&row), nil
 }
 
-func (r *AssignmentRepository) List(ctx context.Context, queueID uuid.UUID) ([]*annotationDomain.QueueAssignment, error) {
+func (r *assignmentRepository) List(ctx context.Context, queueID uuid.UUID) ([]*annotationDomain.QueueAssignment, error) {
 	rows, err := r.tm.Queries(ctx).ListAnnotationQueueAssignmentsByQueue(ctx, queueID)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (r *AssignmentRepository) List(ctx context.Context, queueID uuid.UUID) ([]*
 	return out, nil
 }
 
-func (r *AssignmentRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]*annotationDomain.QueueAssignment, error) {
+func (r *assignmentRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]*annotationDomain.QueueAssignment, error) {
 	rows, err := r.tm.Queries(ctx).ListAnnotationQueueAssignmentsByUser(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (r *AssignmentRepository) ListByUser(ctx context.Context, userID uuid.UUID)
 	return out, nil
 }
 
-func (r *AssignmentRepository) IsAssigned(ctx context.Context, queueID, userID uuid.UUID) (bool, error) {
+func (r *assignmentRepository) IsAssigned(ctx context.Context, queueID, userID uuid.UUID) (bool, error) {
 	return r.tm.Queries(ctx).AnnotationQueueAssignmentExists(ctx, gen.AnnotationQueueAssignmentExistsParams{
 		QueueID: queueID,
 		UserID:  userID,
@@ -97,7 +97,7 @@ func (r *AssignmentRepository) IsAssigned(ctx context.Context, queueID, userID u
 
 // HasRole checks whether the user's assigned role meets or exceeds the
 // minimum. Role hierarchy: admin > reviewer > annotator.
-func (r *AssignmentRepository) HasRole(ctx context.Context, queueID, userID uuid.UUID, minRole annotationDomain.AssignmentRole) (bool, error) {
+func (r *assignmentRepository) HasRole(ctx context.Context, queueID, userID uuid.UUID, minRole annotationDomain.AssignmentRole) (bool, error) {
 	a, err := r.GetByQueueAndUser(ctx, queueID, userID)
 	if err != nil {
 		if err == annotationDomain.ErrAssignmentNotFound {

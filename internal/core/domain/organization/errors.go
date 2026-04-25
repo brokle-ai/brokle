@@ -6,7 +6,6 @@ var (
 	// Organization errors
 	ErrNotFound      = errors.New("not found")
 	ErrAlreadyExists = errors.New("already exists")
-	ErrInactive      = errors.New("inactive")
 
 	// Member errors
 	ErrMemberNotFound      = errors.New("member not found")
@@ -16,17 +15,17 @@ var (
 	// Project errors
 	ErrProjectNotFound      = errors.New("project not found")
 	ErrProjectAlreadyExists = errors.New("project already exists")
-	ErrProjectInactive      = errors.New("project inactive")
-
-	// Environment errors
-	ErrEnvironmentNotFound      = errors.New("environment not found")
-	ErrEnvironmentAlreadyExists = errors.New("environment already exists")
 
 	// Invitation errors
 	ErrInvitationNotFound = errors.New("invitation not found")
-	ErrInvitationExpired  = errors.New("invitation expired")
-	ErrInvitationUsed     = errors.New("invitation already used")
+	// ErrInvitationResendLimit is returned when the configured maximum
+	// number of resend attempts has been reached on an invitation token.
+	ErrInvitationResendLimit = errors.New("maximum invitation resend attempts reached")
+	// ErrInvitationResendCooldown is returned when a resend is requested
+	// before the per-invitation cooldown has elapsed.
+	ErrInvitationResendCooldown = errors.New("must wait before resending invitation")
 
 	// Settings errors
-	ErrSettingsNotFound = errors.New("settings not found")
+	ErrSettingsNotFound      = errors.New("settings not found")
+	ErrSettingsAlreadyExists = errors.New("settings already exist")
 )

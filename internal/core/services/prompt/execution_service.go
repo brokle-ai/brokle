@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	analyticsDomain "brokle/internal/core/domain/analytics"
 	promptDomain "brokle/internal/core/domain/prompt"
-	"brokle/pkg/errors"
+	analyticsService "brokle/internal/core/services/analytics"
+	appErrors "brokle/pkg/errors"
 )
 
 type AIModelProvider string
@@ -33,27 +33,27 @@ type AIClientConfig struct {
 	DefaultTimeout time.Duration
 }
 
-type executionService struct {
-	compiler       promptDomain.CompilerService
-	pricingService analyticsDomain.ProviderPricingService // Optional: nil = use fallback pricing
+type ExecutionService struct {
+	compiler       *CompilerService
+	pricing *analyticsService.ProviderPricingService // Optional: nil = use fallback pricing
 	config         *AIClientConfig
 	httpClient     *http.Client
 }
 
-// pricingService is optional - if nil, hardcoded fallback pricing is used.
+// pricing is optional - if nil, hardcoded fallback pricing is used.
 func NewExecutionService(
-	compiler promptDomain.CompilerService,
-	pricingService analyticsDomain.ProviderPricingService,
+	compiler *CompilerService,
+	pricing *analyticsService.ProviderPricingService,
 	config *AIClientConfig,
-) promptDomain.ExecutionService {
+) *ExecutionService {
 	timeout := config.DefaultTimeout
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
 
-	return &executionService{
+	return &ExecutionService{
 		compiler:       compiler,
-		pricingService: pricingService,
+		pricing: pricing,
 		config:         config,
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -61,7 +61,7 @@ func NewExecutionService(
 	}
 }
 
-func (s *executionService) Execute(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string, configOverrides *promptDomain.ModelConfig) (*promptDomain.ExecutePromptResponse, error) {
+func (s *ExecutionService) Execute(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string, configOverrides *promptDomain.ModelConfig) (*promptDomain.ExecutePromptResponse, error) {
 	startTime := time.Now()
 
 	compiled, err := s.compiler.Compile(prompt.Template, prompt.Type, variables)
@@ -124,33 +124,44 @@ func (s *executionService) Execute(ctx context.Context, prompt *promptDomain.Pro
 	}, nil
 }
 
-func (s *executionService) ExecuteStream(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string, configOverrides *promptDomain.ModelConfig) (<-chan promptDomain.StreamEvent, <-chan *promptDomain.StreamResult, error) {
+func (s *ExecutionService) ExecuteStream(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string, configOverrides *promptDomain.ModelConfig) (<-chan promptDomain.StreamEvent, <-chan *promptDomain.StreamResult, error) {
 	compiled, err := s.compiler.Compile(prompt.Template, prompt.Type, variables)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compile template: %w", err)
+		// Template compile failure is a user-input error (bad template
+		// variables, malformed template). Cross-boundary classification
+		// as validation so handlers emit 422, not 500.
+		return nil, nil, appErrors.NewValidationError("failed to compile template", err.Error())
 	}
 
 	effectiveConfig := s.mergeConfig(nil, configOverrides)
 	if effectiveConfig == nil || effectiveConfig.Model == "" {
-		return nil, nil, errors.NewValidationError("no model specified in config", "")
+		return nil, nil, appErrors.NewValidationError("no model specified in config", "")
 	}
 
 	if effectiveConfig.Provider == "" {
-		return nil, nil, errors.NewValidationError("provider not specified in config", "")
+		return nil, nil, appErrors.NewValidationError("provider not specified in config", "")
 	}
 	provider := AIModelProvider(effectiveConfig.Provider)
 
 	eventChan := make(chan promptDomain.StreamEvent, 100)
 	resultChan := make(chan *promptDomain.StreamResult, 1)
 
+	// Detach from the HTTP request context. A streaming LLM completion
+	// may outlive the request that initiated it (client disconnect
+	// mid-stream, proxy timeout, background consumer), and the goroutine
+	// must keep running so downstream ops (usage accounting, log
+	// emission, SSE flush) finish. 5 min is the conservative upper bound
+	// for a single streaming completion. See CLAUDE.md gotcha #9.
+	execCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	go func() {
+		defer cancel()
 		switch provider {
 		case ProviderOpenAI, ProviderAzure, ProviderOpenRouter, ProviderCustom:
-			s.streamOpenAICompatible(ctx, prompt.Type, compiled, effectiveConfig, provider, eventChan, resultChan)
+			s.streamOpenAICompatible(execCtx, prompt.Type, compiled, effectiveConfig, provider, eventChan, resultChan)
 		case ProviderAnthropic:
-			s.streamAnthropic(ctx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
+			s.streamAnthropic(execCtx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
 		case ProviderGemini:
-			s.streamGemini(ctx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
+			s.streamGemini(execCtx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
 		default:
 			eventChan <- promptDomain.StreamEvent{
 				Type:  promptDomain.StreamEventError,
@@ -164,11 +175,11 @@ func (s *executionService) ExecuteStream(ctx context.Context, prompt *promptDoma
 	return eventChan, resultChan, nil
 }
 
-func (s *executionService) Preview(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string) (any, error) {
+func (s *ExecutionService) Preview(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string) (any, error) {
 	return s.compiler.Compile(prompt.Template, prompt.Type, variables)
 }
 
-func (s *executionService) mergeConfig(base, overrides *promptDomain.ModelConfig) *promptDomain.ModelConfig {
+func (s *ExecutionService) mergeConfig(base, overrides *promptDomain.ModelConfig) *promptDomain.ModelConfig {
 	if base == nil && overrides == nil {
 		return nil
 	}
@@ -281,7 +292,7 @@ type openAIResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func (s *executionService) getOpenAICompatibleConfig(provider AIModelProvider, config *promptDomain.ModelConfig) (baseURL, authHeader, authValue string, err error) {
+func (s *ExecutionService) getOpenAICompatibleConfig(provider AIModelProvider, config *promptDomain.ModelConfig) (baseURL, authHeader, authValue string, err error) {
 	switch provider {
 	case ProviderOpenAI:
 		baseURL = "https://api.openai.com/v1"
@@ -293,7 +304,7 @@ func (s *executionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 
 	case ProviderAzure:
 		if config.ResolvedBaseURL == nil || *config.ResolvedBaseURL == "" {
-			return "", "", "", errors.NewValidationError("Azure OpenAI requires base URL", "configure base_url in provider credentials")
+			return "", "", "", appErrors.NewValidationError("Azure OpenAI requires base URL", "configure base_url in provider credentials")
 		}
 
 		// Extract deployment_id from ProviderConfig
@@ -304,7 +315,7 @@ func (s *executionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 			}
 		}
 		if deploymentID == "" {
-			return "", "", "", errors.NewValidationError("Azure OpenAI requires deployment_id", "configure deployment_id in provider credentials config")
+			return "", "", "", appErrors.NewValidationError("Azure OpenAI requires deployment_id", "configure deployment_id in provider credentials config")
 		}
 
 		// Build correct Azure endpoint: {baseURL}/openai/deployments/{deployment_id}
@@ -322,22 +333,22 @@ func (s *executionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 
 	case ProviderCustom:
 		if config.ResolvedBaseURL == nil || *config.ResolvedBaseURL == "" {
-			return "", "", "", errors.NewValidationError("Custom provider requires base URL", "configure base_url in provider credentials")
+			return "", "", "", appErrors.NewValidationError("Custom provider requires base URL", "configure base_url in provider credentials")
 		}
 		baseURL = *config.ResolvedBaseURL
 		authHeader = "Authorization"
 		authValue = "Bearer " + config.APIKey
 
 	default:
-		return "", "", "", errors.NewValidationError("provider not OpenAI-compatible", string(provider))
+		return "", "", "", appErrors.NewValidationError("provider not OpenAI-compatible", string(provider))
 	}
 
 	return baseURL, authHeader, authValue, nil
 }
 
-func (s *executionService) executeOpenAICompatible(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig, provider AIModelProvider) (*promptDomain.LLMResponse, error) {
+func (s *ExecutionService) executeOpenAICompatible(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig, provider AIModelProvider) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, errors.NewValidationError("API key not provided", fmt.Sprintf("%s API key must be provided via project credentials", provider))
+		return nil, appErrors.NewValidationError("API key not provided", fmt.Sprintf("%s API key must be provided via project credentials", provider))
 	}
 
 	baseURL, authHeader, authValue, err := s.getOpenAICompatibleConfig(provider, config)
@@ -363,7 +374,7 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
 		}
 		req.Messages = make([]openAIMessage, len(messages))
 		for i, msg := range messages {
@@ -377,7 +388,7 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
 		}
 		// Text prompts use chat API with user role
 		req.Messages = []openAIMessage{
@@ -386,7 +397,7 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 		endpoint = baseURL + "/chat/completions"
 
 	default:
-		return nil, errors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
 	}
 
 	// Add api-version query param for Azure
@@ -503,9 +514,9 @@ type anthropicResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func (s *executionService) executeAnthropic(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
+func (s *ExecutionService) executeAnthropic(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, errors.NewValidationError("API key not provided", "Anthropic API key must be provided via project credentials")
+		return nil, appErrors.NewValidationError("API key not provided", "Anthropic API key must be provided via project credentials")
 	}
 
 	baseURL := "https://api.anthropic.com"
@@ -530,7 +541,7 @@ func (s *executionService) executeAnthropic(ctx context.Context, promptType prom
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
 		}
 
 		// Anthropic uses separate system field instead of system role message
@@ -550,14 +561,14 @@ func (s *executionService) executeAnthropic(ctx context.Context, promptType prom
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
 		}
 		req.Messages = []anthropicMessage{
 			{Role: "user", Content: text},
 		}
 
 	default:
-		return nil, errors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
 	}
 
 	body, err := json.Marshal(req)
@@ -619,9 +630,9 @@ func (s *executionService) executeAnthropic(ctx context.Context, promptType prom
 // calculateCost calculates execution cost using ProviderPricingService if available,
 // with fallback to hardcoded provider-specific pricing.
 // This unified method handles all providers and integrates with the analytics domain.
-func (s *executionService) calculateCost(ctx context.Context, provider AIModelProvider, model string, promptTokens, completionTokens int) float64 {
+func (s *ExecutionService) calculateCost(ctx context.Context, provider AIModelProvider, model string, promptTokens, completionTokens int) float64 {
 	// Try pricing service if available
-	if s.pricingService != nil {
+	if s.pricing != nil {
 		cost, err := s.calculateCostFromService(ctx, model, promptTokens, completionTokens)
 		if err == nil {
 			return cost
@@ -643,9 +654,9 @@ func (s *executionService) calculateCost(ctx context.Context, provider AIModelPr
 	}
 }
 
-func (s *executionService) calculateCostFromService(ctx context.Context, model string, promptTokens, completionTokens int) (float64, error) {
+func (s *ExecutionService) calculateCostFromService(ctx context.Context, model string, promptTokens, completionTokens int) (float64, error) {
 	// Get pricing snapshot for this model (global pricing, no project-specific override)
-	snapshot, err := s.pricingService.GetProviderPricingSnapshot(ctx, nil, model, time.Now())
+	snapshot, err := s.pricing.GetProviderPricingSnapshot(ctx, nil, model, time.Now())
 	if err != nil {
 		return 0, err
 	}
@@ -657,7 +668,7 @@ func (s *executionService) calculateCostFromService(ctx context.Context, model s
 	}
 
 	// Calculate cost using pricing service
-	costs := s.pricingService.CalculateProviderCost(usage, snapshot)
+	costs := s.pricing.CalculateProviderCost(usage, snapshot)
 	total, ok := costs["total"]
 	if !ok {
 		return 0, fmt.Errorf("no total cost in pricing result")
@@ -671,7 +682,7 @@ func (s *executionService) calculateCostFromService(ctx context.Context, model s
 // calculateOpenAICostFallback uses hardcoded pricing for OpenAI-compatible providers.
 // Used when ProviderPricingService is unavailable or returns an error.
 // Prices are in USD per 1M tokens.
-func (s *executionService) calculateOpenAICostFallback(model string, promptTokens, completionTokens int) float64 {
+func (s *ExecutionService) calculateOpenAICostFallback(model string, promptTokens, completionTokens int) float64 {
 	var inputPrice, outputPrice float64
 
 	switch {
@@ -698,7 +709,7 @@ func (s *executionService) calculateOpenAICostFallback(model string, promptToken
 
 // calculateAnthropicCostFallback uses hardcoded pricing for Anthropic.
 // Prices are in USD per 1M tokens.
-func (s *executionService) calculateAnthropicCostFallback(model string, inputTokens, outputTokens int) float64 {
+func (s *ExecutionService) calculateAnthropicCostFallback(model string, inputTokens, outputTokens int) float64 {
 	var inputPrice, outputPrice float64
 
 	switch {
@@ -721,7 +732,7 @@ func (s *executionService) calculateAnthropicCostFallback(model string, inputTok
 
 // calculateGeminiCostFallback uses hardcoded pricing for Google Gemini.
 // Prices are in USD per 1M tokens.
-func (s *executionService) calculateGeminiCostFallback(model string, promptTokens, completionTokens int) float64 {
+func (s *ExecutionService) calculateGeminiCostFallback(model string, promptTokens, completionTokens int) float64 {
 	var inputPrice, outputPrice float64
 
 	switch {
@@ -792,9 +803,9 @@ type geminiError struct {
 
 // executeGemini executes prompts using Google Gemini API.
 // Uses x-goog-api-key header for security (API keys in URLs get logged).
-func (s *executionService) executeGemini(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
+func (s *ExecutionService) executeGemini(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, errors.NewValidationError("API key not provided", "Gemini API key must be provided via project credentials")
+		return nil, appErrors.NewValidationError("API key not provided", "Gemini API key must be provided via project credentials")
 	}
 
 	baseURL := "https://generativelanguage.googleapis.com/v1beta"
@@ -815,7 +826,7 @@ func (s *executionService) executeGemini(ctx context.Context, promptType promptD
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
 		}
 
 		var contents []geminiContent
@@ -843,7 +854,7 @@ func (s *executionService) executeGemini(ctx context.Context, promptType promptD
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, errors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
 		}
 		req.Contents = []geminiContent{
 			{
@@ -853,7 +864,7 @@ func (s *executionService) executeGemini(ctx context.Context, promptType promptD
 		}
 
 	default:
-		return nil, errors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
 	}
 
 	body, err := json.Marshal(req)
@@ -1078,7 +1089,7 @@ type anthropicMessageDelta struct {
 	} `json:"usage"`
 }
 
-func (s *executionService) streamOpenAICompatible(
+func (s *ExecutionService) streamOpenAICompatible(
 	ctx context.Context,
 	promptType promptDomain.PromptType,
 	compiled any,
@@ -1316,7 +1327,7 @@ func (s *executionService) streamOpenAICompatible(
 	}
 }
 
-func (s *executionService) streamAnthropic(
+func (s *ExecutionService) streamAnthropic(
 	ctx context.Context,
 	promptType promptDomain.PromptType,
 	compiled any,
@@ -1563,7 +1574,7 @@ type geminiStreamChunk struct {
 // streamGemini handles Google Gemini streaming execution.
 // Endpoint: POST /v1beta/models/{model}:streamGenerateContent?alt=sse
 // Uses x-goog-api-key header for security (API keys in URLs get logged).
-func (s *executionService) streamGemini(
+func (s *ExecutionService) streamGemini(
 	ctx context.Context,
 	promptType promptDomain.PromptType,
 	compiled any,

@@ -43,9 +43,9 @@ const (
 
 // FilterClause represents a single filter condition for matching spans.
 type FilterClause struct {
-	Field    string      `json:"field"`    // e.g., "input", "output", "metadata.key", "span_kind"
-	Operator string      `json:"operator"` // equals, not_equals, contains, gt, lt, is_empty
-	Value    any `json:"value"`
+	Field    string `json:"field"`    // e.g., "input", "output", "metadata.key", "span_kind"
+	Operator string `json:"operator"` // equals, not_equals, contains, gt, lt, is_empty
+	Value    any    `json:"value"`
 }
 
 // VariableMap defines how to extract a variable from span data.

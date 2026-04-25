@@ -17,18 +17,18 @@ type EvaluatorAnalyticsParams struct {
 
 // EvaluatorAnalyticsResponse contains comprehensive analytics for an evaluator.
 type EvaluatorAnalyticsResponse struct {
-	EvaluatorID        uuid.UUID            `json:"evaluator_id"`
-	Period             string               `json:"period"`
-	TotalExecutions    int64                `json:"total_executions"`
-	TotalSpansScored   int64                `json:"total_spans_scored"`
-	SuccessRate        float64              `json:"success_rate"`            // Percentage of successful executions
-	AverageScore       float64              `json:"average_score"`           // Mean score value across all scored spans
-	ScoreDistribution  []DistributionBucket `json:"score_distribution"`      // Histogram of score values
-	ExecutionTrend     []EvaluatorTimeSeriesPoint    `json:"execution_trend"`         // Executions over time
-	ScoreTrend         []EvaluatorTimeSeriesPoint    `json:"score_trend"`             // Average score over time
-	LatencyPercentiles LatencyStats         `json:"latency_percentiles"`     // P50, P90, P99 latencies
-	TopErrors          []ErrorSummary       `json:"top_errors"`              // Most common error types
-	CostEstimate       *CostEstimate        `json:"cost_estimate,omitempty"` // Estimated cost for LLM evaluators
+	EvaluatorID        uuid.UUID                  `json:"evaluator_id"`
+	Period             string                     `json:"period"`
+	TotalExecutions    int64                      `json:"total_executions"`
+	TotalSpansScored   int64                      `json:"total_spans_scored"`
+	SuccessRate        float64                    `json:"success_rate"`            // Percentage of successful executions
+	AverageScore       float64                    `json:"average_score"`           // Mean score value across all scored spans
+	ScoreDistribution  []DistributionBucket       `json:"score_distribution"`      // Histogram of score values
+	ExecutionTrend     []EvaluatorTimeSeriesPoint `json:"execution_trend"`         // Executions over time
+	ScoreTrend         []EvaluatorTimeSeriesPoint `json:"score_trend"`             // Average score over time
+	LatencyPercentiles LatencyStats               `json:"latency_percentiles"`     // P50, P90, P99 latencies
+	TopErrors          []ErrorSummary             `json:"top_errors"`              // Most common error types
+	CostEstimate       *CostEstimate              `json:"cost_estimate,omitempty"` // Estimated cost for LLM evaluators
 }
 
 // DistributionBucket represents a bucket in a histogram.

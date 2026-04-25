@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/organization"
+	organizationService "brokle/internal/core/services/organization"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
@@ -26,9 +27,9 @@ import (
 )
 
 type handler struct {
-	projectSvc organization.ProjectService
-	orgSvc     organization.OrganizationService
-	memberSvc  organization.MemberService
+	projectSvc *organizationService.ProjectService
+	orgSvc     *organizationService.OrganizationService
+	memberSvc  *organizationService.MemberService
 	logger     *slog.Logger
 }
 
@@ -36,9 +37,9 @@ type handler struct {
 // context: the authed dashboard chi group (RequireAuth + LimitByUser).
 func RegisterRoutes(
 	r chi.Router,
-	projectSvc organization.ProjectService,
-	orgSvc organization.OrganizationService,
-	memberSvc organization.MemberService,
+	projectSvc *organizationService.ProjectService,
+	orgSvc *organizationService.OrganizationService,
+	memberSvc *organizationService.MemberService,
 	logger *slog.Logger,
 ) {
 	h := &handler{

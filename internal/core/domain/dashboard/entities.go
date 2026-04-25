@@ -74,7 +74,7 @@ const (
 type QueryFilter struct {
 	Field    string         `json:"field"`
 	Operator FilterOperator `json:"operator"`
-	Value    any    `json:"value"`
+	Value    any            `json:"value"`
 }
 
 // DashboardTimeRange defines a time range for widget queries.
@@ -86,23 +86,23 @@ type DashboardTimeRange struct {
 
 // WidgetQuery defines the data query configuration for a widget.
 type WidgetQuery struct {
-	View       ViewType      `json:"view"`                 // "traces", "spans", "scores"
-	Measures   []string      `json:"measures"`             // ["count", "latency_p50", "total_cost"]
-	Dimensions []string      `json:"dimensions,omitempty"` // grouping fields
-	Filters    []QueryFilter `json:"filters,omitempty"`    // filter conditions
-	DashboardTimeRange  *DashboardTimeRange    `json:"time_range,omitempty"` // time range
-	Limit      int           `json:"limit,omitempty"`      // result limit
-	OrderBy    string        `json:"order_by,omitempty"`   // order by field
-	OrderDir   string        `json:"order_dir,omitempty"`  // "asc" or "desc"
+	View               ViewType            `json:"view"`                 // "traces", "spans", "scores"
+	Measures           []string            `json:"measures"`             // ["count", "latency_p50", "total_cost"]
+	Dimensions         []string            `json:"dimensions,omitempty"` // grouping fields
+	Filters            []QueryFilter       `json:"filters,omitempty"`    // filter conditions
+	DashboardTimeRange *DashboardTimeRange `json:"time_range,omitempty"` // time range
+	Limit              int                 `json:"limit,omitempty"`      // result limit
+	OrderBy            string              `json:"order_by,omitempty"`   // order by field
+	OrderDir           string              `json:"order_dir,omitempty"`  // "asc" or "desc"
 }
 
 // Widget represents a dashboard widget configuration.
 type Widget struct {
-	ID          string                 `json:"id"`
-	Type        WidgetType             `json:"type"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description,omitempty"`
-	Query       WidgetQuery            `json:"query"`
+	ID          string         `json:"id"`
+	Type        WidgetType     `json:"type"`
+	Title       string         `json:"title"`
+	Description string         `json:"description,omitempty"`
+	Query       WidgetQuery    `json:"query"`
 	Config      map[string]any `json:"config,omitempty"` // widget-specific config
 }
 
@@ -135,10 +135,10 @@ type Variable struct {
 
 // DashboardConfig holds dashboard-level configuration including widgets.
 type DashboardConfig struct {
-	Widgets     []Widget   `json:"widgets"`
-	RefreshRate int        `json:"refresh_rate,omitempty"` // seconds
-	DashboardTimeRange   *DashboardTimeRange `json:"time_range,omitempty"`   // dashboard-level time range
-	Variables   []Variable `json:"variables,omitempty"`    // dashboard variables
+	Widgets            []Widget            `json:"widgets"`
+	RefreshRate        int                 `json:"refresh_rate,omitempty"` // seconds
+	DashboardTimeRange *DashboardTimeRange `json:"time_range,omitempty"`   // dashboard-level time range
+	Variables          []Variable          `json:"variables,omitempty"`    // dashboard variables
 }
 
 // Dashboard represents a project dashboard with widget configurations.
@@ -181,13 +181,6 @@ type DashboardFilter struct {
 	Offset    int
 }
 
-// DashboardListResponse represents a paginated list of dashboards.
-type DashboardListResponse struct {
-	Dashboards []*Dashboard `json:"dashboards"`
-	Total      int64        `json:"total"`
-	Limit      int          `json:"limit"`
-	Offset     int          `json:"offset"`
-}
 
 // TemplateCategory defines the category of a dashboard template
 type TemplateCategory string

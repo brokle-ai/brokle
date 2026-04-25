@@ -64,9 +64,9 @@ type Span struct {
 	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
 	ParentSpanID  *string    `json:"parent_span_id,omitempty" db:"parent_span_id"`
 
-	TraceState     *string `json:"trace_state,omitempty" db:"trace_state"`
-	Input          *string `json:"input,omitempty" db:"input"`
-	Output         *string `json:"output,omitempty" db:"output"`
+	TraceState     *string   `json:"trace_state,omitempty" db:"trace_state"`
+	Input          *string   `json:"input,omitempty" db:"input"`
+	Output         *string   `json:"output,omitempty" db:"output"`
 	TraceID        string    `json:"trace_id" db:"trace_id"` // W3C hex
 	SpanName       string    `json:"span_name" db:"span_name"`
 	SpanID         string    `json:"span_id" db:"span_id"` // W3C hex

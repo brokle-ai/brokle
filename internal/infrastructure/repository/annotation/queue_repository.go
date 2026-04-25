@@ -15,15 +15,15 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type QueueRepository struct {
+type queueRepository struct {
 	tm *db.TxManager
 }
 
-func NewQueueRepository(tm *db.TxManager) *QueueRepository {
-	return &QueueRepository{tm: tm}
+func NewQueueRepository(tm *db.TxManager) annotationDomain.QueueRepository {
+	return &queueRepository{tm: tm}
 }
 
-func (r *QueueRepository) Create(ctx context.Context, q *annotationDomain.AnnotationQueue) error {
+func (r *queueRepository) Create(ctx context.Context, q *annotationDomain.AnnotationQueue) error {
 	scoreIDs, err := json.Marshal(q.ScoreConfigIDs)
 	if err != nil {
 		return fmt.Errorf("marshal score_config_ids: %w", err)
@@ -51,7 +51,7 @@ func (r *QueueRepository) Create(ctx context.Context, q *annotationDomain.Annota
 	return nil
 }
 
-func (r *QueueRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*annotationDomain.AnnotationQueue, error) {
+func (r *queueRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*annotationDomain.AnnotationQueue, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueByIDForProject(ctx, gen.GetAnnotationQueueByIDForProjectParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -65,7 +65,7 @@ func (r *QueueRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) 
 	return queueFromRow(&row)
 }
 
-func (r *QueueRepository) GetByName(ctx context.Context, name string, projectID uuid.UUID) (*annotationDomain.AnnotationQueue, error) {
+func (r *queueRepository) GetByName(ctx context.Context, name string, projectID uuid.UUID) (*annotationDomain.AnnotationQueue, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueByName(ctx, gen.GetAnnotationQueueByNameParams{
 		ProjectID: projectID,
 		Name:      name,
@@ -79,7 +79,7 @@ func (r *QueueRepository) GetByName(ctx context.Context, name string, projectID 
 	return queueFromRow(&row)
 }
 
-func (r *QueueRepository) List(ctx context.Context, projectID uuid.UUID, filter *annotationDomain.QueueFilter, offset, limit int) ([]*annotationDomain.AnnotationQueue, int64, error) {
+func (r *queueRepository) List(ctx context.Context, projectID uuid.UUID, filter *annotationDomain.QueueFilter, offset, limit int) ([]*annotationDomain.AnnotationQueue, int64, error) {
 	base := sq.Select().From("annotation_queues").Where(sq.Eq{"project_id": projectID})
 	if filter != nil {
 		if filter.Status != nil {
@@ -127,7 +127,7 @@ func (r *QueueRepository) List(ctx context.Context, projectID uuid.UUID, filter 
 	return out, total, rows.Err()
 }
 
-func (r *QueueRepository) Update(ctx context.Context, q *annotationDomain.AnnotationQueue) error {
+func (r *queueRepository) Update(ctx context.Context, q *annotationDomain.AnnotationQueue) error {
 	scoreIDs, err := json.Marshal(q.ScoreConfigIDs)
 	if err != nil {
 		return fmt.Errorf("marshal score_config_ids: %w", err)
@@ -157,7 +157,7 @@ func (r *QueueRepository) Update(ctx context.Context, q *annotationDomain.Annota
 	return nil
 }
 
-func (r *QueueRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
+func (r *queueRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteAnnotationQueue(ctx, gen.DeleteAnnotationQueueParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -171,14 +171,14 @@ func (r *QueueRepository) Delete(ctx context.Context, id, projectID uuid.UUID) e
 	return nil
 }
 
-func (r *QueueRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
+func (r *queueRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
 	return r.tm.Queries(ctx).AnnotationQueueExistsByName(ctx, gen.AnnotationQueueExistsByNameParams{
 		ProjectID: projectID,
 		Name:      name,
 	})
 }
 
-func (r *QueueRepository) ListAllActive(ctx context.Context) ([]*annotationDomain.AnnotationQueue, error) {
+func (r *queueRepository) ListAllActive(ctx context.Context) ([]*annotationDomain.AnnotationQueue, error) {
 	rows, err := r.tm.Queries(ctx).ListAllActiveAnnotationQueues(ctx)
 	if err != nil {
 		return nil, err

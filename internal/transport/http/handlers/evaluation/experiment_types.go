@@ -5,8 +5,8 @@ import (
 )
 
 // Experiment request/response DTOs shared across dashboard and SDK planes.
-// Huma operation Input/Output wrappers stay colocated with their handler
-// methods in experiment.go — they are the operation signature.
+// Per-route input/output structs stay colocated with their handler
+// methods in experiment.go — they document the route's wire contract.
 
 type CreateExperimentRequest = evaluationDomain.CreateExperimentRequest
 

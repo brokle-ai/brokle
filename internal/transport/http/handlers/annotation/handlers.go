@@ -18,15 +18,16 @@ import (
 	"github.com/google/uuid"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
+	annotationService "brokle/internal/core/services/annotation"
 	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
 type handler struct {
-	queueSvc      annotationDomain.QueueService
-	itemSvc       annotationDomain.ItemService
-	assignmentSvc annotationDomain.AssignmentService
+	queueSvc      *annotationService.QueueService
+	itemSvc       *annotationService.ItemService
+	assignmentSvc *annotationService.AssignmentService
 	logger        *slog.Logger
 }
 
@@ -34,9 +35,9 @@ type handler struct {
 // Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	queueSvc annotationDomain.QueueService,
-	itemSvc annotationDomain.ItemService,
-	assignmentSvc annotationDomain.AssignmentService,
+	queueSvc *annotationService.QueueService,
+	itemSvc *annotationService.ItemService,
+	assignmentSvc *annotationService.AssignmentService,
 	logger *slog.Logger,
 ) {
 	h := &handler{queueSvc: queueSvc, itemSvc: itemSvc, assignmentSvc: assignmentSvc, logger: logger}
@@ -69,7 +70,7 @@ func RegisterRoutes(
 // (project derived from the API key).
 func RegisterSDKRoutes(
 	r chi.Router,
-	itemSvc annotationDomain.ItemService,
+	itemSvc *annotationService.ItemService,
 	logger *slog.Logger,
 ) {
 	h := &handler{itemSvc: itemSvc, logger: logger}

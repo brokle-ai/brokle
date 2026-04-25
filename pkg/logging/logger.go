@@ -1,3 +1,4 @@
+// Package logging initialises structured slog loggers and OpenTelemetry log propagation.
 package logging
 
 import (

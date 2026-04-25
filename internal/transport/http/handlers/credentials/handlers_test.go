@@ -75,7 +75,7 @@ func (fakeModelCatalogService) GetAvailableModels(ctx context.Context, orgID uui
 // with a user-context injector standing in for the production
 // RequireAuth middleware. No other middleware — tests focus on
 // handler behaviour, not the middleware chain.
-func newTestRouter(t *testing.T, svc credentialsDomain.ProviderCredentialService) (*chi.Mux, uuid.UUID) {
+func newTestRouter(t *testing.T, svc handler.CredentialService) (*chi.Mux, uuid.UUID) {
 	t.Helper()
 	userID := uuid.New()
 

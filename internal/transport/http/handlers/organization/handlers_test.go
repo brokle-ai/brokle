@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	orgDomain "brokle/internal/core/domain/organization"
+	organizationService "brokle/internal/core/services/organization"
 	handler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/httpctx"
 )
@@ -34,7 +35,7 @@ import (
 // outside the tested surface).
 
 type fakeOrganizationService struct {
-	orgDomain.OrganizationService // embedded: unused methods panic
+	*organizationService.OrganizationService // embedded: unused methods panic
 
 	listResp []*orgDomain.Organization
 	listErr  error
@@ -45,15 +46,15 @@ func (f *fakeOrganizationService) GetUserOrganizations(ctx context.Context, user
 }
 
 type fakeMemberService struct {
-	orgDomain.MemberService
+	*organizationService.MemberService
 }
 
 type fakeInvitationService struct {
-	orgDomain.InvitationService
+	*organizationService.InvitationService
 }
 
 type fakeSettingsService struct {
-	orgDomain.OrganizationSettingsService
+	*organizationService.OrganizationSettingsService
 }
 
 // ---- helpers ---------------------------------------------------------
@@ -61,7 +62,7 @@ type fakeSettingsService struct {
 // newTestRouter mounts the organization handler on a bare chi router
 // with a user-context injector standing in for the production
 // RequireAuth middleware.
-func newTestRouter(t *testing.T, orgSvc orgDomain.OrganizationService) (*chi.Mux, uuid.UUID) {
+func newTestRouter(t *testing.T, orgSvc handler.OrganizationService) (*chi.Mux, uuid.UUID) {
 	t.Helper()
 	userID := uuid.New()
 	r := chi.NewRouter()

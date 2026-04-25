@@ -16,10 +16,11 @@ var (
 
 	// Session errors
 	ErrSessionNotFound = errors.New("session not found")
-	ErrSessionExpired  = errors.New("session expired")
 
 	// API Key errors
-	ErrAPIKeyNotFound = errors.New("api key not found")
-	ErrAPIKeyInvalid  = errors.New("api key invalid")
-	ErrAPIKeyExpired  = errors.New("api key expired")
+	ErrAPIKeyNotFound      = errors.New("api key not found")
+	ErrAPIKeyAlreadyExists = errors.New("api key already exists")
+
+	// RBAC role errors
+	ErrRoleAlreadyExists = errors.New("role already exists")
 )

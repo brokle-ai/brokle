@@ -65,7 +65,7 @@ import (
 // all shared-egress callers (corporate NAT, CGNAT, mobile carriers,
 // Next.js SSR pods, serverless functions) into one bucket. That's
 // the SSR-loopback 429 bug class. IP limits therefore live on the
-// PUBLIC Huma groups only (dashPublic, sdkPublic) in addRoutes;
+// pre-auth chi groups only (dashPublic, sdkPublic) in addRoutes;
 // authed groups (dashAuth, sdkAuth) run with LimitByUser /
 // LimitByAPIKey alone.
 //
@@ -84,8 +84,6 @@ func installGlobalMiddleware(mux *chi.Mux, deps Deps) {
 	corsAdmin := mustCORS(deps, "dashboard")
 	csrf := crossOriginProtection(deps)
 
-	// Dashboard plane (/api/v1/*) — CORS + CSRF only. Rate limiting
-	// is attached per-Huma-group in addRoutes.
 	// Dashboard plane (/api/v1/*) — CORS + CSRF only. Rate limiting
 	// is attached per-chi-group in addRoutes.
 	mux.Use(pathPrefix("/api/v1", corsAdmin.Wrap))

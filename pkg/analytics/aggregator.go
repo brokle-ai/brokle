@@ -1,3 +1,4 @@
+// Package analytics provides shared analytics helpers (aggregation, time windowing, query utilities).
 package analytics
 
 import (

@@ -18,6 +18,8 @@ import (
 
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	organizationService "brokle/internal/core/services/organization"
+	userService "brokle/internal/core/services/user"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -26,9 +28,9 @@ import (
 )
 
 type handler struct {
-	userSvc    user.UserService
-	profileSvc user.ProfileService
-	orgSvc     orgDomain.OrganizationService
+	userSvc    *userService.UserService
+	profileSvc *userService.ProfileService
+	orgSvc     *organizationService.OrganizationService
 	logger     *slog.Logger
 }
 
@@ -36,9 +38,9 @@ type handler struct {
 // context: the authed dashboard chi group (RequireAuth + LimitByUser).
 func RegisterRoutes(
 	r chi.Router,
-	userSvc user.UserService,
-	profileSvc user.ProfileService,
-	orgSvc orgDomain.OrganizationService,
+	userSvc *userService.UserService,
+	profileSvc *userService.ProfileService,
+	orgSvc *organizationService.OrganizationService,
 	logger *slog.Logger,
 ) {
 	h := &handler{userSvc: userSvc, profileSvc: profileSvc, orgSvc: orgSvc, logger: logger}

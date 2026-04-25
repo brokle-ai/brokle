@@ -33,15 +33,15 @@ func decimalPtrToFloat64(p *decimal.Decimal) *float64 {
 	return &f
 }
 
-type ScoreConfigRepository struct {
+type scoreConfigRepository struct {
 	tm *db.TxManager
 }
 
-func NewScoreConfigRepository(tm *db.TxManager) *ScoreConfigRepository {
-	return &ScoreConfigRepository{tm: tm}
+func NewScoreConfigRepository(tm *db.TxManager) evalDomain.ScoreConfigRepository {
+	return &scoreConfigRepository{tm: tm}
 }
 
-func (r *ScoreConfigRepository) Create(ctx context.Context, c *evalDomain.ScoreConfig) error {
+func (r *scoreConfigRepository) Create(ctx context.Context, c *evalDomain.ScoreConfig) error {
 	cats, err := marshalEvalJSON(c.Categories)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (r *ScoreConfigRepository) Create(ctx context.Context, c *evalDomain.ScoreC
 	return nil
 }
 
-func (r *ScoreConfigRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.ScoreConfig, error) {
+func (r *scoreConfigRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) (*evalDomain.ScoreConfig, error) {
 	row, err := r.tm.Queries(ctx).GetScoreConfigByID(ctx, gen.GetScoreConfigByIDParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -83,7 +83,7 @@ func (r *ScoreConfigRepository) GetByID(ctx context.Context, id, projectID uuid.
 	return scoreConfigFromRow(&row)
 }
 
-func (r *ScoreConfigRepository) GetByName(ctx context.Context, projectID uuid.UUID, name string) (*evalDomain.ScoreConfig, error) {
+func (r *scoreConfigRepository) GetByName(ctx context.Context, projectID uuid.UUID, name string) (*evalDomain.ScoreConfig, error) {
 	row, err := r.tm.Queries(ctx).GetScoreConfigByName(ctx, gen.GetScoreConfigByNameParams{
 		ProjectID: projectID,
 		Name:      name,
@@ -97,7 +97,7 @@ func (r *ScoreConfigRepository) GetByName(ctx context.Context, projectID uuid.UU
 	return scoreConfigFromRow(&row)
 }
 
-func (r *ScoreConfigRepository) List(ctx context.Context, projectID uuid.UUID, offset, limit int) ([]*evalDomain.ScoreConfig, int64, error) {
+func (r *scoreConfigRepository) List(ctx context.Context, projectID uuid.UUID, offset, limit int) ([]*evalDomain.ScoreConfig, int64, error) {
 	total, err := r.tm.Queries(ctx).CountScoreConfigsByProject(ctx, projectID)
 	if err != nil {
 		return nil, 0, err
@@ -121,7 +121,7 @@ func (r *ScoreConfigRepository) List(ctx context.Context, projectID uuid.UUID, o
 	return out, total, nil
 }
 
-func (r *ScoreConfigRepository) Update(ctx context.Context, c *evalDomain.ScoreConfig, projectID uuid.UUID) error {
+func (r *scoreConfigRepository) Update(ctx context.Context, c *evalDomain.ScoreConfig, projectID uuid.UUID) error {
 	cats, err := marshalEvalJSON(c.Categories)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (r *ScoreConfigRepository) Update(ctx context.Context, c *evalDomain.ScoreC
 	return nil
 }
 
-func (r *ScoreConfigRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
+func (r *scoreConfigRepository) Delete(ctx context.Context, id, projectID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteScoreConfig(ctx, gen.DeleteScoreConfigParams{
 		ID:        id,
 		ProjectID: projectID,
@@ -167,7 +167,7 @@ func (r *ScoreConfigRepository) Delete(ctx context.Context, id, projectID uuid.U
 	return nil
 }
 
-func (r *ScoreConfigRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
+func (r *scoreConfigRepository) ExistsByName(ctx context.Context, projectID uuid.UUID, name string) (bool, error) {
 	return r.tm.Queries(ctx).ScoreConfigExistsByName(ctx, gen.ScoreConfigExistsByNameParams{
 		ProjectID: projectID,
 		Name:      name,

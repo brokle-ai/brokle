@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -19,55 +20,117 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// authService implements the authDomain.AuthService interface
-type authService struct {
-	authConfig        *config.AuthConfig
+// AuthService implements user authentication flows (login, refresh, logout,
+// password change/reset, OAuth session helpers). Audit events are recorded
+// inline via recordAudit; no decorator layer.
+type AuthService struct {
+	cfg               *config.AuthConfig
 	userRepo          userDomain.Repository
 	sessionRepo       authDomain.UserSessionRepository
-	jwtService        authDomain.JWTService
-	roleService       authDomain.RoleService
+	auditRepo         authDomain.AuditLogRepository
 	passwordResetRepo authDomain.PasswordResetTokenRepository
-	blacklistedTokens authDomain.BlacklistedTokenService
-	redis             *redis.Client // For OAuth session storage
+	jwt               *JWTService
+	roles             *RoleService
+	blacklist         *BlacklistedTokenService
+	redis             *redis.Client // OAuth session storage
+	logger            *slog.Logger
 }
 
-// NewAuthService creates a new auth service instance
+// NewAuthService wires an AuthService with its dependencies.
 func NewAuthService(
-	authConfig *config.AuthConfig,
+	cfg *config.AuthConfig,
 	userRepo userDomain.Repository,
 	sessionRepo authDomain.UserSessionRepository,
-	jwtService authDomain.JWTService,
-	roleService authDomain.RoleService,
+	auditRepo authDomain.AuditLogRepository,
+	jwt *JWTService,
+	roles *RoleService,
 	passwordResetRepo authDomain.PasswordResetTokenRepository,
-	blacklistedTokens authDomain.BlacklistedTokenService,
+	blacklist *BlacklistedTokenService,
 	redisClient *redis.Client,
-) authDomain.AuthService {
-	return &authService{
-		authConfig:        authConfig,
+	logger *slog.Logger,
+) *AuthService {
+	return &AuthService{
+		cfg:               cfg,
 		userRepo:          userRepo,
 		sessionRepo:       sessionRepo,
-		jwtService:        jwtService,
-		roleService:       roleService,
+		auditRepo:         auditRepo,
+		jwt:               jwt,
+		roles:             roles,
 		passwordResetRepo: passwordResetRepo,
-		blacklistedTokens: blacklistedTokens,
+		blacklist:         blacklist,
 		redis:             redisClient,
+		logger:            logger,
 	}
 }
 
+// recordAudit writes an audit log best-effort; audit failures never propagate.
+func (s *AuthService) recordAudit(ctx context.Context, userID *uuid.UUID, action, resource, resourceID string, metadata map[string]any) {
+	if s.auditRepo == nil {
+		return
+	}
+	auditLog := authDomain.NewAuditLog(userID, nil, action, resource, resourceID, metadata, "", "")
+	if err := s.auditRepo.Create(ctx, auditLog); err != nil && s.logger != nil {
+		s.logger.Error("failed to write audit log", "action", action, "error", err)
+	}
+}
+
+// classifyAuthFailure maps a pre-classified AppError to a stable audit reason
+// string. Unknown / non-AppError paths fall through to "system_error".
+func classifyAuthFailure(err error) string {
+	appErr, ok := appErrors.IsAppError(err)
+	if !ok {
+		return "system_error"
+	}
+	switch appErr.Type {
+	case appErrors.TypeAuthentication:
+		return "invalid_credentials"
+	case appErrors.TypePermission:
+		return "account_inactive"
+	}
+	return "system_error"
+}
+
+// classifyRefreshFailure categorises refresh-token rejections.
+func classifyRefreshFailure(err error) string {
+	appErr, ok := appErrors.IsAppError(err)
+	if !ok {
+		return "system_error"
+	}
+	if appErr.Type == appErrors.TypeAuthentication {
+		return "invalid_token"
+	}
+	return "system_error"
+}
+
 // Login authenticates a user and returns a login response
-func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (*authDomain.LoginResponse, error) {
+func (s *AuthService) Login(ctx context.Context, req *authDomain.LoginRequest) (resp *authDomain.LoginResponse, err error) {
+	var authUserID *uuid.UUID
+	defer func() {
+		if err != nil {
+			s.recordAudit(ctx, authUserID, "auth.login.failed", "user", "", map[string]any{
+				"email":  req.Email,
+				"reason": classifyAuthFailure(err),
+			})
+			return
+		}
+		s.recordAudit(ctx, authUserID, "auth.login.success", "user", "", map[string]any{
+			"email": req.Email,
+		})
+	}()
+
 	// Get user with password
 	user, err := s.userRepo.GetByEmailWithPassword(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+			return nil, appErrors.NewUnauthorizedError("invalid email or password")
 		}
-		return nil, appErrors.NewInternalError("Authentication service unavailable", err)
+		return nil, appErrors.NewInternalError("authentication service unavailable", err)
 	}
+	authUserID = &user.ID
 
 	// Check if user is active
 	if !user.IsActive {
-		return nil, appErrors.NewForbiddenError("Account is inactive")
+		return nil, appErrors.NewForbiddenError("account is inactive")
 	}
 
 	// Block OAuth users from password login
@@ -76,18 +139,18 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 		if user.OAuthProvider != nil {
 			providerName = *user.OAuthProvider
 		}
-		return nil, appErrors.NewUnauthorizedError("This account uses " + providerName + " login - please sign in with " + providerName)
+		return nil, appErrors.NewUnauthorizedError("this account uses " + providerName + " login - please sign in with " + providerName)
 	}
 
 	// Verify password (only for password-based accounts)
 	if user.AuthMethod == "password" {
 		if !user.HasPassword() {
-			return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+			return nil, appErrors.NewUnauthorizedError("invalid email or password")
 		}
 
 		err = bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(req.Password))
 		if err != nil {
-			return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+			return nil, appErrors.NewUnauthorizedError("invalid email or password")
 		}
 	}
 
@@ -96,23 +159,23 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 	permissions := []string{}
 
 	// Generate access token with JTI for session tracking
-	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
+	accessToken, jti, err := s.jwt.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
 		"email":           user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to generate access token", err)
+		return nil, appErrors.NewInternalError("failed to generate access token", err)
 	}
 
-	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, user.ID)
+	refreshToken, err := s.jwt.GenerateRefreshToken(ctx, user.ID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to generate refresh token", err)
+		return nil, appErrors.NewInternalError("failed to generate refresh token", err)
 	}
 
 	// Use configurable token TTLs from AuthConfig
-	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
-	refreshExpiresAt := time.Now().Add(s.authConfig.RefreshTokenTTL)
+	expiresAt := time.Now().Add(s.cfg.AccessTokenTTL)
+	refreshExpiresAt := time.Now().Add(s.cfg.RefreshTokenTTL)
 
 	// Hash the refresh token for secure storage
 	refreshTokenHash := s.hashToken(refreshToken)
@@ -125,61 +188,61 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 	session := authDomain.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, ipAddress, userAgent, req.DeviceInfo)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to create session", err)
+		return nil, appErrors.NewInternalError("failed to create session", err)
 	}
 
-	// Update last login
-	err = s.userRepo.UpdateLastLogin(ctx, user.ID)
-	if err != nil {
-		// Non-critical error, continue with login
+	// Update last_login. Best-effort — login succeeds regardless.
+	if err := s.userRepo.UpdateLastLogin(ctx, user.ID); err != nil {
+		s.logger.Warn("failed to update last_login after successful login",
+			"error", err, "user_id", user.ID)
 	}
 
 	return &authDomain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
 // GenerateTokensForUser generates login tokens for a user without password validation.
 // Used for OAuth signup, email verification, trusted authentication flows, and existing OAuth user login.
-func (s *authService) GenerateTokensForUser(ctx context.Context, userID uuid.UUID) (*authDomain.LoginResponse, error) {
+func (s *AuthService) GenerateTokensForUser(ctx context.Context, userID uuid.UUID) (*authDomain.LoginResponse, error) {
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError("User not found")
+			return nil, appErrors.NewNotFoundError("user not found")
 		}
-		return nil, appErrors.NewInternalError("User lookup failed", err)
+		return nil, appErrors.NewInternalError("user lookup failed", err)
 	}
 
 	// Check if user is active
 	if !user.IsActive {
-		return nil, appErrors.NewForbiddenError("Account is inactive")
+		return nil, appErrors.NewForbiddenError("account is inactive")
 	}
 
 	// Get user effective permissions
 	permissions := []string{}
 
 	// Generate access token with JTI for session tracking
-	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
+	accessToken, jti, err := s.jwt.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
 		"email":           user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to generate access token", err)
+		return nil, appErrors.NewInternalError("failed to generate access token", err)
 	}
 
-	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, user.ID)
+	refreshToken, err := s.jwt.GenerateRefreshToken(ctx, user.ID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to generate refresh token", err)
+		return nil, appErrors.NewInternalError("failed to generate refresh token", err)
 	}
 
 	// Use configurable token TTLs from AuthConfig
-	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
-	refreshExpiresAt := time.Now().Add(s.authConfig.RefreshTokenTTL)
+	expiresAt := time.Now().Add(s.cfg.AccessTokenTTL)
+	refreshExpiresAt := time.Now().Add(s.cfg.RefreshTokenTTL)
 
 	// Hash the refresh token for secure storage
 	refreshTokenHash := s.hashToken(refreshToken)
@@ -188,7 +251,7 @@ func (s *authService) GenerateTokensForUser(ctx context.Context, userID uuid.UUI
 	session := authDomain.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to create session", err)
+		return nil, appErrors.NewInternalError("failed to create session", err)
 	}
 
 	// Update last login
@@ -198,34 +261,51 @@ func (s *authService) GenerateTokensForUser(ctx context.Context, userID uuid.UUI
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
 // Logout invalidates a user access token via JTI blacklisting
-func (s *authService) Logout(ctx context.Context, jti string, userID uuid.UUID) error {
-	// Blacklist the current access token immediately
-	expiry := time.Now().Add(s.authConfig.AccessTokenTTL) // Blacklist until token would expire
-	err := s.blacklistedTokens.BlacklistToken(ctx, jti, userID, expiry, "user_logout")
-	if err != nil {
-		return appErrors.NewInternalError("Failed to blacklist token", err)
-	}
+func (s *AuthService) Logout(ctx context.Context, jti string, userID uuid.UUID) (err error) {
+	defer func() {
+		action := "auth.logout.success"
+		if err != nil {
+			action = "auth.logout.failed"
+		}
+		s.recordAudit(ctx, &userID, action, "user", userID.String(), map[string]any{"jti": jti})
+	}()
 
+	// Blacklist the current access token immediately
+	expiry := time.Now().Add(s.cfg.AccessTokenTTL) // Blacklist until token would expire
+	if err = s.blacklist.BlacklistToken(ctx, jti, userID, expiry, "user_logout"); err != nil {
+		return appErrors.NewInternalError("failed to blacklist token", err)
+	}
 	return nil
 }
 
 // RefreshToken generates new access token using refresh token
-func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshTokenRequest) (*authDomain.LoginResponse, error) {
+func (s *AuthService) RefreshToken(ctx context.Context, req *authDomain.RefreshTokenRequest) (resp *authDomain.LoginResponse, err error) {
+	var refreshUserID *uuid.UUID
+	defer func() {
+		if err != nil {
+			s.recordAudit(ctx, refreshUserID, "auth.refresh_token.failed", "token", "", map[string]any{
+				"reason": classifyRefreshFailure(err),
+			})
+			return
+		}
+		s.recordAudit(ctx, refreshUserID, "auth.refresh_token.success", "token", "", nil)
+	}()
+
 	// Validate refresh token
-	claims, err := s.jwtService.ValidateRefreshToken(ctx, req.RefreshToken)
+	claims, err := s.jwt.ValidateRefreshToken(ctx, req.RefreshToken)
 	if err != nil {
 		if errors.Is(err, authDomain.ErrTokenExpired) {
-			return nil, appErrors.NewUnauthorizedError("Refresh token expired")
+			return nil, appErrors.NewUnauthorizedError("refresh token expired")
 		}
 		if errors.Is(err, authDomain.ErrTokenInvalid) {
-			return nil, appErrors.NewUnauthorizedError("Invalid refresh token")
+			return nil, appErrors.NewUnauthorizedError("invalid refresh token")
 		}
-		return nil, appErrors.NewInternalError("Token validation failed", err)
+		return nil, appErrors.NewInternalError("token validation failed", err)
 	}
 
 	// Get session by refresh token hash
@@ -233,26 +313,27 @@ func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshT
 	session, err := s.sessionRepo.GetByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
 		if errors.Is(err, authDomain.ErrSessionNotFound) {
-			return nil, appErrors.NewUnauthorizedError("Session not found")
+			return nil, appErrors.NewUnauthorizedError("session not found")
 		}
-		return nil, appErrors.NewInternalError("Session lookup failed", err)
+		return nil, appErrors.NewInternalError("session lookup failed", err)
 	}
 
 	if !session.IsActive {
-		return nil, appErrors.NewUnauthorizedError("Session is inactive")
+		return nil, appErrors.NewUnauthorizedError("session is inactive")
 	}
 
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, claims.UserID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return nil, appErrors.NewUnauthorizedError("User not found")
+			return nil, appErrors.NewUnauthorizedError("user not found")
 		}
-		return nil, appErrors.NewInternalError("User lookup failed", err)
+		return nil, appErrors.NewInternalError("user lookup failed", err)
 	}
+	refreshUserID = &user.ID
 
 	if !user.IsActive {
-		return nil, appErrors.NewForbiddenError("User is inactive")
+		return nil, appErrors.NewForbiddenError("user is inactive")
 	}
 
 	// Get user effective permissions across all scopes
@@ -260,37 +341,40 @@ func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshT
 	permissions := []string{}
 
 	// Generate new access token with JTI for session tracking
-	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
+	accessToken, jti, err := s.jwt.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]any{
 		"email":           user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to generate access token", err)
+		return nil, appErrors.NewInternalError("failed to generate access token", err)
 	}
 
 	// Implement token rotation if enabled
 	var newRefreshToken string
-	if s.authConfig.TokenRotationEnabled {
+	if s.cfg.TokenRotationEnabled {
 		// Generate new refresh token
-		newRefreshToken, err = s.jwtService.GenerateRefreshToken(ctx, user.ID)
+		newRefreshToken, err = s.jwt.GenerateRefreshToken(ctx, user.ID)
 		if err != nil {
-			return nil, appErrors.NewInternalError("Failed to generate new refresh token", err)
+			return nil, appErrors.NewInternalError("failed to generate new refresh token", err)
 		}
 
 		// Blacklist the old refresh token to prevent reuse
-		oldRefreshClaims, err := s.jwtService.ValidateRefreshToken(ctx, req.RefreshToken)
+		oldRefreshClaims, err := s.jwt.ValidateRefreshToken(ctx, req.RefreshToken)
 		if err == nil && oldRefreshClaims.JWTID != "" {
-			// Add old refresh token to blacklist
-			err = s.blacklistedTokens.BlacklistToken(
+			// Add old refresh token to blacklist. Best-effort — if this
+			// fails the old token would still be honoured until natural
+			// expiry, which weakens rotation but doesn't block the new
+			// token from working.
+			if err := s.blacklist.BlacklistToken(
 				ctx,
 				oldRefreshClaims.JWTID,
 				user.ID,
-				time.Now().Add(s.authConfig.RefreshTokenTTL), // Keep in blacklist until natural expiry
+				time.Now().Add(s.cfg.RefreshTokenTTL),
 				"token_rotation",
-			)
-			if err != nil {
-				// Non-critical error, continue with token rotation
+			); err != nil {
+				s.logger.Warn("failed to blacklist old refresh token during rotation",
+					"error", err, "jti", oldRefreshClaims.JWTID, "user_id", user.ID)
 			}
 		}
 
@@ -302,82 +386,96 @@ func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshT
 
 	// Update session with new JTI and expiry (NO ACCESS TOKEN STORED)
 	session.CurrentJTI = jti
-	session.ExpiresAt = time.Now().Add(s.authConfig.AccessTokenTTL)
+	session.ExpiresAt = time.Now().Add(s.cfg.AccessTokenTTL)
 	session.UpdatedAt = time.Now()
 	session.MarkAsUsed() // Update last used timestamp
 
 	err = s.sessionRepo.Update(ctx, session)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to update session", err)
+		return nil, appErrors.NewInternalError("failed to update session", err)
 	}
 
 	return &authDomain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
 // ChangePassword changes a user's password
-func (s *authService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) (err error) {
+	defer func() {
+		if err == nil {
+			s.recordAudit(ctx, &userID, "auth.password.changed", "user", userID.String(), nil)
+		}
+	}()
+
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("User not found")
+			return appErrors.NewNotFoundError("user not found")
 		}
-		return appErrors.NewInternalError("User lookup failed", err)
+		return appErrors.NewInternalError("user lookup failed", err)
 	}
 
 	// Verify current password
 	if !user.HasPassword() {
-		return appErrors.NewUnauthorizedError("User has no password set")
+		return appErrors.NewUnauthorizedError("user has no password set")
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(currentPassword))
 	if err != nil {
-		return appErrors.NewUnauthorizedError("Current password is incorrect")
+		return appErrors.NewUnauthorizedError("current password is incorrect")
 	}
 
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to hash new password", err)
+		return appErrors.NewInternalError("failed to hash new password", err)
 	}
 
 	// Update password
 	err = s.userRepo.UpdatePassword(ctx, userID, string(hashedPassword))
 	if err != nil {
-		return appErrors.NewInternalError("Failed to update password", err)
+		return appErrors.NewInternalError("failed to update password", err)
 	}
 
-	// Revoke all user sessions (force re-login)
-	err = s.sessionRepo.RevokeUserSessions(ctx, userID)
-	if err != nil {
-		// Non-critical error, password change succeeded
+	// Revoke all user sessions (force re-login). Best-effort — if this
+	// fails the password change still succeeded, but we want operators
+	// to know that stale sessions may be lingering for the user.
+	if err := s.sessionRepo.RevokeUserSessions(ctx, userID); err != nil {
+		s.logger.Warn("failed to revoke sessions after password change",
+			"error", err, "user_id", userID)
 	}
 
 	return nil
 }
 
 // ResetPassword initiates password reset process
-func (s *authService) ResetPassword(ctx context.Context, email string) error {
+func (s *AuthService) ResetPassword(ctx context.Context, email string) error {
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		// Don't reveal if user exists or not
 		return nil
 	}
+	s.recordAudit(ctx, &user.ID, "auth.password.reset_requested", "user", user.ID.String(), map[string]any{
+		"email": email,
+	})
 
-	// Invalidate any existing password reset tokens for this user
-	err = s.passwordResetRepo.InvalidateAllUserTokens(ctx, user.ID)
-	if err != nil {
-		// Non-critical error, continue with reset process
+	// Invalidate any existing password reset tokens for this user.
+	// Best-effort — older outstanding tokens become "long-lived" if
+	// this fails, but the new token will still work and ConfirmPasswordReset
+	// validates against the per-token used flag.
+	if err := s.passwordResetRepo.InvalidateAllUserTokens(ctx, user.ID); err != nil {
+		s.logger.Warn("failed to invalidate prior password reset tokens",
+			"error", err, "user_id", user.ID)
 	}
 
 	// Generate secure reset token
 	tokenBytes := make([]byte, 32)
 	_, err = rand.Read(tokenBytes)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to generate reset token", err)
+		return appErrors.NewInternalError("failed to generate reset token", err)
 	}
 	tokenString := hex.EncodeToString(tokenBytes)
 
@@ -385,7 +483,7 @@ func (s *authService) ResetPassword(ctx context.Context, email string) error {
 	resetToken := authDomain.NewPasswordResetToken(user.ID, tokenString, time.Now().Add(1*time.Hour))
 	err = s.passwordResetRepo.Create(ctx, resetToken)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to create password reset token", err)
+		return appErrors.NewInternalError("failed to create password reset token", err)
 	}
 
 	// TODO: Send email with reset link containing tokenString
@@ -395,88 +493,92 @@ func (s *authService) ResetPassword(ctx context.Context, email string) error {
 }
 
 // ConfirmPasswordReset completes password reset process
-func (s *authService) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+func (s *AuthService) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
 	// Find and validate password reset token
 	resetToken, err := s.passwordResetRepo.GetByToken(ctx, token)
 	if err != nil {
-		return appErrors.NewUnauthorizedError("Invalid or expired password reset token")
+		return appErrors.NewUnauthorizedError("invalid or expired password reset token")
 	}
 
 	// Check if token is valid (not used and not expired)
 	isValid, err := s.passwordResetRepo.IsValid(ctx, resetToken.ID)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to validate password reset token", err)
+		return appErrors.NewInternalError("failed to validate password reset token", err)
 	}
 	if !isValid {
-		return appErrors.NewUnauthorizedError("Password reset token is invalid or expired")
+		return appErrors.NewUnauthorizedError("password reset token is invalid or expired")
 	}
 
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, resetToken.UserID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("User not found")
+			return appErrors.NewNotFoundError("user not found")
 		}
-		return appErrors.NewInternalError("User lookup failed", err)
+		return appErrors.NewInternalError("user lookup failed", err)
 	}
 
 	if !user.IsActive {
-		return appErrors.NewForbiddenError("User account is inactive")
+		return appErrors.NewForbiddenError("user account is inactive")
 	}
 
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to hash new password", err)
+		return appErrors.NewInternalError("failed to hash new password", err)
 	}
 
 	// Update password
 	err = s.userRepo.UpdatePassword(ctx, user.ID, string(hashedPassword))
 	if err != nil {
-		return appErrors.NewInternalError("Failed to update password", err)
+		return appErrors.NewInternalError("failed to update password", err)
 	}
 
-	// Mark token as used
-	err = s.passwordResetRepo.MarkAsUsed(ctx, resetToken.ID)
-	if err != nil {
-		// Non-critical error - password was already updated
+	// Mark token as used. Best-effort — the password update has already
+	// landed; if this fails the token would be re-usable until expiry,
+	// which is a degraded state worth alerting on but not aborting on.
+	if err := s.passwordResetRepo.MarkAsUsed(ctx, resetToken.ID); err != nil {
+		s.logger.Warn("failed to mark password reset token as used",
+			"error", err, "token_id", resetToken.ID, "user_id", user.ID)
 	}
 
-	// Revoke all user sessions (force re-login with new password)
-	err = s.sessionRepo.RevokeUserSessions(ctx, user.ID)
-	if err != nil {
-		// Non-critical error, password reset succeeded
+	// Revoke all user sessions (force re-login with new password).
+	// Best-effort — same reasoning as ChangePassword above.
+	if err := s.sessionRepo.RevokeUserSessions(ctx, user.ID); err != nil {
+		s.logger.Warn("failed to revoke sessions after password reset",
+			"error", err, "user_id", user.ID)
 	}
 
+	s.recordAudit(ctx, &user.ID, "auth.password.reset", "user", user.ID.String(), nil)
 	return nil
 }
 
 // SendEmailVerification sends email verification
-func (s *authService) SendEmailVerification(ctx context.Context, userID uuid.UUID) error {
+func (s *AuthService) SendEmailVerification(ctx context.Context, userID uuid.UUID) error {
 	// TODO: Generate verification token and send email
 
 	return nil
 }
 
 // VerifyEmail verifies user's email
-func (s *authService) VerifyEmail(ctx context.Context, token string) error {
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 	// TODO: Implement email verification
-	return appErrors.NewNotImplementedError("Email verification not implemented")
+	return appErrors.NewNotImplementedError("email verification not implemented")
 }
 
 // GetCurrentUser returns current user information
-func (s *authService) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*userDomain.User, error) {
+func (s *AuthService) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*userDomain.User, error) {
 	return s.userRepo.GetByID(ctx, userID)
 }
 
 // UpdateProfile updates user profile
-func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *authDomain.UpdateAuthProfileRequest) error {
+func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *authDomain.UpdateAuthProfileRequest) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("User not found")
+			return appErrors.NewNotFoundError("user not found")
 		}
-		return appErrors.NewInternalError("User lookup failed", err)
+		return appErrors.NewInternalError("user lookup failed", err)
 	}
 
 	// Update fields if provided
@@ -497,52 +599,52 @@ func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *
 
 	err = s.userRepo.Update(ctx, user)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to update user", err)
+		return appErrors.NewInternalError("failed to update user", err)
 	}
 
 	return nil
 }
 
 // GetUserSessions returns user's active sessions
-func (s *authService) GetUserSessions(ctx context.Context, userID uuid.UUID) ([]*authDomain.UserSession, error) {
+func (s *AuthService) GetUserSessions(ctx context.Context, userID uuid.UUID) ([]*authDomain.UserSession, error) {
 	return s.sessionRepo.GetActiveSessionsByUserID(ctx, userID)
 }
 
 // RevokeSession revokes a specific user session
-func (s *authService) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error {
+func (s *AuthService) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error {
 	// Verify session belongs to user
 	session, err := s.sessionRepo.GetByID(ctx, sessionID)
 	if err != nil {
 		if errors.Is(err, authDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("Session not found")
+			return appErrors.NewNotFoundError("session not found")
 		}
-		return appErrors.NewInternalError("Session lookup failed", err)
+		return appErrors.NewInternalError("session lookup failed", err)
 	}
 
 	if session.UserID != userID {
-		return appErrors.NewForbiddenError("Session does not belong to user")
+		return appErrors.NewForbiddenError("session does not belong to user")
 	}
 
 	return s.sessionRepo.RevokeSession(ctx, sessionID)
 }
 
 // RevokeAllSessions revokes all user sessions
-func (s *authService) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
+func (s *AuthService) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
 	return s.sessionRepo.RevokeUserSessions(ctx, userID)
 }
 
 // GetAuthContext returns authentication context from token
-func (s *authService) GetAuthContext(ctx context.Context, token string) (*authDomain.AuthContext, error) {
+func (s *AuthService) GetAuthContext(ctx context.Context, token string) (*authDomain.AuthContext, error) {
 	// Validate JWT token
-	claims, err := s.jwtService.ValidateAccessToken(ctx, token)
+	claims, err := s.jwt.ValidateAccessToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, authDomain.ErrTokenExpired) {
-			return nil, appErrors.NewUnauthorizedError("Token expired")
+			return nil, appErrors.NewUnauthorizedError("token expired")
 		}
 		if errors.Is(err, authDomain.ErrTokenInvalid) {
-			return nil, appErrors.NewUnauthorizedError("Invalid token")
+			return nil, appErrors.NewUnauthorizedError("invalid token")
 		}
-		return nil, appErrors.NewInternalError("Token validation failed", err)
+		return nil, appErrors.NewInternalError("token validation failed", err)
 	}
 
 	// Return clean auth context - permissions resolved dynamically when needed
@@ -550,44 +652,44 @@ func (s *authService) GetAuthContext(ctx context.Context, token string) (*authDo
 }
 
 // ValidateAuthToken validates token and returns auth context
-func (s *authService) ValidateAuthToken(ctx context.Context, token string) (*authDomain.AuthContext, error) {
+func (s *AuthService) ValidateAuthToken(ctx context.Context, token string) (*authDomain.AuthContext, error) {
 	return s.GetAuthContext(ctx, token)
 }
 
 // RevokeAccessToken immediately revokes an access token by adding it to blacklist
-func (s *authService) RevokeAccessToken(ctx context.Context, jti string, userID uuid.UUID, reason string) error {
+func (s *AuthService) RevokeAccessToken(ctx context.Context, jti string, userID uuid.UUID, reason string) error {
 	// Parse JTI to get token expiration time
 	// We need the expiration time to know when to cleanup the blacklisted token
 	// For now, we'll use a default expiration time based on config
-	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
+	expiresAt := time.Now().Add(s.cfg.AccessTokenTTL)
 
 	// Add token to blacklist
-	err := s.blacklistedTokens.BlacklistToken(ctx, jti, userID, expiresAt, reason)
+	err := s.blacklist.BlacklistToken(ctx, jti, userID, expiresAt, reason)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to revoke access token", err)
+		return appErrors.NewInternalError("failed to revoke access token", err)
 	}
 
 	return nil
 }
 
 // RevokeUserAccessTokens revokes all active access tokens for a user
-func (s *authService) RevokeUserAccessTokens(ctx context.Context, userID uuid.UUID, reason string) error {
+func (s *AuthService) RevokeUserAccessTokens(ctx context.Context, userID uuid.UUID, reason string) error {
 	// Blacklist all user tokens
-	err := s.blacklistedTokens.BlacklistUserTokens(ctx, userID, reason)
+	err := s.blacklist.BlacklistUserTokens(ctx, userID, reason)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to revoke user access tokens", err)
+		return appErrors.NewInternalError("failed to revoke user access tokens", err)
 	}
 
 	return nil
 }
 
 // IsTokenRevoked checks if an access token has been revoked
-func (s *authService) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
-	return s.blacklistedTokens.IsTokenBlacklisted(ctx, jti)
+func (s *AuthService) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
+	return s.blacklist.IsTokenBlacklisted(ctx, jti)
 }
 
 // hashToken creates a SHA-256 hash of a token for secure storage
-func (s *authService) hashToken(token string) string {
+func (s *AuthService) hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
 }

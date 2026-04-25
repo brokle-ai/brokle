@@ -15,16 +15,18 @@ import (
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
+	evaluationService "brokle/internal/core/services/evaluation"
+	observabilityService "brokle/internal/core/services/observability"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
-type itemService struct {
+type ItemService struct {
 	queueRepo          annotation.QueueRepository
 	itemRepo           annotation.ItemRepository
 	assignmentRepo     annotation.AssignmentRepository
-	scoreConfigService evaluation.ScoreConfigService
-	scoreService       observability.ScoreService
+	scoreConfigs *evaluationService.ScoreConfigService
+	scores       *observabilityService.ScoreService
 	projectRepo        organization.ProjectRepository
 	transactor         common.Transactor
 	logger             *slog.Logger
@@ -35,18 +37,18 @@ func NewItemService(
 	queueRepo annotation.QueueRepository,
 	itemRepo annotation.ItemRepository,
 	assignmentRepo annotation.AssignmentRepository,
-	scoreConfigService evaluation.ScoreConfigService,
-	scoreService observability.ScoreService,
+	scoreConfigs *evaluationService.ScoreConfigService,
+	scores *observabilityService.ScoreService,
 	projectRepo organization.ProjectRepository,
 	transactor common.Transactor,
 	logger *slog.Logger,
-) annotation.ItemService {
-	return &itemService{
+) *ItemService {
+	return &ItemService{
 		queueRepo:          queueRepo,
 		itemRepo:           itemRepo,
 		assignmentRepo:     assignmentRepo,
-		scoreConfigService: scoreConfigService,
-		scoreService:       scoreService,
+		scoreConfigs: scoreConfigs,
+		scores:       scores,
 		projectRepo:        projectRepo,
 		transactor:         transactor,
 		logger:             logger,
@@ -55,7 +57,7 @@ func NewItemService(
 
 // AddItems adds items to a queue.
 // Returns the count of items actually created (excluding duplicates).
-func (s *itemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID, req *annotation.AddItemsBatchRequest) (int, error) {
+func (s *ItemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID, req *annotation.AddItemsBatchRequest) (int, error) {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -103,7 +105,7 @@ func (s *itemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID
 }
 
 // ListItems retrieves items in a queue with optional filtering and pagination.
-func (s *itemService) ListItems(ctx context.Context, queueID, projectID uuid.UUID, filter *annotation.ItemFilter) ([]*annotation.QueueItem, int64, error) {
+func (s *ItemService) ListItems(ctx context.Context, queueID, projectID uuid.UUID, filter *annotation.ItemFilter) ([]*annotation.QueueItem, int64, error) {
 	// Verify queue exists and belongs to project
 	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -123,7 +125,7 @@ func (s *itemService) ListItems(ctx context.Context, queueID, projectID uuid.UUI
 
 // ClaimNext claims the next available item for the user to annotate.
 // Follows Langfuse pattern: finds first pending item where lock is available or reclaimable.
-func (s *itemService) ClaimNext(ctx context.Context, queueID, projectID, userID uuid.UUID, seenItemIDs []uuid.UUID) (*annotation.QueueItem, error) {
+func (s *ItemService) ClaimNext(ctx context.Context, queueID, projectID, userID uuid.UUID, seenItemIDs []uuid.UUID) (*annotation.QueueItem, error) {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -167,7 +169,7 @@ func (s *itemService) ClaimNext(ctx context.Context, queueID, projectID, userID 
 }
 
 // Complete marks an item as completed and submits the scores.
-func (s *itemService) Complete(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID, req *annotation.CompleteItemRequest) error {
+func (s *ItemService) Complete(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID, req *annotation.CompleteItemRequest) error {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -230,7 +232,7 @@ func (s *itemService) Complete(ctx context.Context, itemID, queueID, projectID, 
 }
 
 // submitScores creates Score entities from annotation submissions and sends them to ClickHouse.
-func (s *itemService) submitScores(
+func (s *ItemService) submitScores(
 	ctx context.Context,
 	item *annotation.QueueItem,
 	queue *annotation.AnnotationQueue,
@@ -248,7 +250,7 @@ func (s *itemService) submitScores(
 	now := time.Now()
 
 	for _, sub := range submissions {
-		scoreConfig, err := s.scoreConfigService.GetByID(ctx, sub.ScoreConfigID, projectID)
+		scoreConfig, err := s.scoreConfigs.GetByID(ctx, sub.ScoreConfigID, projectID)
 		if err != nil {
 			s.logger.Warn("score config not found, skipping",
 				"score_config_id", sub.ScoreConfigID,
@@ -321,7 +323,7 @@ func (s *itemService) submitScores(
 	}
 
 	// Submit scores to ClickHouse
-	if err := s.scoreService.CreateScoreBatch(ctx, scores); err != nil {
+	if err := s.scores.CreateScoreBatch(ctx, scores); err != nil {
 		return fmt.Errorf("failed to create scores: %w", err)
 	}
 
@@ -336,7 +338,7 @@ func (s *itemService) submitScores(
 }
 
 // buildScoreMetadata creates metadata JSON for annotation scores.
-func (s *itemService) buildScoreMetadata(
+func (s *ItemService) buildScoreMetadata(
 	queue *annotation.AnnotationQueue,
 	item *annotation.QueueItem,
 	userID uuid.UUID,
@@ -362,7 +364,7 @@ func (s *itemService) buildScoreMetadata(
 }
 
 // Skip marks an item as skipped by the user.
-func (s *itemService) Skip(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID, req *annotation.SkipItemRequest) error {
+func (s *ItemService) Skip(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID, req *annotation.SkipItemRequest) error {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -416,7 +418,7 @@ func (s *itemService) Skip(ctx context.Context, itemID, queueID, projectID, user
 }
 
 // ReleaseLock releases the lock on an item, returning it to the pending pool.
-func (s *itemService) ReleaseLock(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID) error {
+func (s *ItemService) ReleaseLock(ctx context.Context, itemID, queueID, projectID, userID uuid.UUID) error {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -465,7 +467,7 @@ func (s *itemService) ReleaseLock(ctx context.Context, itemID, queueID, projectI
 }
 
 // DeleteItem removes an item from the queue.
-func (s *itemService) DeleteItem(ctx context.Context, itemID, queueID, projectID uuid.UUID) error {
+func (s *ItemService) DeleteItem(ctx context.Context, itemID, queueID, projectID uuid.UUID) error {
 	// Verify queue exists and belongs to project
 	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -493,7 +495,7 @@ func (s *itemService) DeleteItem(ctx context.Context, itemID, queueID, projectID
 }
 
 // GetStats retrieves statistics for a queue.
-func (s *itemService) GetStats(ctx context.Context, queueID, projectID uuid.UUID) (*annotation.QueueStats, error) {
+func (s *ItemService) GetStats(ctx context.Context, queueID, projectID uuid.UUID) (*annotation.QueueStats, error) {
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {

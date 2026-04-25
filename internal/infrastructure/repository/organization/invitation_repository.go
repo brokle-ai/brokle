@@ -228,9 +228,9 @@ func (r *invitationRepository) MarkResent(
 		return fmt.Errorf("mark invitation %s resent: %w", id, err)
 	}
 	if int(row.ResentCount) >= maxAttempts {
-		return ErrResendLimitReached
+		return fmt.Errorf("mark invitation %s resent: %w", id, orgDomain.ErrInvitationResendLimit)
 	}
-	return ErrResendCooldown
+	return fmt.Errorf("mark invitation %s resent: %w", id, orgDomain.ErrInvitationResendCooldown)
 }
 
 func (r *invitationRepository) CleanupExpiredInvitations(ctx context.Context) error {

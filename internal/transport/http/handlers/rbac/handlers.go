@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	authDomain "brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -24,10 +25,10 @@ import (
 )
 
 type handler struct {
-	roleSvc      authDomain.RoleService
-	permSvc      authDomain.PermissionService
-	orgMemberSvc authDomain.OrganizationMemberService
-	scopeSvc     authDomain.ScopeService
+	roleSvc      *authService.RoleService
+	permSvc      *authService.PermissionService
+	orgMemberSvc *authService.OrganizationMemberService
+	scopeSvc     *authService.ScopeService
 	logger       *slog.Logger
 }
 
@@ -35,10 +36,10 @@ type handler struct {
 // the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	roleSvc authDomain.RoleService,
-	permSvc authDomain.PermissionService,
-	orgMemberSvc authDomain.OrganizationMemberService,
-	scopeSvc authDomain.ScopeService,
+	roleSvc *authService.RoleService,
+	permSvc *authService.PermissionService,
+	orgMemberSvc *authService.OrganizationMemberService,
+	scopeSvc *authService.ScopeService,
 	logger *slog.Logger,
 ) {
 	h := &handler{
@@ -421,13 +422,17 @@ func (h *handler) listPermissions(w http.ResponseWriter, r *http.Request) {
 	if offset < 0 {
 		offset = 0
 	}
-	resp, err := h.permSvc.ListPermissions(r.Context(), limit, offset)
+	items, total, err := h.permSvc.ListPermissions(r.Context(), limit, offset)
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "rbac: list permissions failed", "error", err)
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, resp)
+	page := offset/limit + 1
+	response.Success(w, listPermissionsBody{
+		Data:       items,
+		Pagination: response.BuildPagination(page, limit, total),
+	})
 }
 
 func (h *handler) getPermission(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,6 @@
 package credentials
 
 import (
-	"context"
-
 	"github.com/google/uuid"
 )
 
@@ -79,48 +77,7 @@ type TestConnectionResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-type ProviderCredentialService interface {
-	// Create creates a new credential for the organization.
-	// Returns error if a credential with the same name already exists.
-	Create(ctx context.Context, req *CreateCredentialRequest) (*ProviderCredentialResponse, error)
-
-	// Update updates an existing credential by ID within a specific organization.
-	// Returns error if the credential doesn't exist or belongs to different organization.
-	Update(ctx context.Context, id uuid.UUID, orgID uuid.UUID, req *UpdateCredentialRequest) (*ProviderCredentialResponse, error)
-
-	// GetByID retrieves a credential by ID within a specific organization.
-	// Returns the safe response (no encrypted data, only masked key preview).
-	// Returns error if the credential doesn't exist or belongs to different organization.
-	GetByID(ctx context.Context, id uuid.UUID, orgID uuid.UUID) (*ProviderCredentialResponse, error)
-
-	// GetByName retrieves a credential by organization and name.
-	// Returns the safe response (no encrypted data, only masked key preview).
-	GetByName(ctx context.Context, orgID uuid.UUID, name string) (*ProviderCredentialResponse, error)
-
-	// List retrieves all credentials for an organization.
-	// Returns safe responses (no encrypted data).
-	List(ctx context.Context, orgID uuid.UUID) ([]*ProviderCredentialResponse, error)
-
-	// Delete removes a credential by ID within a specific organization.
-	// Returns error if the credential doesn't exist or belongs to different organization.
-	Delete(ctx context.Context, id uuid.UUID, orgID uuid.UUID) error
-
-	// GetDecryptedByID retrieves the decrypted key configuration by credential ID within a specific organization.
-	// This is ONLY for internal use during prompt execution.
-	// Returns ErrCredentialNotFound if no credential exists or belongs to different organization.
-	GetDecryptedByID(ctx context.Context, credentialID uuid.UUID, orgID uuid.UUID) (*DecryptedKeyConfig, error)
-
-	// GetExecutionConfig returns the key configuration for AI execution.
-	// Requires credential_id and validates that the credential's adapter matches.
-	// Returns ErrAdapterMismatch if the credential's adapter doesn't match the expected adapter.
-	// Returns ErrCredentialNotFound if the credential doesn't exist.
-	GetExecutionConfig(ctx context.Context, orgID uuid.UUID, credentialID uuid.UUID, adapter Provider) (*DecryptedKeyConfig, error)
-
-	// ValidateKey validates an API key with the provider without storing it.
-	// Makes a lightweight API call to verify the key works.
-	ValidateKey(ctx context.Context, adapter Provider, apiKey string, baseURL *string, config map[string]any) error
-
-	// TestConnection tests a provider configuration without saving.
-	// Returns a response indicating success or failure with error message.
-	TestConnection(ctx context.Context, req *TestConnectionRequest) *TestConnectionResponse
-}
+// Service-level interface removed; constructor `NewProviderCredentialService`
+// in `internal/core/services/credentials/` returns the concrete
+// *ProviderCredentialService directly. See CLAUDE.md Mandatory Development
+// Rules → "Service constructors return concrete types".

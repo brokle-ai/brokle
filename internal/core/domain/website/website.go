@@ -1,3 +1,7 @@
+// Package website contains the public-website domain: contact-form
+// submissions and any other anonymous-user-facing entities surfaced by
+// the marketing site (kept separate from the authenticated dashboard
+// plane so the trust boundary is explicit).
 package website
 
 import (

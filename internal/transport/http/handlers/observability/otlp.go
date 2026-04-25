@@ -1,11 +1,10 @@
-// OTLP HTTP ingestion (traces, logs, metrics) — HUMA-EXEMPT.
+// OTLP HTTP ingestion (traces, logs, metrics).
 //
 // The OTLP HTTP endpoints accept raw protobuf (and protobuf-JSON) bodies
-// per the OpenTelemetry spec and do not fit Huma v2's JSON-first operation
-// shape without substantial adapter code. They are mounted as plain chi
-// handlers via RegisterOTLPChiRoutes alongside the Huma apiPublic routes
-// on the SDK plane. The routes MUST be wired under the same chi Group
-// that attaches middleware.RequireSDKAuth + middleware.LimitByAPIKey.
+// per the OpenTelemetry spec. They are mounted as plain chi handlers via
+// RegisterOTLPRoutes alongside the rest of the SDK plane. The routes MUST
+// be wired under the same chi Group that attaches middleware.RequireSDKAuth
+// + middleware.LimitByAPIKey.
 //
 // Endpoints:
 //
@@ -13,11 +12,11 @@
 //	POST /v1/logs     — OTLP logs export
 //	POST /v1/metrics  — OTLP metrics export
 //
-// Response shape: standard APIResponse envelope (JSON), matching the
-// existing client contract. Not strict OTLP spec response (protobuf
-// ExportTraceServiceResponse) — Brokle SDKs already consume the APIResponse
-// envelope from this endpoint, and third-party OTLP senders accept a 200
-// as success per the spec's "at-least-once" semantics.
+// Response shape: Brokle's Stripe/OpenAI-style success envelope (raw
+// resource on 200, {"error":{...}} on 4xx/5xx) rather than strict OTLP
+// ExportXxxServiceResponse protobuf. Brokle SDKs consume the standard
+// envelope; third-party OTLP senders accept a 200 as success per the
+// spec's "at-least-once" semantics.
 package observability
 
 import (
@@ -51,7 +50,7 @@ import (
 )
 
 // registerOTLPOps wires the three OTLP HTTP ingestion endpoints as
-// plain chi handlers. Called from RegisterOTLPChiRoutes in handlers.go.
+// chi handlers. Called from RegisterOTLPRoutes in handlers.go.
 func registerOTLPOps(r chi.Router, h *otlpHandler) {
 	r.Post("/v1/traces", h.handleTraces)
 	r.Post("/v1/logs", h.handleLogs)

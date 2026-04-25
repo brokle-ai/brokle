@@ -118,3 +118,8 @@ var ErrNoRows = pgx.ErrNoRows
 func IsNoRows(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)
 }
+
+// Note: for UNIQUE/FK constraint violation checks, use
+// appErrors.IsUniqueViolation / appErrors.IsForeignKeyViolation from
+// pkg/errors/constraints.go. They live there because the SQLSTATE-code
+// parsing is independent of the TxManager.

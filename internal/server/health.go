@@ -19,10 +19,9 @@ import (
 // Health endpoints follow the Kubernetes API server convention —
 // /livez, /readyz, /healthz. Each returns a flat JSON shape that
 // kubelet, Prometheus blackbox exporters, and operator dashboards
-// consume directly. HUMA-EXEMPT by design: the responses are
-// envelope-free (probe consumers expect a known shape) and the
-// readiness status code varies (200 vs 503), which would conflict
-// with the APIResponse `success: true` invariant.
+// consume directly. The responses are envelope-free (probe consumers
+// expect a known shape) and the readiness status code varies (200 vs
+// 503) so they deliberately bypass the standard AppError envelope.
 //
 // Mounted on a stdlib http.ServeMux wrapper (see newProbeDispatcher)
 // that sits OUTSIDE the chi mux and its global middleware stack, so
@@ -43,9 +42,9 @@ type readyState struct{ ready atomic.Bool }
 
 func newReadyState() *readyState { return &readyState{} }
 
-func (r *readyState) MarkReady()       { r.ready.Store(true) }
-func (r *readyState) MarkNotReady()    { r.ready.Store(false) }
-func (r *readyState) IsReady() bool    { return r.ready.Load() }
+func (r *readyState) MarkReady()    { r.ready.Store(true) }
+func (r *readyState) MarkNotReady() { r.ready.Store(false) }
+func (r *readyState) IsReady() bool { return r.ready.Load() }
 
 // processStart is the moment the server package was first imported
 // — close enough to "process start" for uptime reporting. Captured

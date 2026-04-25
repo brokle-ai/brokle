@@ -4,21 +4,40 @@
 package credentials
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
+	analyticsDomain "brokle/internal/core/domain/analytics"
 	credentialsDomain "brokle/internal/core/domain/credentials"
-	credentialsService "brokle/internal/core/services/credentials"
 	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
+// CredentialService is the narrow method set the handler consumes.
+// Declared at the consumption site (Go idiom: accept interfaces) so tests
+// can pass a fake and prod wiring passes *credentialsService.ProviderCredentialService.
+type CredentialService interface {
+	Create(ctx context.Context, req *credentialsDomain.CreateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error)
+	Update(ctx context.Context, id, orgID uuid.UUID, req *credentialsDomain.UpdateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error)
+	GetByID(ctx context.Context, id, orgID uuid.UUID) (*credentialsDomain.ProviderCredentialResponse, error)
+	List(ctx context.Context, orgID uuid.UUID) ([]*credentialsDomain.ProviderCredentialResponse, error)
+	Delete(ctx context.Context, id, orgID uuid.UUID) error
+	TestConnection(ctx context.Context, req *credentialsDomain.TestConnectionRequest) *credentialsDomain.TestConnectionResponse
+}
+
+// ModelCatalog is the narrow method set used by the handler for model discovery.
+type ModelCatalog interface {
+	GetAvailableModels(ctx context.Context, orgID uuid.UUID) ([]*analyticsDomain.AvailableModel, error)
+}
+
 type handler struct {
-	svc     credentialsDomain.ProviderCredentialService
-	catalog credentialsService.ModelCatalogService
+	svc     CredentialService
+	catalog ModelCatalog
 	logger  *slog.Logger
 }
 
@@ -27,8 +46,8 @@ type handler struct {
 // (RequireAuth + LimitByUser already applied).
 func RegisterRoutes(
 	r chi.Router,
-	svc credentialsDomain.ProviderCredentialService,
-	catalog credentialsService.ModelCatalogService,
+	svc CredentialService,
+	catalog ModelCatalog,
 	logger *slog.Logger,
 ) {
 	h := &handler{svc: svc, catalog: catalog, logger: logger}

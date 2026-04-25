@@ -45,8 +45,9 @@ func TestEveryErrorTypeHasStatus(t *testing.T) {
 // class fallback in typeFromStatus must keep them in TypeInvalidRequest
 // (or a more specific 4xx Type), never let them leak to TypeAPIError.
 func TestFromHTTPStatusClassFallback(t *testing.T) {
-	// Statuses Huma documents emitting from its pre-handler pipeline,
-	// plus chi/net-http 405 and a fronting CDN's 520 (Cloudflare).
+	// Statuses commonly emitted at the framework boundary (chi/net-http
+	// 405, request-decode 413/415/422, content negotiation 406), plus a
+	// fronting CDN's 520 (Cloudflare).
 	cases := map[int]ErrorType{
 		http.StatusMethodNotAllowed:           TypeInvalidRequest,
 		http.StatusNotAcceptable:              TypeInvalidRequest,
@@ -251,8 +252,8 @@ func TestAppError_MarshalJSON_IncludesOptionalFields(t *testing.T) {
 // each entry emits as {location, message, value} with omitempty on
 // location+value. The top-level envelope carries `errors` only when
 // non-empty (omitempty), so nil + empty slices disappear from the
-// wire rather than appearing as `"errors":[]` (drifting from the
-// Huma-path shape).
+// wire rather than appearing as `"errors":[]` (which would drift
+// from the Stripe/OpenAI envelope shape).
 func TestAppError_MarshalJSON_Errors(t *testing.T) {
 	t.Run("populated", func(t *testing.T) {
 		err := NewValidationError("Validation failed", "one or more fields failed validation",

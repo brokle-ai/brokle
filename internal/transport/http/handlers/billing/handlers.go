@@ -25,6 +25,7 @@ import (
 	"brokle/internal/core/domain/analytics"
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/shared"
+	billingService "brokle/internal/core/services/billing"
 	handlersShared "brokle/internal/transport/http/handlers/shared"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
@@ -35,10 +36,10 @@ import (
 )
 
 type handler struct {
-	usageSvc    billingDomain.BillableUsageService
-	budgetSvc   billingDomain.BudgetService
-	contractSvc billingDomain.ContractService
-	pricingSvc  billingDomain.PricingService
+	usageSvc    *billingService.BillableUsageService
+	budgetSvc   *billingService.BudgetService
+	contractSvc *billingService.ContractService
+	pricingSvc  *billingService.PricingService
 	logger      *slog.Logger
 }
 
@@ -46,10 +47,10 @@ type handler struct {
 // context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	usageSvc billingDomain.BillableUsageService,
-	budgetSvc billingDomain.BudgetService,
-	contractSvc billingDomain.ContractService,
-	pricingSvc billingDomain.PricingService,
+	usageSvc *billingService.BillableUsageService,
+	budgetSvc *billingService.BudgetService,
+	contractSvc *billingService.ContractService,
+	pricingSvc *billingService.PricingService,
 	logger *slog.Logger,
 ) {
 	h := &handler{
@@ -272,7 +273,7 @@ func (h *handler) listBudgets(w http.ResponseWriter, r *http.Request) {
 	}
 	budgets, err := h.budgetSvc.GetBudgetsByOrg(r.Context(), orgID)
 	if err != nil {
-		h.logger.Error("failed to list budgets", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to list budgets", "error", err, "organization_id", orgID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to list budgets", err))
 		return
 	}
@@ -353,7 +354,7 @@ func (h *handler) createBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.budgetSvc.CreateBudget(r.Context(), budget); err != nil {
-		h.logger.Error("failed to create budget", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to create budget", "error", err, "organization_id", orgID)
 		response.WriteError(w, err)
 		return
 	}
@@ -413,7 +414,7 @@ func (h *handler) updateBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.budgetSvc.UpdateBudget(r.Context(), budget); err != nil {
-		h.logger.Error("failed to update budget", "error", err, "budget_id", budgetID)
+		h.logger.Error("Failed to update budget", "error", err, "budget_id", budgetID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to update budget", err))
 		return
 	}
@@ -441,7 +442,7 @@ func (h *handler) deleteBudget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.budgetSvc.DeleteBudget(r.Context(), budgetID); err != nil {
-		h.logger.Error("failed to delete budget", "error", err, "budget_id", budgetID)
+		h.logger.Error("Failed to delete budget", "error", err, "budget_id", budgetID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to delete budget", err))
 		return
 	}
@@ -464,7 +465,7 @@ func (h *handler) getBudgetAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	alerts, err := h.budgetSvc.GetAlerts(r.Context(), orgID, limit)
 	if err != nil {
-		h.logger.Error("failed to get alerts", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to get alerts", "error", err, "organization_id", orgID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to get alerts", err))
 		return
 	}
@@ -483,7 +484,7 @@ func (h *handler) acknowledgeBudgetAlert(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.budgetSvc.AcknowledgeAlert(r.Context(), orgID, alertID); err != nil {
-		h.logger.Error("failed to acknowledge alert", "error", err, "alert_id", alertID)
+		h.logger.Error("Failed to acknowledge alert", "error", err, "alert_id", alertID)
 		if billingDomain.IsNotFoundError(err) {
 			response.WriteError(w, appErrors.NewNotFoundError("Alert not found"))
 			return
@@ -543,7 +544,7 @@ func (h *handler) createContract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.contractSvc.CreateContract(r.Context(), contract); err != nil {
-		h.logger.Error("failed to create contract", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to create contract", "error", err, "organization_id", orgID)
 		response.WriteError(w, err)
 		return
 	}
@@ -563,7 +564,7 @@ func (h *handler) createContract(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err := h.contractSvc.AddVolumeTiers(r.Context(), contract.ID, tiers); err != nil {
-			h.logger.Error("failed to add volume tiers", "error", err, "contract_id", contract.ID)
+			h.logger.Error("Failed to add volume tiers", "error", err, "contract_id", contract.ID)
 			response.WriteError(w, err)
 			return
 		}
@@ -599,7 +600,7 @@ func (h *handler) listContracts(w http.ResponseWriter, r *http.Request) {
 	}
 	contracts, err := h.contractSvc.GetContractsByOrg(r.Context(), orgID)
 	if err != nil {
-		h.logger.Error("failed to get contracts", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to get contracts", "error", err, "organization_id", orgID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to get contracts", err))
 		return
 	}
@@ -666,7 +667,7 @@ func (h *handler) updateContract(w http.ResponseWriter, r *http.Request) {
 	contract.UpdatedAt = time.Now()
 
 	if err := h.contractSvc.UpdateContract(r.Context(), contract); err != nil {
-		h.logger.Error("failed to update contract", "error", err, "contract_id", contractID)
+		h.logger.Error("Failed to update contract", "error", err, "contract_id", contractID)
 		response.WriteError(w, err)
 		return
 	}
@@ -682,7 +683,7 @@ func (h *handler) activateContract(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	if err := h.contractSvc.ActivateContract(r.Context(), contractID, userID); err != nil {
-		h.logger.Error("failed to activate contract", "error", err, "contract_id", contractID)
+		h.logger.Error("Failed to activate contract", "error", err, "contract_id", contractID)
 		response.WriteError(w, err)
 		return
 	}
@@ -707,14 +708,11 @@ func (h *handler) cancelContract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.contractSvc.CancelContract(r.Context(), contractID, body.Reason, userID); err != nil {
-		h.logger.Error("failed to cancel contract", "error", err, "contract_id", contractID)
+		h.logger.Error("Failed to cancel contract", "error", err, "contract_id", contractID)
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, map[string]any{
-		"message": "Contract cancelled successfully",
-		"status":  "cancelled",
-	})
+	response.NoContent(w)
 }
 
 func (h *handler) updateContractTiers(w http.ResponseWriter, r *http.Request) {
@@ -742,7 +740,7 @@ func (h *handler) updateContractTiers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := h.contractSvc.UpdateVolumeTiers(r.Context(), contractID, tiers); err != nil {
-		h.logger.Error("failed to update volume tiers", "error", err, "contract_id", contractID)
+		h.logger.Error("Failed to update volume tiers", "error", err, "contract_id", contractID)
 		response.WriteError(w, err)
 		return
 	}
@@ -760,7 +758,7 @@ func (h *handler) getContractHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	history, err := h.contractSvc.GetContractHistory(r.Context(), contractID)
 	if err != nil {
-		h.logger.Error("failed to get contract history", "error", err, "contract_id", contractID)
+		h.logger.Error("Failed to get contract history", "error", err, "contract_id", contractID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to get contract history", err))
 		return
 	}
@@ -775,7 +773,7 @@ func (h *handler) getEffectivePricing(w http.ResponseWriter, r *http.Request) {
 	}
 	effective, err := h.pricingSvc.GetEffectivePricing(r.Context(), orgID)
 	if err != nil {
-		h.logger.Error("failed to get effective pricing", "error", err, "organization_id", orgID)
+		h.logger.Error("Failed to get effective pricing", "error", err, "organization_id", orgID)
 		response.WriteError(w, appErrors.NewInternalError("Failed to get effective pricing", err))
 		return
 	}

@@ -1,3 +1,4 @@
+// Package validator wraps go-playground/validator/v10 with Brokle-specific field registrations and error mapping.
 package validator
 
 import (

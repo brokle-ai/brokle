@@ -1,3 +1,4 @@
+// Package annotation implements human-in-the-loop annotation: queues, items, assignments, and review workflow.
 package annotation
 
 import (
@@ -12,7 +13,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type assignmentService struct {
+type AssignmentService struct {
 	queueRepo      annotation.QueueRepository
 	assignmentRepo annotation.AssignmentRepository
 	logger         *slog.Logger
@@ -23,8 +24,8 @@ func NewAssignmentService(
 	queueRepo annotation.QueueRepository,
 	assignmentRepo annotation.AssignmentRepository,
 	logger *slog.Logger,
-) annotation.AssignmentService {
-	return &assignmentService{
+) *AssignmentService {
+	return &AssignmentService{
 		queueRepo:      queueRepo,
 		assignmentRepo: assignmentRepo,
 		logger:         logger,
@@ -32,7 +33,7 @@ func NewAssignmentService(
 }
 
 // Assign assigns a user to a queue with the specified role.
-func (s *assignmentService) Assign(ctx context.Context, queueID, projectID, userID uuid.UUID, role annotation.AssignmentRole, assignedBy *uuid.UUID) (*annotation.QueueAssignment, error) {
+func (s *AssignmentService) Assign(ctx context.Context, queueID, projectID, userID uuid.UUID, role annotation.AssignmentRole, assignedBy *uuid.UUID) (*annotation.QueueAssignment, error) {
 	// Verify queue exists and belongs to project
 	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -82,7 +83,7 @@ func (s *assignmentService) Assign(ctx context.Context, queueID, projectID, user
 }
 
 // Unassign removes a user's assignment from a queue.
-func (s *assignmentService) Unassign(ctx context.Context, queueID, projectID, userID uuid.UUID) error {
+func (s *AssignmentService) Unassign(ctx context.Context, queueID, projectID, userID uuid.UUID) error {
 	// Verify queue exists and belongs to project
 	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -108,7 +109,7 @@ func (s *assignmentService) Unassign(ctx context.Context, queueID, projectID, us
 }
 
 // ListAssignments retrieves all assignments for a queue.
-func (s *assignmentService) ListAssignments(ctx context.Context, queueID, projectID uuid.UUID) ([]*annotation.QueueAssignment, error) {
+func (s *AssignmentService) ListAssignments(ctx context.Context, queueID, projectID uuid.UUID) ([]*annotation.QueueAssignment, error) {
 	// Verify queue exists and belongs to project
 	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
@@ -127,7 +128,7 @@ func (s *assignmentService) ListAssignments(ctx context.Context, queueID, projec
 }
 
 // GetUserQueues retrieves all queues a user is assigned to.
-func (s *assignmentService) GetUserQueues(ctx context.Context, userID uuid.UUID) ([]*annotation.QueueAssignment, error) {
+func (s *AssignmentService) GetUserQueues(ctx context.Context, userID uuid.UUID) ([]*annotation.QueueAssignment, error) {
 	assignments, err := s.assignmentRepo.ListByUser(ctx, userID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to list user queue assignments", err)
@@ -136,7 +137,7 @@ func (s *assignmentService) GetUserQueues(ctx context.Context, userID uuid.UUID)
 }
 
 // CheckAccess verifies if a user has access to a queue with the minimum required role.
-func (s *assignmentService) CheckAccess(ctx context.Context, queueID, userID uuid.UUID, minRole annotation.AssignmentRole) error {
+func (s *AssignmentService) CheckAccess(ctx context.Context, queueID, userID uuid.UUID, minRole annotation.AssignmentRole) error {
 	hasRole, err := s.assignmentRepo.HasRole(ctx, queueID, userID, minRole)
 	if err != nil {
 		return appErrors.NewInternalError("failed to check access", err)

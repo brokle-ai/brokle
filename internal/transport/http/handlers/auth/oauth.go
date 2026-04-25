@@ -345,4 +345,3 @@ func (h *handler) exchangeLoginSession(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn: sessionData.ExpiresIn * 1000,
 	})
 }
-

@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/shopspring/decimal"
 )
 
 // ============================================================================
@@ -33,16 +31,4 @@ type ProviderModelRepository interface {
 	GetProviderPrices(ctx context.Context, modelID uuid.UUID, projectID *uuid.UUID) ([]*ProviderPrice, error)
 	UpdateProviderPrice(ctx context.Context, priceID uuid.UUID, price *ProviderPrice) error
 	DeleteProviderPrice(ctx context.Context, priceID uuid.UUID) error
-}
-
-// ProviderPricingService handles provider pricing lookups and cost calculations
-// Calculates user spending with AI providers (NOT billing users)
-type ProviderPricingService interface {
-	// Get provider pricing snapshot at specific time (with 5-min cache)
-	// Returns OpenAI/Anthropic rates used to calculate cost visibility
-	GetProviderPricingSnapshot(ctx context.Context, projectID *uuid.UUID, modelName string, atTime time.Time) (*ProviderPricingSnapshot, error)
-
-	// Calculate provider costs from usage and pricing
-	// Returns what user spent with provider (e.g., OpenAI charged them $0.005)
-	CalculateProviderCost(usage map[string]uint64, pricing *ProviderPricingSnapshot) map[string]decimal.Decimal
 }

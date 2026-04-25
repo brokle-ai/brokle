@@ -12,8 +12,8 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// permissionService implements auth.PermissionService interface
-type permissionService struct {
+// PermissionService implements auth.PermissionService interface
+type PermissionService struct {
 	permissionRepo authDomain.PermissionRepository
 	rolePermRepo   authDomain.RolePermissionRepository
 }
@@ -22,51 +22,51 @@ type permissionService struct {
 func NewPermissionService(
 	permissionRepo authDomain.PermissionRepository,
 	rolePermRepo authDomain.RolePermissionRepository,
-) authDomain.PermissionService {
-	return &permissionService{
+) *PermissionService {
+	return &PermissionService{
 		permissionRepo: permissionRepo,
 		rolePermRepo:   rolePermRepo,
 	}
 }
 
 // CreatePermission creates a new permission
-func (s *permissionService) CreatePermission(ctx context.Context, req *authDomain.CreatePermissionRequest) (*authDomain.Permission, error) {
+func (s *PermissionService) CreatePermission(ctx context.Context, req *authDomain.CreatePermissionRequest) (*authDomain.Permission, error) {
 	// Validate permission doesn't already exist
 	existing, err := s.permissionRepo.GetByResourceAction(ctx, req.Resource, req.Action)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("Permission " + req.Resource + ":" + req.Action + " already exists")
+		return nil, appErrors.NewConflictError("permission " + req.Resource + ":" + req.Action + " already exists")
 	}
 
 	// Create permission
 	permission := authDomain.NewPermission(req.Resource, req.Action, req.Description)
 	if err := s.permissionRepo.Create(ctx, permission); err != nil {
-		return nil, appErrors.NewInternalError("Failed to create permission", err)
+		return nil, appErrors.NewInternalError("failed to create permission", err)
 	}
 
 	return permission, nil
 }
 
 // GetPermission retrieves a permission by ID
-func (s *permissionService) GetPermission(ctx context.Context, permissionID uuid.UUID) (*authDomain.Permission, error) {
+func (s *PermissionService) GetPermission(ctx context.Context, permissionID uuid.UUID) (*authDomain.Permission, error) {
 	return s.permissionRepo.GetByID(ctx, permissionID)
 }
 
 // GetPermissionByName retrieves a permission by legacy name
-func (s *permissionService) GetPermissionByName(ctx context.Context, name string) (*authDomain.Permission, error) {
+func (s *PermissionService) GetPermissionByName(ctx context.Context, name string) (*authDomain.Permission, error) {
 	return s.permissionRepo.GetByName(ctx, name)
 }
 
 // GetPermissionByResourceAction retrieves a permission by resource:action
-func (s *permissionService) GetPermissionByResourceAction(ctx context.Context, resource, action string) (*authDomain.Permission, error) {
+func (s *PermissionService) GetPermissionByResourceAction(ctx context.Context, resource, action string) (*authDomain.Permission, error) {
 	return s.permissionRepo.GetByResourceAction(ctx, resource, action)
 }
 
 // UpdatePermission updates a permission
-func (s *permissionService) UpdatePermission(ctx context.Context, permissionID uuid.UUID, req *authDomain.UpdatePermissionRequest) error {
+func (s *PermissionService) UpdatePermission(ctx context.Context, permissionID uuid.UUID, req *authDomain.UpdatePermissionRequest) error {
 	// Get existing permission
 	permission, err := s.permissionRepo.GetByID(ctx, permissionID)
 	if err != nil {
-		return appErrors.NewNotFoundError("Permission not found")
+		return appErrors.NewNotFoundError("permission not found")
 	}
 
 	// Update fields
@@ -78,22 +78,24 @@ func (s *permissionService) UpdatePermission(ctx context.Context, permissionID u
 }
 
 // DeletePermission deletes a permission
-func (s *permissionService) DeletePermission(ctx context.Context, permissionID uuid.UUID) error {
+func (s *PermissionService) DeletePermission(ctx context.Context, permissionID uuid.UUID) error {
 	// Check if permission is in use
 	// This would need to be implemented properly in a production system
 	return s.permissionRepo.Delete(ctx, permissionID)
 }
 
-// ListPermissions lists permissions with pagination
-func (s *permissionService) ListPermissions(ctx context.Context, limit, offset int) (*authDomain.PermissionListResponse, error) {
+// ListPermissions returns a paginated slice of permissions plus the total
+// count. Handler-layer code wraps the result into the canonical
+// {data, pagination} envelope.
+func (s *PermissionService) ListPermissions(ctx context.Context, limit, offset int) ([]*authDomain.Permission, int64, error) {
 	permissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to list permissions", err)
+		return nil, 0, appErrors.NewInternalError("failed to list permissions", err)
 	}
 
-	totalCount := len(permissions)
+	total := int64(len(permissions))
 
-	// Apply pagination
+	// In-memory pagination — fine for the RBAC permission set (small, bounded).
 	start := offset
 	end := offset + limit
 	if start > len(permissions) {
@@ -102,33 +104,26 @@ func (s *permissionService) ListPermissions(ctx context.Context, limit, offset i
 	if end > len(permissions) {
 		end = len(permissions)
 	}
-	paginatedPermissions := permissions[start:end]
-
-	return &authDomain.PermissionListResponse{
-		Permissions: paginatedPermissions,
-		TotalCount:  totalCount,
-		Page:        offset/limit + 1,
-		PageSize:    limit,
-	}, nil
+	return permissions[start:end], total, nil
 }
 
 // GetAllPermissions returns all permissions
-func (s *permissionService) GetAllPermissions(ctx context.Context) ([]*authDomain.Permission, error) {
+func (s *PermissionService) GetAllPermissions(ctx context.Context) ([]*authDomain.Permission, error) {
 	return s.permissionRepo.GetAllPermissions(ctx)
 }
 
 // GetPermissionsByResource returns all permissions for a resource
-func (s *permissionService) GetPermissionsByResource(ctx context.Context, resource string) ([]*authDomain.Permission, error) {
+func (s *PermissionService) GetPermissionsByResource(ctx context.Context, resource string) ([]*authDomain.Permission, error) {
 	return s.permissionRepo.GetByResource(ctx, resource)
 }
 
 // GetPermissionsByNames returns permissions by legacy names
-func (s *permissionService) GetPermissionsByNames(ctx context.Context, names []string) ([]*authDomain.Permission, error) {
+func (s *PermissionService) GetPermissionsByNames(ctx context.Context, names []string) ([]*authDomain.Permission, error) {
 	permissions := make([]*authDomain.Permission, 0, len(names))
 	for _, name := range names {
 		perm, err := s.permissionRepo.GetByName(ctx, name)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("Permission " + name + " not found")
+			return nil, appErrors.NewNotFoundError("permission " + name + " not found")
 		}
 		permissions = append(permissions, perm)
 	}
@@ -136,7 +131,7 @@ func (s *permissionService) GetPermissionsByNames(ctx context.Context, names []s
 }
 
 // GetPermissionsByResourceActions returns permissions by resource:action format
-func (s *permissionService) GetPermissionsByResourceActions(ctx context.Context, resourceActions []string) ([]*authDomain.Permission, error) {
+func (s *PermissionService) GetPermissionsByResourceActions(ctx context.Context, resourceActions []string) ([]*authDomain.Permission, error) {
 	permissions := make([]*authDomain.Permission, 0, len(resourceActions))
 	for _, resourceAction := range resourceActions {
 		resource, action, err := s.ParseResourceAction(resourceAction)
@@ -146,68 +141,63 @@ func (s *permissionService) GetPermissionsByResourceActions(ctx context.Context,
 
 		perm, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("Permission " + resourceAction + " not found")
+			return nil, appErrors.NewNotFoundError("permission " + resourceAction + " not found")
 		}
 		permissions = append(permissions, perm)
 	}
 	return permissions, nil
 }
 
-// SearchPermissions searches permissions with pagination
-func (s *permissionService) SearchPermissions(ctx context.Context, query string, limit, offset int) (*authDomain.PermissionListResponse, error) {
+// SearchPermissions returns a filtered + paginated slice of permissions
+// plus the total matching count. Handler-layer code wraps the result
+// into the canonical {data, pagination} envelope.
+func (s *PermissionService) SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*authDomain.Permission, int64, error) {
 	// Basic search implementation - in production this would be done at DB level
 	allPermissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to search permissions", err)
+		return nil, 0, appErrors.NewInternalError("failed to search permissions", err)
 	}
 
 	// Filter permissions by query
-	filteredPermissions := make([]*authDomain.Permission, 0)
+	filtered := make([]*authDomain.Permission, 0)
+	q := strings.ToLower(query)
 	for _, perm := range allPermissions {
 		desc := ""
 		if perm.Description != nil {
 			desc = *perm.Description
 		}
-		if strings.Contains(strings.ToLower(perm.Name), strings.ToLower(query)) ||
-			strings.Contains(strings.ToLower(desc), strings.ToLower(query)) ||
-			strings.Contains(strings.ToLower(perm.Resource), strings.ToLower(query)) ||
-			strings.Contains(strings.ToLower(perm.Action), strings.ToLower(query)) {
-			filteredPermissions = append(filteredPermissions, perm)
+		if strings.Contains(strings.ToLower(perm.Name), q) ||
+			strings.Contains(strings.ToLower(desc), q) ||
+			strings.Contains(strings.ToLower(perm.Resource), q) ||
+			strings.Contains(strings.ToLower(perm.Action), q) {
+			filtered = append(filtered, perm)
 		}
 	}
 
-	// Apply pagination
-	totalCount := len(filteredPermissions)
+	total := int64(len(filtered))
 	start := offset
 	end := offset + limit
-	if start > len(filteredPermissions) {
-		start = len(filteredPermissions)
+	if start > len(filtered) {
+		start = len(filtered)
 	}
-	if end > len(filteredPermissions) {
-		end = len(filteredPermissions)
+	if end > len(filtered) {
+		end = len(filtered)
 	}
-	paginatedPermissions := filteredPermissions[start:end]
-
-	return &authDomain.PermissionListResponse{
-		Permissions: paginatedPermissions,
-		TotalCount:  totalCount,
-		Page:        offset/limit + 1,
-		PageSize:    limit,
-	}, nil
+	return filtered[start:end], total, nil
 }
 
 // GetAvailableResources returns all distinct resources
-func (s *permissionService) GetAvailableResources(ctx context.Context) ([]string, error) {
+func (s *PermissionService) GetAvailableResources(ctx context.Context) ([]string, error) {
 	return s.permissionRepo.GetAvailableResources(ctx)
 }
 
 // GetActionsForResource returns all actions for a resource
-func (s *permissionService) GetActionsForResource(ctx context.Context, resource string) ([]string, error) {
+func (s *PermissionService) GetActionsForResource(ctx context.Context, resource string) ([]string, error) {
 	return s.permissionRepo.GetActionsForResource(ctx, resource)
 }
 
 // ValidatePermissionName validates legacy permission name
-func (s *permissionService) ValidatePermissionName(ctx context.Context, name string) error {
+func (s *PermissionService) ValidatePermissionName(ctx context.Context, name string) error {
 	if !strings.Contains(name, ".") {
 		return appErrors.NewValidationError("name", "Invalid permission name format: "+name+" (must contain dot)")
 	}
@@ -215,7 +205,7 @@ func (s *permissionService) ValidatePermissionName(ctx context.Context, name str
 }
 
 // ValidateResourceAction validates resource:action format
-func (s *permissionService) ValidateResourceAction(ctx context.Context, resource, action string) error {
+func (s *PermissionService) ValidateResourceAction(ctx context.Context, resource, action string) error {
 	if resource == "" || action == "" {
 		return appErrors.NewValidationError("resource_action", "Resource and action cannot be empty")
 	}
@@ -223,7 +213,7 @@ func (s *permissionService) ValidateResourceAction(ctx context.Context, resource
 }
 
 // PermissionExists checks if a resource:action permission exists
-func (s *permissionService) PermissionExists(ctx context.Context, resource, action string) (bool, error) {
+func (s *PermissionService) PermissionExists(ctx context.Context, resource, action string) (bool, error) {
 	_, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 	if err != nil {
 		if errors.Is(err, authDomain.ErrNotFound) {
@@ -235,7 +225,7 @@ func (s *permissionService) PermissionExists(ctx context.Context, resource, acti
 }
 
 // BulkPermissionExists checks if multiple resource:action permissions exist
-func (s *permissionService) BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error) {
+func (s *PermissionService) BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error) {
 	results := make(map[string]bool)
 	for _, resourceAction := range resourceActions {
 		resource, action, err := s.ParseResourceAction(resourceAction)
@@ -255,7 +245,7 @@ func (s *permissionService) BulkPermissionExists(ctx context.Context, resourceAc
 }
 
 // ParseResourceAction parses resource:action format
-func (s *permissionService) ParseResourceAction(resourceAction string) (resource, action string, err error) {
+func (s *PermissionService) ParseResourceAction(resourceAction string) (resource, action string, err error) {
 	parts := strings.Split(resourceAction, ":")
 	if len(parts) != 2 {
 		return "", "", appErrors.NewValidationError("resource_action", "Invalid resource:action format: "+resourceAction)
@@ -264,12 +254,12 @@ func (s *permissionService) ParseResourceAction(resourceAction string) (resource
 }
 
 // FormatResourceAction formats resource and action into resource:action
-func (s *permissionService) FormatResourceAction(resource, action string) string {
+func (s *PermissionService) FormatResourceAction(resource, action string) string {
 	return fmt.Sprintf("%s:%s", resource, action)
 }
 
 // IsValidResourceActionFormat checks if string is valid resource:action format
-func (s *permissionService) IsValidResourceActionFormat(resourceAction string) bool {
+func (s *PermissionService) IsValidResourceActionFormat(resourceAction string) bool {
 	parts := strings.Split(resourceAction, ":")
 	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
 }

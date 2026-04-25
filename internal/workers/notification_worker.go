@@ -23,46 +23,46 @@ type NotificationWorker struct {
 
 // NotificationJob represents a notification processing job
 type NotificationJob struct {
-	Timestamp time.Time   `json:"timestamp"`
-	Data      any `json:"data"`
-	Type      string      `json:"type"`
-	Retry     int         `json:"retry"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      any       `json:"data"`
+	Type      string    `json:"type"`
+	Retry     int       `json:"retry"`
 }
 
 // EmailJob represents an email notification job
 type EmailJob struct {
 	TemplateData map[string]any `json:"template_data,omitempty"`
-	Subject      string                 `json:"subject"`
-	Body         string                 `json:"body"`
-	BodyHTML     string                 `json:"body_html,omitempty"`
-	Template     string                 `json:"template,omitempty"`
-	Priority     string                 `json:"priority,omitempty"`
-	UserID       string                 `json:"user_id,omitempty"`
-	To           []string               `json:"to"`
-	CC           []string               `json:"cc,omitempty"`
-	BCC          []string               `json:"bcc,omitempty"`
+	Subject      string         `json:"subject"`
+	Body         string         `json:"body"`
+	BodyHTML     string         `json:"body_html,omitempty"`
+	Template     string         `json:"template,omitempty"`
+	Priority     string         `json:"priority,omitempty"`
+	UserID       string         `json:"user_id,omitempty"`
+	To           []string       `json:"to"`
+	CC           []string       `json:"cc,omitempty"`
+	BCC          []string       `json:"bcc,omitempty"`
 }
 
 // WebhookJob represents a webhook notification job
 type WebhookJob struct {
-	Headers    map[string]string      `json:"headers,omitempty"`
-	Payload    map[string]any `json:"payload"`
-	URL        string                 `json:"url"`
-	Method     string                 `json:"method"`
-	UserID     string                 `json:"user_id,omitempty"`
-	EventType  string                 `json:"event_type,omitempty"`
-	Timeout    int                    `json:"timeout,omitempty"`
-	RetryCount int                    `json:"retry_count,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Payload    map[string]any    `json:"payload"`
+	URL        string            `json:"url"`
+	Method     string            `json:"method"`
+	UserID     string            `json:"user_id,omitempty"`
+	EventType  string            `json:"event_type,omitempty"`
+	Timeout    int               `json:"timeout,omitempty"`
+	RetryCount int               `json:"retry_count,omitempty"`
 }
 
 // SlackJob represents a Slack notification job
 type SlackJob struct {
-	Channel   string                   `json:"channel"`
-	Message   string                   `json:"message"`
-	Username  string                   `json:"username,omitempty"`
-	IconEmoji string                   `json:"icon_emoji,omitempty"`
-	UserID    string                   `json:"user_id,omitempty"`
-	EventType string                   `json:"event_type,omitempty"`
+	Channel   string           `json:"channel"`
+	Message   string           `json:"message"`
+	Username  string           `json:"username,omitempty"`
+	IconEmoji string           `json:"icon_emoji,omitempty"`
+	UserID    string           `json:"user_id,omitempty"`
+	EventType string           `json:"event_type,omitempty"`
 	Blocks    []map[string]any `json:"blocks,omitempty"`
 }
 
@@ -76,12 +76,12 @@ type SMSJob struct {
 // PushJob represents a push notification job
 type PushJob struct {
 	Data         map[string]any `json:"data,omitempty"`
-	Title        string                 `json:"title"`
-	Body         string                 `json:"body"`
-	Sound        string                 `json:"sound,omitempty"`
-	UserID       string                 `json:"user_id,omitempty"`
-	DeviceTokens []string               `json:"device_tokens"`
-	Badge        int                    `json:"badge,omitempty"`
+	Title        string         `json:"title"`
+	Body         string         `json:"body"`
+	Sound        string         `json:"sound,omitempty"`
+	UserID       string         `json:"user_id,omitempty"`
+	DeviceTokens []string       `json:"device_tokens"`
+	Badge        int            `json:"badge,omitempty"`
 }
 
 // NewNotificationWorker creates a new notification worker

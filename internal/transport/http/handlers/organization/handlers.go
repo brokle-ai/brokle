@@ -8,6 +8,7 @@
 package organization
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/transport/http/httpctx"
@@ -23,11 +25,49 @@ import (
 	"brokle/pkg/response"
 )
 
+// OrganizationService / MemberService / InvitationService / SettingsService
+// describe the narrow method sets the handler consumes (Go idiom: accept
+// interfaces). Concrete *organizationService.* types from prod wiring
+// satisfy these; tests inject fakes.
+type OrganizationService interface {
+	GetUserOrganizations(ctx context.Context, userID uuid.UUID) ([]*organization.Organization, error)
+	CreateOrganization(ctx context.Context, userID uuid.UUID, req *organization.CreateOrganizationRequest) (*organization.Organization, error)
+	GetOrganization(ctx context.Context, orgID uuid.UUID) (*organization.Organization, error)
+	UpdateOrganization(ctx context.Context, orgID uuid.UUID, req *organization.UpdateOrganizationRequest) error
+	DeleteOrganization(ctx context.Context, orgID uuid.UUID) error
+}
+
+type MemberService interface {
+	CanUserAccessOrganization(ctx context.Context, userID, orgID uuid.UUID) (bool, error)
+	GetMembers(ctx context.Context, orgID uuid.UUID) ([]*organization.Member, error)
+	RemoveMember(ctx context.Context, orgID, targetUserID, callerID uuid.UUID) error
+	IsMember(ctx context.Context, userID, orgID uuid.UUID) (bool, error)
+}
+
+type InvitationService interface {
+	InviteUser(ctx context.Context, orgID, userID uuid.UUID, req *organization.InviteUserRequest) (*organization.Invitation, error)
+	GetPendingInvitations(ctx context.Context, orgID uuid.UUID) ([]*organization.Invitation, error)
+	ResendInvitation(ctx context.Context, invitationID, userID uuid.UUID) (*organization.Invitation, error)
+	RevokeInvitation(ctx context.Context, invitationID, userID uuid.UUID) error
+	GetUserInvitations(ctx context.Context, email string) ([]*organization.Invitation, error)
+	GetInvitationByToken(ctx context.Context, token string) (*organization.Invitation, error)
+	AcceptInvitation(ctx context.Context, token string, userID uuid.UUID) (*organization.AcceptInvitationResult, error)
+	DeclineInvitation(ctx context.Context, token string) error
+}
+
+type SettingsService interface {
+	ListSettings(ctx context.Context, orgID uuid.UUID) (map[string]any, error)
+	CreateSetting(ctx context.Context, orgID, userID uuid.UUID, req *organization.CreateOrganizationSettingRequest) (*organization.OrganizationSettings, error)
+	GetSetting(ctx context.Context, orgID uuid.UUID, key string) (*organization.OrganizationSettings, error)
+	UpdateSetting(ctx context.Context, orgID uuid.UUID, key string, userID uuid.UUID, req *organization.UpdateOrganizationSettingRequest) (*organization.OrganizationSettings, error)
+	DeleteSetting(ctx context.Context, orgID uuid.UUID, key string, userID uuid.UUID) error
+}
+
 type handler struct {
-	orgSvc        organization.OrganizationService
-	memberSvc     organization.MemberService
-	invitationSvc organization.InvitationService
-	settingsSvc   organization.OrganizationSettingsService
+	orgSvc        OrganizationService
+	memberSvc     MemberService
+	invitationSvc InvitationService
+	settingsSvc   SettingsService
 	logger        *slog.Logger
 }
 
@@ -35,10 +75,10 @@ type handler struct {
 // routes on r. Expected mount context: the authed dashboard chi group.
 func RegisterRoutes(
 	r chi.Router,
-	orgSvc organization.OrganizationService,
-	memberSvc organization.MemberService,
-	invitationSvc organization.InvitationService,
-	settingsSvc organization.OrganizationSettingsService,
+	orgSvc OrganizationService,
+	memberSvc MemberService,
+	invitationSvc InvitationService,
+	settingsSvc SettingsService,
 	logger *slog.Logger,
 ) {
 	h := &handler{
@@ -624,7 +664,7 @@ func (h *handler) listSettings(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	settings, err := h.settingsSvc.GetAllSettings(r.Context(), orgID)
+	settings, err := h.settingsSvc.ListSettings(r.Context(), orgID)
 	if err != nil {
 		response.WriteError(w, err)
 		return

@@ -1,3 +1,4 @@
+// Package storage contains the blob-storage domain: file logs and storage references.
 package storage
 
 import (
@@ -11,8 +12,8 @@ import (
 // Go field types mirror the ClickHouse column types exactly:
 //   - ID (String)           : blob-local opaque id
 //   - EntityID (String)     : polymorphic by EntityType — W3C hex trace/span
-//                             id for per-span archives, UUID-as-string for
-//                             archive-batch rows
+//     id for per-span archives, UUID-as-string for
+//     archive-batch rows
 //   - EventID (String)      : worker-provided stream record id, not always a UUID
 //   - ProjectID (UUID)      : tenant scope; strongly typed
 type BlobStorageFileLog struct {

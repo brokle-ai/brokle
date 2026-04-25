@@ -18,7 +18,7 @@ import (
 	"brokle/pkg/uid"
 )
 
-type budgetService struct {
+type BudgetService struct {
 	budgetRepo  billing.UsageBudgetRepository
 	alertRepo   billing.UsageAlertRepository
 	projectRepo orgDomain.ProjectRepository
@@ -30,8 +30,8 @@ func NewBudgetService(
 	alertRepo billing.UsageAlertRepository,
 	projectRepo orgDomain.ProjectRepository,
 	logger *slog.Logger,
-) billing.BudgetService {
-	return &budgetService{
+) *BudgetService {
+	return &BudgetService{
 		budgetRepo:  budgetRepo,
 		alertRepo:   alertRepo,
 		projectRepo: projectRepo,
@@ -39,7 +39,7 @@ func NewBudgetService(
 	}
 }
 
-func (s *budgetService) CreateBudget(ctx context.Context, budget *billing.UsageBudget) error {
+func (s *BudgetService) CreateBudget(ctx context.Context, budget *billing.UsageBudget) error {
 	// Validate project ownership if project_id is provided
 	if budget.ProjectID != nil && *budget.ProjectID != uuid.Nil {
 		project, err := s.projectRepo.GetByID(ctx, *budget.ProjectID)
@@ -96,15 +96,15 @@ func (s *budgetService) CreateBudget(ctx context.Context, budget *billing.UsageB
 	return nil
 }
 
-func (s *budgetService) GetBudget(ctx context.Context, id uuid.UUID) (*billing.UsageBudget, error) {
+func (s *BudgetService) GetBudget(ctx context.Context, id uuid.UUID) (*billing.UsageBudget, error) {
 	return s.budgetRepo.GetByID(ctx, id)
 }
 
-func (s *budgetService) GetBudgetsByOrg(ctx context.Context, orgID uuid.UUID) ([]*billing.UsageBudget, error) {
+func (s *BudgetService) GetBudgetsByOrg(ctx context.Context, orgID uuid.UUID) ([]*billing.UsageBudget, error) {
 	return s.budgetRepo.GetByOrgID(ctx, orgID)
 }
 
-func (s *budgetService) UpdateBudget(ctx context.Context, budget *billing.UsageBudget) error {
+func (s *BudgetService) UpdateBudget(ctx context.Context, budget *billing.UsageBudget) error {
 	budget.UpdatedAt = time.Now()
 
 	if err := s.budgetRepo.Update(ctx, budget); err != nil {
@@ -123,7 +123,7 @@ func (s *budgetService) UpdateBudget(ctx context.Context, budget *billing.UsageB
 	return nil
 }
 
-func (s *budgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
+func (s *BudgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
 	if err := s.budgetRepo.Delete(ctx, id); err != nil {
 		s.logger.Error("failed to delete budget",
 			"error", err,
@@ -139,7 +139,7 @@ func (s *budgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *budgetService) CheckBudgets(ctx context.Context, orgID uuid.UUID) ([]*billing.UsageAlert, error) {
+func (s *BudgetService) CheckBudgets(ctx context.Context, orgID uuid.UUID) ([]*billing.UsageAlert, error) {
 	budgets, err := s.budgetRepo.GetActive(ctx, orgID)
 	if err != nil {
 		return nil, err
@@ -172,7 +172,7 @@ func (s *budgetService) CheckBudgets(ctx context.Context, orgID uuid.UUID) ([]*b
 	return newAlerts, nil
 }
 
-func (s *budgetService) evaluateBudget(budget *billing.UsageBudget) []*billing.UsageAlert {
+func (s *BudgetService) evaluateBudget(budget *billing.UsageBudget) []*billing.UsageAlert {
 	var alerts []*billing.UsageAlert
 
 	// Ensure thresholds are sorted ascending for correct reverse iteration
@@ -253,11 +253,11 @@ func getSeverityForThreshold(threshold int64) billing.AlertSeverity {
 	}
 }
 
-func (s *budgetService) GetAlerts(ctx context.Context, orgID uuid.UUID, limit int) ([]*billing.UsageAlert, error) {
+func (s *BudgetService) GetAlerts(ctx context.Context, orgID uuid.UUID, limit int) ([]*billing.UsageAlert, error) {
 	return s.alertRepo.GetByOrgID(ctx, orgID, limit)
 }
 
-func (s *budgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uuid.UUID) error {
+func (s *BudgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uuid.UUID) error {
 	// Fetch alert and verify organization ownership
 	alert, err := s.alertRepo.GetByID(ctx, alertID)
 	if err != nil {
@@ -265,17 +265,21 @@ func (s *budgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uui
 			"error", err,
 			"alert_id", alertID,
 		)
-		return err
+		if errors.Is(err, billing.ErrAlertNotFound) {
+			return appErrors.NewNotFoundError("alert", appErrors.WithParam(alertID.String()))
+		}
+		return appErrors.NewInternalError("failed to get alert", err)
 	}
 
-	// Security: verify alert belongs to the requesting organization
+	// Security: verify alert belongs to the requesting organization.
+	// Return a generic not-found to avoid confirming the alert exists in another org.
 	if alert.OrganizationID != orgID {
 		s.logger.Warn("unauthorized alert acknowledgement attempt",
 			"alert_id", alertID,
 			"alert_org_id", alert.OrganizationID,
 			"requested_org_id", orgID,
 		)
-		return fmt.Errorf("%w: %s", billing.ErrAlertNotFound, alertID) // Return sentinel error to avoid info leak
+		return appErrors.NewNotFoundError("alert", appErrors.WithParam(alertID.String()))
 	}
 
 	if err := s.alertRepo.Acknowledge(ctx, alertID); err != nil {
@@ -283,7 +287,7 @@ func (s *budgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uui
 			"error", err,
 			"alert_id", alertID,
 		)
-		return err
+		return appErrors.NewInternalError("failed to acknowledge alert", err)
 	}
 
 	s.logger.Info("alert acknowledged",

@@ -5,88 +5,49 @@ import (
 	"fmt"
 )
 
-// Domain errors for prompt management
+// Domain errors for prompt management.
+//
+// Sentinels are kept only when actively produced by a repository and
+// consumed by a service via errors.Is. Same rule for factory helpers
+// (NewXxxError) — they live here only when called from outside the
+// domain package.
 var (
-	// Prompt errors
+	// Prompt CRUD
 	ErrPromptNotFound      = errors.New("prompt not found")
 	ErrPromptAlreadyExists = errors.New("prompt already exists")
-	ErrInvalidPromptName   = errors.New("invalid prompt name")
 	ErrInvalidPromptType   = errors.New("invalid prompt type")
 
-	// Version errors
-	ErrVersionNotFound      = errors.New("version not found")
-	ErrVersionImmutable     = errors.New("versions are immutable and cannot be modified")
-	ErrInvalidVersionNumber = errors.New("invalid version number")
+	// Versioning
+	ErrVersionNotFound = errors.New("version not found")
 
-	// Label errors
-	ErrLabelNotFound       = errors.New("label not found")
-	ErrLabelProtected      = errors.New("label is protected")
-	ErrLabelAlreadyExists  = errors.New("label already exists")
-	ErrInvalidLabelName    = errors.New("invalid label name")
-	ErrLatestLabelReserved = errors.New("'latest' label is auto-managed and cannot be modified")
+	// Labels
+	ErrLabelNotFound               = errors.New("label not found")
+	ErrLabelAlreadyExists          = errors.New("label already exists")
+	ErrProtectedLabelAlreadyExists = errors.New("protected label already exists")
 
-	// Template errors
+	// Templating (used by service-layer factory helpers below)
 	ErrInvalidTemplate       = errors.New("invalid template")
 	ErrInvalidTemplateFormat = errors.New("invalid template format")
 	ErrVariableMissing       = errors.New("required variable missing")
-	ErrInvalidVariableName   = errors.New("invalid variable name")
 
-	// Dialect errors
+	// Dialect compilation
 	ErrUnsupportedDialect = errors.New("unsupported template dialect")
 	ErrDialectCompilation = errors.New("template compilation failed")
 	ErrTemplateTooLarge   = errors.New("template exceeds maximum size limit")
-	ErrNestingTooDeep     = errors.New("template nesting exceeds maximum depth")
 
-	// Cache errors
+	// Cache
 	ErrCacheNotFound = errors.New("cache entry not found")
 	ErrCacheExpired  = errors.New("cache entry expired")
-
-	// Execution errors
-	ErrExecutionFailed    = errors.New("prompt execution failed")
-	ErrProviderNotFound   = errors.New("LLM provider not found")
-	ErrInvalidModelConfig = errors.New("invalid model configuration")
 )
 
-// Error codes for structured API responses
+// Error codes surfaced to clients via the AppError envelope. Only codes
+// with active call sites are kept; anything orphaned was deleted during
+// the 2026-04-25 sentinel sweep.
 const (
-	ErrCodePromptNotFound      = "PROMPT_NOT_FOUND"
-	ErrCodePromptAlreadyExists = "PROMPT_ALREADY_EXISTS"
-	ErrCodeVersionNotFound     = "VERSION_NOT_FOUND"
-	ErrCodeLabelNotFound       = "LABEL_NOT_FOUND"
-	ErrCodeLabelProtected      = "LABEL_PROTECTED"
-	ErrCodeInvalidTemplate     = "INVALID_TEMPLATE"
-	ErrCodeVariableMissing     = "VARIABLE_MISSING"
-	ErrCodeExecutionFailed     = "EXECUTION_FAILED"
-	ErrCodeUnsupportedDialect  = "UNSUPPORTED_DIALECT"
-	ErrCodeDialectCompilation  = "DIALECT_COMPILATION_FAILED"
-	ErrCodeTemplateTooLarge    = "TEMPLATE_TOO_LARGE"
+	ErrCodeTemplateTooLarge = "TEMPLATE_TOO_LARGE"
 )
 
-// Convenience functions for creating contextualized errors
-
-func NewPromptNotFoundError(name string) error {
-	return fmt.Errorf("%w: %s", ErrPromptNotFound, name)
-}
-
-func NewPromptNotFoundByIDError(id string) error {
-	return fmt.Errorf("%w: id=%s", ErrPromptNotFound, id)
-}
-
-func NewPromptAlreadyExistsError(name, projectID string) error {
-	return fmt.Errorf("%w: %s in project %s", ErrPromptAlreadyExists, name, projectID)
-}
-
-func NewVersionNotFoundError(promptName string, version int) error {
-	return fmt.Errorf("%w: %s version %d", ErrVersionNotFound, promptName, version)
-}
-
-func NewLabelNotFoundError(promptName, labelName string) error {
-	return fmt.Errorf("%w: %s label '%s'", ErrLabelNotFound, promptName, labelName)
-}
-
-func NewLabelProtectedError(labelName string) error {
-	return fmt.Errorf("%w: '%s' requires admin permission", ErrLabelProtected, labelName)
-}
+// Convenience constructors for contextualized errors.
 
 func NewVariableMissingError(varName string) error {
 	return fmt.Errorf("%w: {{%s}}", ErrVariableMissing, varName)
@@ -94,10 +55,6 @@ func NewVariableMissingError(varName string) error {
 
 func NewInvalidTemplateError(details string) error {
 	return fmt.Errorf("%w: %s", ErrInvalidTemplate, details)
-}
-
-func NewExecutionFailedError(details string) error {
-	return fmt.Errorf("%w: %s", ErrExecutionFailed, details)
 }
 
 func NewUnsupportedDialectError(dialect string) error {
@@ -112,37 +69,13 @@ func NewTemplateTooLargeError(size, maxSize int) error {
 	return fmt.Errorf("%w: size %d exceeds limit %d", ErrTemplateTooLarge, size, maxSize)
 }
 
-// Error classification helpers
-
+// IsNotFoundError reports whether err is one of the prompt-domain
+// not-found sentinels. Used by callers that need to translate any
+// prompt-not-found variant to a 404 AppError without branching on
+// each sentinel individually.
 func IsNotFoundError(err error) bool {
 	return errors.Is(err, ErrPromptNotFound) ||
 		errors.Is(err, ErrVersionNotFound) ||
 		errors.Is(err, ErrLabelNotFound) ||
 		errors.Is(err, ErrCacheNotFound)
-}
-
-func IsValidationError(err error) bool {
-	return errors.Is(err, ErrInvalidPromptName) ||
-		errors.Is(err, ErrInvalidPromptType) ||
-		errors.Is(err, ErrInvalidLabelName) ||
-		errors.Is(err, ErrInvalidTemplate) ||
-		errors.Is(err, ErrInvalidTemplateFormat) ||
-		errors.Is(err, ErrVariableMissing) ||
-		errors.Is(err, ErrInvalidVariableName) ||
-		errors.Is(err, ErrInvalidModelConfig) ||
-		errors.Is(err, ErrUnsupportedDialect) ||
-		errors.Is(err, ErrDialectCompilation) ||
-		errors.Is(err, ErrTemplateTooLarge) ||
-		errors.Is(err, ErrNestingTooDeep)
-}
-
-func IsConflictError(err error) bool {
-	return errors.Is(err, ErrPromptAlreadyExists) ||
-		errors.Is(err, ErrLabelAlreadyExists)
-}
-
-func IsForbiddenError(err error) bool {
-	return errors.Is(err, ErrLabelProtected) ||
-		errors.Is(err, ErrLatestLabelReserved) ||
-		errors.Is(err, ErrVersionImmutable)
 }

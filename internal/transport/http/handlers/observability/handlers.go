@@ -7,7 +7,7 @@
 //   - SDK plane (RequireSDKAuth) — span query + filter validation.
 //     See sdk.go.
 //   - OTLP ingestion (/v1/traces, /v1/logs, /v1/metrics) — plain chi
-//     handlers unaware of the chi↔Huma migration. See otlp.go.
+//     handlers that accept raw protobuf bodies. See otlp.go.
 package observability
 
 import (
@@ -15,7 +15,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"brokle/internal/core/domain/observability"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/streams"
 )
@@ -42,7 +41,7 @@ type otlpHandler struct {
 // OTLPDeps bundles all services required by the OTLP ingestion endpoints.
 type OTLPDeps struct {
 	StreamProducer       *streams.TelemetryStreamProducer
-	DeduplicationService observability.TelemetryDeduplicationService
+	DeduplicationService *obsServices.TelemetryDeduplicationService
 	OTLPConverter        *obsServices.OTLPConverterService
 	LogsConverter        *obsServices.OTLPLogsConverterService
 	EventsConverter      *obsServices.OTLPEventsConverterService
@@ -83,10 +82,10 @@ func RegisterSDKRoutes(
 	registerSDKOps(r, h)
 }
 
-// RegisterOTLPChiRoutes mounts the three OTLP HTTP ingestion endpoints
+// RegisterOTLPRoutes mounts the three OTLP HTTP ingestion endpoints
 // as plain chi handlers. The caller is responsible for applying
 // RequireSDKAuth and rate-limit middleware on the surrounding chi group.
-func RegisterOTLPChiRoutes(r chi.Router, deps OTLPDeps) {
+func RegisterOTLPRoutes(r chi.Router, deps OTLPDeps) {
 	h := &otlpHandler{deps: deps}
 	registerOTLPOps(r, h)
 }

@@ -48,11 +48,14 @@ import (
 //     clients (NAT, CGNAT, BFF/SSR pods, serverless) collapse all
 //     users into one IP bucket and cross-throttle. Concretely:
 //
-//     * sdkPublic  — LimitByIP + LimitByKeyPrefix  (validate-key;
-//                    IP for flood defence, key-prefix for brute force)
-//     * sdkAuth    — LimitByAPIKey only            (authed SDK)
-//     * dashPublic — LimitByIP only                (login, signup, OAuth, etc.)
-//     * dashAuth   — LimitByUser only              (authed dashboard)
+//   - sdkPublic  — LimitByIP + LimitByKeyPrefix  (validate-key;
+//     IP for flood defence, key-prefix for brute force)
+//
+//   - sdkAuth    — LimitByAPIKey only            (authed SDK)
+//
+//   - dashPublic — LimitByIP only                (login, signup, OAuth, etc.)
+//
+//   - dashAuth   — LimitByUser only              (authed dashboard)
 //
 // Plane layout:
 //
@@ -74,6 +77,13 @@ import (
 //	            credentials, project, dashboard, annotation, billing,
 //	            organization, prompt, rbac, playground,
 //	            observability, evaluation
+//
+// Auth spans both posture groups because /api/v1/auth/* has public
+// endpoints (login, signup) and protected endpoints (me, logout)
+// under one prefix. The two Register functions register concrete
+// paths (r.Post / r.Get), not an r.Route subtree, so they coexist on
+// the shared routing tree without chi Mount collision. See CLAUDE.md
+// Transport gotcha #35 and the 2026-04-24 Lessons Learned entry.
 //
 // NEVER call r.Use(...) on the top-level chi.Mux here — that belongs
 // in installGlobalMiddleware; chi panics if mux-level middleware is
@@ -97,7 +107,7 @@ func addRoutes(r chi.Router, d Deps) {
 		r.Use(middleware.LimitByAPIKey(rateLimitD))
 
 		// OTLP protobuf ingestion.
-		observabilityHandler.RegisterOTLPChiRoutes(r, observabilityHandler.OTLPDeps{
+		observabilityHandler.RegisterOTLPRoutes(r, observabilityHandler.OTLPDeps{
 			StreamProducer:       d.Observability.StreamProducer,
 			DeduplicationService: d.Observability.DeduplicationService,
 			OTLPConverter:        d.Observability.OTLPConverterService,
@@ -126,15 +136,9 @@ func addRoutes(r chi.Router, d Deps) {
 	// token refresh, website contact form.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.LimitByIP(rateLimitD))
-		authHandler.RegisterPublicRoutes(r, authHandler.PublicDeps{
-			Auth:          d.Auth,
-			User:          d.User,
-			Registration:  d.Registration,
-			Session:       d.Session,
-			OAuthProvider: d.OAuthProvider,
-			Config:        d.Config,
-			Logger:        d.Logger,
-		})
+		authHandler.RegisterPublicRoutes(r,
+			d.Auth, d.User, d.Registration, d.Session,
+			d.OAuthProvider, d.Config, d.Logger)
 		websiteHandler.RegisterRoutes(r, d.Website, d.Logger)
 	})
 
@@ -143,16 +147,9 @@ func addRoutes(r chi.Router, d Deps) {
 		r.Use(middleware.RequireAuth(d.authMiddlewareDeps()))
 		r.Use(middleware.LimitByUser(rateLimitD))
 
-		authHandler.RegisterProtectedRoutes(r, authHandler.ProtectedDeps{
-			Auth:          d.Auth,
-			User:          d.User,
-			Profile:       d.Profile,
-			Registration:  d.Registration,
-			Session:       d.Session,
-			OAuthProvider: d.OAuthProvider,
-			Config:        d.Config,
-			Logger:        d.Logger,
-		})
+		authHandler.RegisterProtectedRoutes(r,
+			d.Auth, d.User, d.Profile, d.Registration, d.Session,
+			d.OAuthProvider, d.Config, d.Logger)
 
 		userHandler.RegisterRoutes(r, d.User, d.Profile, d.Organization, d.Logger)
 		apikeyHandler.RegisterRoutes(r, d.APIKey, d.Logger)

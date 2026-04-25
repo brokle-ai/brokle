@@ -1,3 +1,4 @@
+// Package uid provides UUIDv7 generation and timestamp-extraction helpers.
 package uid
 
 import (

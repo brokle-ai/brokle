@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	commentDomain "brokle/internal/core/domain/comment"
+	commentService "brokle/internal/core/services/comment"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -19,13 +20,13 @@ import (
 )
 
 type handler struct {
-	svc    commentDomain.Service
+	svc    *commentService.CommentService
 	logger *slog.Logger
 }
 
 // RegisterRoutes mounts the comment routes on r. Expected mount
 // context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, svc commentDomain.Service, logger *slog.Logger) {
+func RegisterRoutes(r chi.Router, svc *commentService.CommentService, logger *slog.Logger) {
 	h := &handler{svc: svc, logger: logger}
 
 	r.Route("/api/v1/traces/{id}/comments", func(r chi.Router) {

@@ -5,9 +5,9 @@ import (
 
 	"brokle/internal/config"
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	"brokle/internal/core/services/registration"
+	userService "brokle/internal/core/services/user"
 )
 
 // handler bundles every service a dashboard-plane auth operation needs.
@@ -15,40 +15,14 @@ import (
 // RegisterProtectedRoutes. SDK-plane operations have their own lighter-
 // weight sdkHandler.
 type handler struct {
-	authSvc       authDomain.AuthService
-	userSvc       user.UserService
-	profileSvc    user.ProfileService
-	regSvc        registration.RegistrationService
-	sessionSvc    authDomain.SessionService
+	authSvc       *authService.AuthService
+	userSvc       *userService.UserService
+	profileSvc    *userService.ProfileService
+	regSvc        *registration.RegistrationService
+	sessionSvc    *authService.SessionService
 	oauthProvider *authService.OAuthProviderService
 	cfg           *config.Config
 	logger        *slog.Logger
-}
-
-// PublicDeps bundles every dependency the public dashboard auth
-// operations need.
-type PublicDeps struct {
-	Auth          authDomain.AuthService
-	User          user.UserService
-	Registration  registration.RegistrationService
-	Session       authDomain.SessionService
-	OAuthProvider *authService.OAuthProviderService
-	Config        *config.Config
-	Logger        *slog.Logger
-}
-
-// ProtectedDeps mirrors PublicDeps for the authenticated routes.
-// Carries the profile service in addition to the common set; public
-// operations never touch profile data.
-type ProtectedDeps struct {
-	Auth          authDomain.AuthService
-	User          user.UserService
-	Profile       user.ProfileService
-	Registration  registration.RegistrationService
-	Session       authDomain.SessionService
-	OAuthProvider *authService.OAuthProviderService
-	Config        *config.Config
-	Logger        *slog.Logger
 }
 
 // sdkHandler is a lightweight handler bundling only what SDK-plane
@@ -56,7 +30,7 @@ type ProtectedDeps struct {
 // dashboard-plane `handler` so we don't pollute the SDK surface with
 // services it shouldn't be able to reach.
 type sdkHandler struct {
-	apiKeySvc authDomain.APIKeyService
+	apiKeySvc *authService.APIKeyService
 	logger    *slog.Logger
 }
 

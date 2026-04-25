@@ -1,3 +1,4 @@
+// Package realtime provides realtime pub/sub helpers for streaming events.
 package realtime
 
 import (

@@ -3,12 +3,11 @@
 // The dispatcher's job is to route /livez, /readyz, /healthz, and
 // /metrics to raw handlers so they bypass chi and its global
 // middleware stack (RequestLogger + Metrics + …). Getting this wrong
-// once caused a chi "all middlewares must be defined before routes
-// on a mux" panic at boot and — more subtly — a silent latent bug
-// where Huma meta routes also bypassed middleware. These tests guard
-// the invariants at a wire level: they exercise the dispatcher +
-// chi + middleware composition exactly as production does, just
-// without the service-layer dependencies.
+// once caused a chi "all middlewares must be defined before routes on
+// a mux" panic at boot. These tests guard the invariants at a wire
+// level: they exercise the dispatcher + chi + middleware composition
+// exactly as production does, just without the service-layer
+// dependencies.
 package server
 
 import (

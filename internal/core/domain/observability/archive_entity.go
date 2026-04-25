@@ -1,3 +1,4 @@
+// Package observability contains the observability domain: traces, spans, scores, metrics, logs, OTLP types, and archive entities.
 package observability
 
 import "time"

@@ -109,7 +109,7 @@ func (r *permissionRepository) GetAll(ctx context.Context) ([]*authDomain.Permis
 	return permissionsFromRows(rows), nil
 }
 
-// GetAllPermissions is a legacy alias kept for the domain interface.
+// GetAllPermissions returns all permissions without pagination (used by seeder and scope resolution).
 func (r *permissionRepository) GetAllPermissions(ctx context.Context) ([]*authDomain.Permission, error) {
 	return r.GetAll(ctx)
 }

@@ -5,8 +5,8 @@ import (
 )
 
 // Dataset request body DTOs shared across dashboard and SDK planes.
-// Huma operation Input/Output wrappers stay colocated with their handler
-// methods in dataset.go — they are the operation signature.
+// Per-route input/output structs stay colocated with their handler
+// methods in dataset.go — they document the route's wire contract.
 
 type CreateDatasetRequest struct {
 	Name        string         `json:"name" minLength:"1" maxLength:"255"`
@@ -32,10 +32,10 @@ type ImportFromJSONRequest struct {
 }
 
 type ImportFromCSVRequest struct {
-	Content       string             `json:"content"`
-	ColumnMapping csvColumnMapping   `json:"column_mapping"`
-	HasHeader     bool               `json:"has_header"`
-	Deduplicate   bool               `json:"deduplicate"`
+	Content       string           `json:"content"`
+	ColumnMapping csvColumnMapping `json:"column_mapping"`
+	HasHeader     bool             `json:"has_header"`
+	Deduplicate   bool             `json:"deduplicate"`
 }
 
 type csvColumnMapping struct {

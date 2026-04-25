@@ -660,7 +660,7 @@ func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	}
 
 	// Get all roles and delete them
-	roles, err := s.roleRepo.GetAllRoles(ctx)
+	roles, err := s.roleRepo.ListRoles(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list roles for reset: %w", err)
 	}
@@ -731,7 +731,7 @@ func (s *Seeder) resetPricing(ctx context.Context, verbose bool) error {
 }
 
 func (s *Seeder) GetRBACStatistics(ctx context.Context) (*RBACStatistics, error) {
-	allRoles, err := s.roleRepo.GetAllRoles(ctx)
+	allRoles, err := s.roleRepo.ListRoles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all roles: %w", err)
 	}

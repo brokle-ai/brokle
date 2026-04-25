@@ -1,3 +1,4 @@
+// Package billing contains the billing domain: plans, budgets, contracts, and usage records.
 package billing
 
 import (
@@ -26,29 +27,29 @@ type PaymentMethod struct {
 }
 
 type Invoice struct {
-	DueDate          time.Time              `json:"due_date"`
-	UpdatedAt        time.Time              `json:"updated_at"`
-	CreatedAt        time.Time              `json:"created_at"`
-	PeriodStart      time.Time              `json:"period_start"`
-	PeriodEnd        time.Time              `json:"period_end"`
-	IssueDate        time.Time              `json:"issue_date"`
-	PaidAt           *time.Time             `json:"paid_at,omitempty"`
-	BillingAddress   *BillingAddress        `json:"billing_address"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
-	Currency         string                 `json:"currency"`
-	Period           string                 `json:"period"`
-	InvoiceNumber    string                 `json:"invoice_number"`
-	OrganizationName string                 `json:"organization_name"`
-	Notes            string                 `json:"notes,omitempty"`
-	PaymentTerms     string                 `json:"payment_terms"`
-	Status           InvoiceStatus          `json:"status"`
-	LineItems        []InvoiceLineItem      `json:"line_items"`
-	TotalAmount      decimal.Decimal        `json:"total_amount"`
-	DiscountAmount   decimal.Decimal        `json:"discount_amount"`
-	TaxAmount        decimal.Decimal        `json:"tax_amount"`
-	Subtotal         decimal.Decimal        `json:"subtotal"`
-	ID               uuid.UUID              `json:"id"`
-	OrganizationID   uuid.UUID              `json:"organization_id"`
+	DueDate          time.Time         `json:"due_date"`
+	UpdatedAt        time.Time         `json:"updated_at"`
+	CreatedAt        time.Time         `json:"created_at"`
+	PeriodStart      time.Time         `json:"period_start"`
+	PeriodEnd        time.Time         `json:"period_end"`
+	IssueDate        time.Time         `json:"issue_date"`
+	PaidAt           *time.Time        `json:"paid_at,omitempty"`
+	BillingAddress   *BillingAddress   `json:"billing_address"`
+	Metadata         map[string]any    `json:"metadata,omitempty"`
+	Currency         string            `json:"currency"`
+	Period           string            `json:"period"`
+	InvoiceNumber    string            `json:"invoice_number"`
+	OrganizationName string            `json:"organization_name"`
+	Notes            string            `json:"notes,omitempty"`
+	PaymentTerms     string            `json:"payment_terms"`
+	Status           InvoiceStatus     `json:"status"`
+	LineItems        []InvoiceLineItem `json:"line_items"`
+	TotalAmount      decimal.Decimal   `json:"total_amount"`
+	DiscountAmount   decimal.Decimal   `json:"discount_amount"`
+	TaxAmount        decimal.Decimal   `json:"tax_amount"`
+	Subtotal         decimal.Decimal   `json:"subtotal"`
+	ID               uuid.UUID         `json:"id"`
+	OrganizationID   uuid.UUID         `json:"organization_id"`
 }
 
 type InvoiceStatus string
@@ -124,15 +125,15 @@ const (
 )
 
 type DiscountCondition struct {
-	MinUsage          *UsageThreshold `json:"min_usage,omitempty"`
-	TimeOfDay         *BillingTimeRange      `json:"time_of_day,omitempty"`
-	VolumeThreshold   *VolumeDiscount `json:"volume_threshold,omitempty"`
-	BillingTiers      []string        `json:"billing_tiers,omitempty"`
-	RequestTypes      []string        `json:"request_types,omitempty"`
-	Providers         []uuid.UUID     `json:"providers,omitempty"`
-	Models            []uuid.UUID     `json:"models,omitempty"`
-	DaysOfWeek        []time.Weekday  `json:"days_of_week,omitempty"`
-	FirstTimeCustomer bool            `json:"first_time_customer"`
+	MinUsage          *UsageThreshold   `json:"min_usage,omitempty"`
+	TimeOfDay         *BillingTimeRange `json:"time_of_day,omitempty"`
+	VolumeThreshold   *VolumeDiscount   `json:"volume_threshold,omitempty"`
+	BillingTiers      []string          `json:"billing_tiers,omitempty"`
+	RequestTypes      []string          `json:"request_types,omitempty"`
+	Providers         []uuid.UUID       `json:"providers,omitempty"`
+	Models            []uuid.UUID       `json:"models,omitempty"`
+	DaysOfWeek        []time.Weekday    `json:"days_of_week,omitempty"`
+	FirstTimeCustomer bool              `json:"first_time_customer"`
 }
 
 type UsageThreshold struct {
@@ -157,43 +158,42 @@ type VolumeTier struct {
 
 // BillingRecord represents a billing record (moved from deleted analytics worker)
 type BillingRecord struct {
-	UpdatedAt      time.Time              `json:"updated_at"`
-	CreatedAt      time.Time              `json:"created_at"`
-	Metadata       map[string]any `json:"metadata"`
-	TransactionID  *string                `json:"transaction_id,omitempty"`
-	PaymentMethod  *string                `json:"payment_method,omitempty"`
-	ProcessedAt    *time.Time             `json:"processed_at,omitempty"`
-	Period         string                 `json:"period"`
-	Currency       string                 `json:"currency"`
-	Status         string                 `json:"status"`
-	Amount         decimal.Decimal        `json:"amount"`
-	NetCost        decimal.Decimal        `json:"net_cost"`
-	ID             uuid.UUID              `json:"id"`
-	OrganizationID uuid.UUID              `json:"organization_id"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	CreatedAt      time.Time       `json:"created_at"`
+	Metadata       map[string]any  `json:"metadata"`
+	TransactionID  *string         `json:"transaction_id,omitempty"`
+	PaymentMethod  *string         `json:"payment_method,omitempty"`
+	ProcessedAt    *time.Time      `json:"processed_at,omitempty"`
+	Period         string          `json:"period"`
+	Currency       string          `json:"currency"`
+	Status         string          `json:"status"`
+	Amount         decimal.Decimal `json:"amount"`
+	NetCost        decimal.Decimal `json:"net_cost"`
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
 }
 
 // BillingSummary represents aggregated billing data (moved from deleted analytics worker)
 type BillingSummary struct {
-	PeriodStart       time.Time              `json:"period_start"`
-	PeriodEnd         time.Time              `json:"period_end"`
-	CreatedAt         time.Time              `json:"created_at"`
-	GeneratedAt       time.Time              `json:"generated_at"`
-	ModelBreakdown    map[string]any `json:"model_breakdown"`
-	ProviderBreakdown map[string]any `json:"provider_breakdown"`
-	Currency          string                 `json:"currency"`
-	Period            string                 `json:"period"`
-	Status            string                 `json:"status"`
-	TotalAmount       decimal.Decimal        `json:"total_amount"`
-	Discounts         decimal.Decimal        `json:"discounts"`
-	NetCost           decimal.Decimal        `json:"net_cost"`
-	RecordCount       int                    `json:"record_count"`
-	TotalCost         decimal.Decimal        `json:"total_cost"`
-	TotalTokens       int                    `json:"total_tokens"`
-	TotalRequests     int                    `json:"total_requests"`
-	ID                uuid.UUID              `json:"id"`
-	OrganizationID    uuid.UUID              `json:"organization_id"`
+	PeriodStart       time.Time       `json:"period_start"`
+	PeriodEnd         time.Time       `json:"period_end"`
+	CreatedAt         time.Time       `json:"created_at"`
+	GeneratedAt       time.Time       `json:"generated_at"`
+	ModelBreakdown    map[string]any  `json:"model_breakdown"`
+	ProviderBreakdown map[string]any  `json:"provider_breakdown"`
+	Currency          string          `json:"currency"`
+	Period            string          `json:"period"`
+	Status            string          `json:"status"`
+	TotalAmount       decimal.Decimal `json:"total_amount"`
+	Discounts         decimal.Decimal `json:"discounts"`
+	NetCost           decimal.Decimal `json:"net_cost"`
+	RecordCount       int             `json:"record_count"`
+	TotalCost         decimal.Decimal `json:"total_cost"`
+	TotalTokens       int             `json:"total_tokens"`
+	TotalRequests     int             `json:"total_requests"`
+	ID                uuid.UUID       `json:"id"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
 }
-
 
 // Usage-Based Billing Entities
 
@@ -375,7 +375,7 @@ type Contract struct {
 
 	// Timestamps (full precision, no normalization)
 	// Access rule: contract is active when now < EndDate
-	StartDate time.Time  `json:"start_date"`       // Contract start timestamp (e.g., 2026-01-08T10:15:00Z)
+	StartDate time.Time  `json:"start_date"`         // Contract start timestamp (e.g., 2026-01-08T10:15:00Z)
 	EndDate   *time.Time `json:"end_date,omitempty"` // Contract expiry timestamp (null = no expiration)
 
 	// Financial terms
@@ -446,7 +446,6 @@ type ContractHistory struct {
 	Changes        json.RawMessage `json:"changes" swaggertype:"object"`
 	Reason         *string         `json:"reason,omitempty"` // nullable TEXT
 }
-
 
 // EffectivePricing represents resolved pricing (contract overrides plan)
 type EffectivePricing struct {

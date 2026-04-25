@@ -15,15 +15,15 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type ItemRepository struct {
+type itemRepository struct {
 	tm *db.TxManager
 }
 
-func NewItemRepository(tm *db.TxManager) *ItemRepository {
-	return &ItemRepository{tm: tm}
+func NewItemRepository(tm *db.TxManager) annotationDomain.ItemRepository {
+	return &itemRepository{tm: tm}
 }
 
-func (r *ItemRepository) Create(ctx context.Context, item *annotationDomain.QueueItem) error {
+func (r *itemRepository) Create(ctx context.Context, item *annotationDomain.QueueItem) error {
 	meta, err := marshalItemMetadata(item.Metadata)
 	if err != nil {
 		return err
@@ -52,7 +52,7 @@ func (r *ItemRepository) Create(ctx context.Context, item *annotationDomain.Queu
 // CreateBatch inserts many items in one round-trip using parallel UNNEST arrays.
 // ON CONFLICT (queue_id, object_id, object_type) DO NOTHING makes this
 // idempotent; the returned count reflects actual insertions.
-func (r *ItemRepository) CreateBatch(ctx context.Context, items []*annotationDomain.QueueItem) (int64, error) {
+func (r *itemRepository) CreateBatch(ctx context.Context, items []*annotationDomain.QueueItem) (int64, error) {
 	if len(items) == 0 {
 		return 0, nil
 	}
@@ -95,7 +95,7 @@ func (r *ItemRepository) CreateBatch(ctx context.Context, items []*annotationDom
 	return n, nil
 }
 
-func (r *ItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*annotationDomain.QueueItem, error) {
+func (r *itemRepository) GetByID(ctx context.Context, id uuid.UUID) (*annotationDomain.QueueItem, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueItemByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -106,7 +106,7 @@ func (r *ItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*annotation
 	return itemFromRow(&row)
 }
 
-func (r *ItemRepository) GetByIDForQueue(ctx context.Context, id, queueID uuid.UUID) (*annotationDomain.QueueItem, error) {
+func (r *itemRepository) GetByIDForQueue(ctx context.Context, id, queueID uuid.UUID) (*annotationDomain.QueueItem, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueItemByIDForQueue(ctx, gen.GetAnnotationQueueItemByIDForQueueParams{
 		ID:      id,
 		QueueID: queueID,
@@ -120,7 +120,7 @@ func (r *ItemRepository) GetByIDForQueue(ctx context.Context, id, queueID uuid.U
 	return itemFromRow(&row)
 }
 
-func (r *ItemRepository) List(ctx context.Context, queueID uuid.UUID, filter *annotationDomain.ItemFilter) ([]*annotationDomain.QueueItem, int64, error) {
+func (r *itemRepository) List(ctx context.Context, queueID uuid.UUID, filter *annotationDomain.ItemFilter) ([]*annotationDomain.QueueItem, int64, error) {
 	base := sq.Select().From("annotation_queue_items").Where(sq.Eq{"queue_id": queueID})
 	if filter != nil && filter.Status != nil {
 		base = base.Where(sq.Eq{"status": string(*filter.Status)})
@@ -164,7 +164,7 @@ func (r *ItemRepository) List(ctx context.Context, queueID uuid.UUID, filter *an
 	return out, total, rows.Err()
 }
 
-func (r *ItemRepository) Update(ctx context.Context, item *annotationDomain.QueueItem) error {
+func (r *itemRepository) Update(ctx context.Context, item *annotationDomain.QueueItem) error {
 	item.UpdatedAt = time.Now()
 	meta, err := marshalItemMetadata(item.Metadata)
 	if err != nil {
@@ -189,7 +189,7 @@ func (r *ItemRepository) Update(ctx context.Context, item *annotationDomain.Queu
 	return nil
 }
 
-func (r *ItemRepository) Delete(ctx context.Context, id, queueID uuid.UUID) error {
+func (r *itemRepository) Delete(ctx context.Context, id, queueID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteAnnotationQueueItem(ctx, gen.DeleteAnnotationQueueItemParams{
 		ID:      id,
 		QueueID: queueID,
@@ -203,7 +203,7 @@ func (r *ItemRepository) Delete(ctx context.Context, id, queueID uuid.UUID) erro
 	return nil
 }
 
-func (r *ItemRepository) ExistsByObject(ctx context.Context, queueID uuid.UUID, objectID string, objectType annotationDomain.ObjectType) (bool, error) {
+func (r *itemRepository) ExistsByObject(ctx context.Context, queueID uuid.UUID, objectID string, objectType annotationDomain.ObjectType) (bool, error) {
 	return r.tm.Queries(ctx).AnnotationQueueItemExistsByObject(ctx, gen.AnnotationQueueItemExistsByObjectParams{
 		QueueID:    queueID,
 		ObjectID:   objectID,
@@ -215,7 +215,7 @@ func (r *ItemRepository) ExistsByObject(ctx context.Context, queueID uuid.UUID, 
 // SELECT ... FOR UPDATE SKIP LOCKED + UPDATE. Eligibility: pending AND
 // (never locked OR lock expired OR locked by same user). Kept as raw
 // SQL because sqlc cannot express FOR UPDATE SKIP LOCKED typed params.
-func (r *ItemRepository) FetchAndLockNext(ctx context.Context, queueID, userID uuid.UUID, lockTimeout int, seenItemIDs []uuid.UUID) (*annotationDomain.QueueItem, error) {
+func (r *itemRepository) FetchAndLockNext(ctx context.Context, queueID, userID uuid.UUID, lockTimeout int, seenItemIDs []uuid.UUID) (*annotationDomain.QueueItem, error) {
 	now := time.Now()
 	lockExpiry := now.Add(-time.Duration(lockTimeout) * time.Second)
 
@@ -259,7 +259,7 @@ func (r *ItemRepository) FetchAndLockNext(ctx context.Context, queueID, userID u
 	return item, nil
 }
 
-func (r *ItemRepository) Complete(ctx context.Context, id, userID uuid.UUID) error {
+func (r *itemRepository) Complete(ctx context.Context, id, userID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).CompleteAnnotationQueueItem(ctx, gen.CompleteAnnotationQueueItemParams{
 		ID:              id,
 		AnnotatorUserID: &userID,
@@ -273,7 +273,7 @@ func (r *ItemRepository) Complete(ctx context.Context, id, userID uuid.UUID) err
 	return nil
 }
 
-func (r *ItemRepository) Skip(ctx context.Context, id, userID uuid.UUID) error {
+func (r *itemRepository) Skip(ctx context.Context, id, userID uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).SkipAnnotationQueueItem(ctx, gen.SkipAnnotationQueueItemParams{
 		ID:              id,
 		AnnotatorUserID: &userID,
@@ -287,7 +287,7 @@ func (r *ItemRepository) Skip(ctx context.Context, id, userID uuid.UUID) error {
 	return nil
 }
 
-func (r *ItemRepository) ReleaseLock(ctx context.Context, id uuid.UUID) error {
+func (r *itemRepository) ReleaseLock(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).ReleaseAnnotationQueueItemLock(ctx, id)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func (r *ItemRepository) ReleaseLock(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *ItemRepository) ReleaseExpiredLocks(ctx context.Context, queueID uuid.UUID, lockTimeout int) (int64, error) {
+func (r *itemRepository) ReleaseExpiredLocks(ctx context.Context, queueID uuid.UUID, lockTimeout int) (int64, error) {
 	lockExpiry := time.Now().Add(-time.Duration(lockTimeout) * time.Second)
 	return r.tm.Queries(ctx).ReleaseExpiredAnnotationQueueLocks(ctx, gen.ReleaseExpiredAnnotationQueueLocksParams{
 		QueueID:  queueID,
@@ -306,7 +306,7 @@ func (r *ItemRepository) ReleaseExpiredLocks(ctx context.Context, queueID uuid.U
 	})
 }
 
-func (r *ItemRepository) GetStats(ctx context.Context, queueID uuid.UUID, lockTimeout int) (*annotationDomain.QueueStats, error) {
+func (r *itemRepository) GetStats(ctx context.Context, queueID uuid.UUID, lockTimeout int) (*annotationDomain.QueueStats, error) {
 	stats := &annotationDomain.QueueStats{}
 	statusRows, err := r.tm.Queries(ctx).CountAnnotationQueueItemsByStatus(ctx, queueID)
 	if err != nil {

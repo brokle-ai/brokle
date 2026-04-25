@@ -21,9 +21,9 @@ import (
 //
 // Handler architecture (outer → inner):
 //
-//   handler (http.ServeMux: /livez, /readyz, /healthz, /metrics, /*)
-//     └── catch-all /* → mux (chi.Mux: global middleware stack)
-//                         └── per-group sub-stacks (auth, CORS, CSRF, …)
+//	handler (http.ServeMux: /livez, /readyz, /healthz, /metrics, /*)
+//	  └── catch-all /* → mux (chi.Mux: global middleware stack)
+//	                      └── per-group sub-stacks (auth, CORS, CSRF, …)
 //
 // The outer dispatcher is what http.Server.Handler points at; chi
 // never sees ops-plane traffic.
@@ -176,4 +176,3 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // listener; the dispatcher is the realistic surface a live client
 // would hit, including the probe-bypass routing.
 func (s *Server) Handler() http.Handler { return s.handler }
-

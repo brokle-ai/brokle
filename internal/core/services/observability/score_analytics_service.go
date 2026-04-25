@@ -1,9 +1,10 @@
 package observability
 
 import (
-	"github.com/google/uuid"
 	"context"
 	"log/slog"
+
+	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
@@ -15,11 +16,17 @@ var validIntervals = map[string]bool{
 	"week": true,
 }
 
+// Compile-time proof that *ScoreAnalyticsService satisfies the domain
+// contract. Catches interface drift at compile, not at runtime.
+
 type ScoreAnalyticsService struct {
 	analyticsRepo observability.ScoreAnalyticsRepository
 	logger        *slog.Logger
 }
 
+// NewScoreAnalyticsService returns an *ScoreAnalyticsService.
+// Returning the domain interface (not the concrete *ScoreAnalyticsService)
+// keeps the handler layer dependent on the contract, not the impl.
 func NewScoreAnalyticsService(analyticsRepo observability.ScoreAnalyticsRepository, logger *slog.Logger) *ScoreAnalyticsService {
 	return &ScoreAnalyticsService{
 		analyticsRepo: analyticsRepo,
@@ -46,21 +53,21 @@ func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observ
 
 	stats, err := s.analyticsRepo.GetStatistics(ctx, filter)
 	if err != nil {
-		s.logger.Error("GetStatistics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
+		s.logger.Error("getStatistics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
 		return nil, appErrors.NewInternalError("failed to get score statistics", err)
 	}
 	response.Statistics = stats
 
 	timeSeries, err := s.analyticsRepo.GetTimeSeries(ctx, filter)
 	if err != nil {
-		s.logger.Error("GetTimeSeries failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
+		s.logger.Error("getTimeSeries failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
 		return nil, appErrors.NewInternalError("failed to get score time series", err)
 	}
 	response.TimeSeries = timeSeries
 
 	distribution, err := s.analyticsRepo.GetDistribution(ctx, filter, 10)
 	if err != nil {
-		s.logger.Error("GetDistribution failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
+		s.logger.Error("getDistribution failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
 		return nil, appErrors.NewInternalError("failed to get score distribution", err)
 	}
 	response.Distribution = distribution
@@ -68,14 +75,14 @@ func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observ
 	if filter.CompareScoreName != nil && *filter.CompareScoreName != "" {
 		heatmap, err := s.analyticsRepo.GetHeatmap(ctx, filter, 10)
 		if err != nil {
-			s.logger.Error("GetHeatmap failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
+			s.logger.Error("getHeatmap failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
 			return nil, appErrors.NewInternalError("failed to get score heatmap", err)
 		}
 		response.Heatmap = heatmap
 
 		comparison, err := s.analyticsRepo.GetComparisonMetrics(ctx, filter)
 		if err != nil {
-			s.logger.Error("GetComparisonMetrics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
+			s.logger.Error("getComparisonMetrics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
 			return nil, appErrors.NewInternalError("failed to get score comparison metrics", err)
 		}
 		response.Comparison = comparison

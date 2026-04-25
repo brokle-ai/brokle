@@ -1,3 +1,4 @@
+// Package pointers provides pointer conversion helpers for optional fields.
 package pointers
 
 import "github.com/shopspring/decimal"

@@ -14,7 +14,7 @@ import (
 	"brokle/pkg/units"
 )
 
-type pricingService struct {
+type PricingService struct {
 	billingRepo  billing.OrganizationBillingRepository
 	planRepo     billing.PlanRepository
 	contractRepo billing.ContractRepository
@@ -28,8 +28,8 @@ func NewPricingService(
 	contractRepo billing.ContractRepository,
 	tierRepo billing.VolumeDiscountTierRepository,
 	logger *slog.Logger,
-) billing.PricingService {
-	return &pricingService{
+) *PricingService {
+	return &PricingService{
 		billingRepo:  billingRepo,
 		planRepo:     planRepo,
 		contractRepo: contractRepo,
@@ -39,7 +39,7 @@ func NewPricingService(
 }
 
 // GetEffectivePricing resolves pricing: contract overrides > plan defaults
-func (s *pricingService) GetEffectivePricing(ctx context.Context, orgID uuid.UUID) (*billing.EffectivePricing, error) {
+func (s *PricingService) GetEffectivePricing(ctx context.Context, orgID uuid.UUID) (*billing.EffectivePricing, error) {
 	// Get organization's billing state
 	orgBilling, err := s.billingRepo.GetByOrgID(ctx, orgID)
 	if err != nil {
@@ -51,7 +51,7 @@ func (s *pricingService) GetEffectivePricing(ctx context.Context, orgID uuid.UUI
 
 // GetEffectivePricingWithBilling resolves pricing using pre-fetched orgBilling
 // Use this when orgBilling is already available to avoid redundant DB query
-func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, orgID uuid.UUID, orgBilling *billing.OrganizationBilling) (*billing.EffectivePricing, error) {
+func (s *PricingService) GetEffectivePricingWithBilling(ctx context.Context, orgID uuid.UUID, orgBilling *billing.OrganizationBilling) (*billing.EffectivePricing, error) {
 	// 1. Get organization's base plan
 	plan, err := s.planRepo.GetByID(ctx, orgBilling.PlanID)
 	if err != nil {
@@ -104,7 +104,7 @@ func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, org
 }
 
 // CalculateCostWithTiers calculates cost with volume tier support
-func (s *pricingService) CalculateCostWithTiers(ctx context.Context, orgID uuid.UUID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
+func (s *PricingService) CalculateCostWithTiers(ctx context.Context, orgID uuid.UUID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
 	effective, err := s.GetEffectivePricing(ctx, orgID)
 	if err != nil {
 		return decimal.Zero, err
@@ -119,7 +119,7 @@ func (s *pricingService) CalculateCostWithTiers(ctx context.Context, orgID uuid.
 
 // CalculateCostWithTiersNoFreeTier calculates cost with tier support but without free tier deductions
 // Used for project-level budgets where free tier is org-level only
-func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID uuid.UUID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
+func (s *PricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID uuid.UUID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
 	effective, err := s.GetEffectivePricing(ctx, orgID)
 	if err != nil {
 		return decimal.Zero, err
@@ -133,7 +133,7 @@ func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, o
 }
 
 // calculateFlat uses simple linear pricing (current implementation)
-func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -157,7 +157,7 @@ func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pric
 }
 
 // calculateWithTiers uses progressive tier pricing
-func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Calculate each dimension
@@ -172,7 +172,7 @@ func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary,
 }
 
 // calculateFlatNoFreeTier uses simple linear pricing without free tier deductions
-func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -192,7 +192,7 @@ func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSum
 }
 
 // calculateWithTiersNoFreeTier uses progressive tier pricing without free tier deductions
-func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Calculate each dimension without free tier
@@ -207,7 +207,7 @@ func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsa
 // The algorithm works in absolute coordinate space: billable range is [freeTier, usage), not [0, billableUsage)
 // This ensures free tier correctly offsets tier boundaries (e.g., free=500 with tier [0-1k] charges usage 500-1k in that tier)
 // Exported for use by workers that need per-dimension cost calculation
-func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dimension billing.TierDimension, allTiers []*billing.VolumeDiscountTier, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) CalculateDimensionWithTiers(usage, freeTier int64, dimension billing.TierDimension, allTiers []*billing.VolumeDiscountTier, pricing *billing.EffectivePricing) decimal.Decimal {
 	// Early exit: all usage covered by free tier
 	if usage <= freeTier {
 		return decimal.Zero
@@ -292,7 +292,7 @@ func getDimensionUnitSize(dimension billing.TierDimension) int64 {
 
 // calculateFlatDimension calculates cost for a single dimension using flat pricing
 // Used as fallback when no volume tiers are defined for a dimension
-func (s *pricingService) calculateFlatDimension(billableUsage int64, dimension billing.TierDimension, pricing *billing.EffectivePricing) decimal.Decimal {
+func (s *PricingService) calculateFlatDimension(billableUsage int64, dimension billing.TierDimension, pricing *billing.EffectivePricing) decimal.Decimal {
 	if billableUsage == 0 {
 		return decimal.Zero
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/analytics"
+	analyticsService "brokle/internal/core/services/analytics"
 	"brokle/internal/transport/http/handlers/shared"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
@@ -16,13 +17,13 @@ import (
 )
 
 type handler struct {
-	svc    analytics.OverviewService
+	svc    *analyticsService.OverviewService
 	logger *slog.Logger
 }
 
 // RegisterRoutes mounts the overview route on r. Expected mount
 // context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, svc analytics.OverviewService, logger *slog.Logger) {
+func RegisterRoutes(r chi.Router, svc *analyticsService.OverviewService, logger *slog.Logger) {
 	h := &handler{svc: svc, logger: logger}
 	r.Get("/api/v1/projects/{projectId}/overview", h.getOverview)
 }

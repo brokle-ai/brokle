@@ -16,7 +16,7 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-type datasetItemService struct {
+type DatasetItemService struct {
 	itemRepo    evaluation.DatasetItemRepository
 	datasetRepo evaluation.DatasetRepository
 	traceRepo   observability.TraceRepository
@@ -28,8 +28,8 @@ func NewDatasetItemService(
 	datasetRepo evaluation.DatasetRepository,
 	traceRepo observability.TraceRepository,
 	logger *slog.Logger,
-) evaluation.DatasetItemService {
-	return &datasetItemService{
+) *DatasetItemService {
+	return &DatasetItemService{
 		itemRepo:    itemRepo,
 		datasetRepo: datasetRepo,
 		traceRepo:   traceRepo,
@@ -37,7 +37,7 @@ func NewDatasetItemService(
 	}
 }
 
-func (s *datasetItemService) Create(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemRequest) (*evaluation.DatasetItem, error) {
+func (s *DatasetItemService) Create(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemRequest) (*evaluation.DatasetItem, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -70,7 +70,7 @@ func (s *datasetItemService) Create(ctx context.Context, datasetID uuid.UUID, pr
 	return item, nil
 }
 
-func (s *datasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsBatchRequest) (int, error) {
+func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsBatchRequest) (int, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return 0, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -158,7 +158,7 @@ func (s *datasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUI
 	return len(items), nil
 }
 
-func (s *datasetItemService) List(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.DatasetItem, int64, error) {
+func (s *DatasetItemService) List(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.DatasetItem, int64, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -173,7 +173,7 @@ func (s *datasetItemService) List(ctx context.Context, datasetID uuid.UUID, proj
 	return items, total, nil
 }
 
-func (s *datasetItemService) Delete(ctx context.Context, id uuid.UUID, datasetID uuid.UUID, projectID uuid.UUID) error {
+func (s *DatasetItemService) Delete(ctx context.Context, id uuid.UUID, datasetID uuid.UUID, projectID uuid.UUID) error {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -197,7 +197,7 @@ func (s *datasetItemService) Delete(ctx context.Context, id uuid.UUID, datasetID
 }
 
 // ImportFromJSON imports dataset items from a JSON array with optional field mapping and deduplication.
-func (s *datasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromJSONRequest) (*evaluation.BulkImportResult, error) {
+func (s *DatasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromJSONRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -292,7 +292,7 @@ func (s *datasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.
 }
 
 // ImportFromCSV imports dataset items from CSV content with column mapping.
-func (s *datasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromCSVRequest) (*evaluation.BulkImportResult, error) {
+func (s *DatasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromCSVRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -474,7 +474,7 @@ func (s *datasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.U
 
 // parseCSVValue attempts to parse a CSV cell value into its appropriate type.
 // Tries JSON parsing first (for objects, arrays, booleans, numbers), falls back to string.
-func (s *datasetItemService) parseCSVValue(value string) any {
+func (s *DatasetItemService) parseCSVValue(value string) any {
 	value = strings.TrimSpace(value)
 
 	var parsed any
@@ -486,7 +486,7 @@ func (s *datasetItemService) parseCSVValue(value string) any {
 }
 
 // CreateFromTraces creates dataset items from existing trace data (OTEL-native import).
-func (s *datasetItemService) CreateFromTraces(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromTracesRequest) (*evaluation.BulkImportResult, error) {
+func (s *DatasetItemService) CreateFromTraces(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromTracesRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -590,7 +590,7 @@ func (s *datasetItemService) CreateFromTraces(ctx context.Context, datasetID uui
 }
 
 // CreateFromSpans creates dataset items from existing span data.
-func (s *datasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromSpansRequest) (*evaluation.BulkImportResult, error) {
+func (s *DatasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromSpansRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -696,7 +696,7 @@ func (s *datasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid
 }
 
 // ExportItems exports all dataset items for a dataset.
-func (s *datasetItemService) ExportItems(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID) ([]*evaluation.DatasetItem, error) {
+func (s *DatasetItemService) ExportItems(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID) ([]*evaluation.DatasetItem, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
 		if errors.Is(err, evaluation.ErrDatasetNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
@@ -734,12 +734,12 @@ type spanData struct {
 }
 
 // computeContentHash computes a SHA256 hash of the input and expected fields for deduplication.
-func (s *datasetItemService) computeContentHash(input, expected map[string]any) string {
+func (s *DatasetItemService) computeContentHash(input, expected map[string]any) string {
 	return ComputeContentHash(input, expected)
 }
 
 // extractFieldsFromRaw extracts input, expected, and metadata fields from a raw JSON item using keys mapping.
-func (s *datasetItemService) extractFieldsFromRaw(raw map[string]any, mapping *evaluation.KeysMapping) (input, expected, metadata map[string]any) {
+func (s *DatasetItemService) extractFieldsFromRaw(raw map[string]any, mapping *evaluation.KeysMapping) (input, expected, metadata map[string]any) {
 	input = make(map[string]any)
 	expected = make(map[string]any)
 	metadata = make(map[string]any)
@@ -802,7 +802,7 @@ func (s *datasetItemService) extractFieldsFromRaw(raw map[string]any, mapping *e
 }
 
 // extractFieldsFromSpan extracts input, expected, and metadata fields from a span using keys mapping.
-func (s *datasetItemService) extractFieldsFromSpan(span *observability.Span, mapping *evaluation.KeysMapping) (input, expected, metadata map[string]any) {
+func (s *DatasetItemService) extractFieldsFromSpan(span *observability.Span, mapping *evaluation.KeysMapping) (input, expected, metadata map[string]any) {
 	input = make(map[string]any)
 	expected = make(map[string]any)
 	metadata = make(map[string]any)

@@ -1,6 +1,6 @@
 // Package clientip resolves the originating client IP for an inbound HTTP
-// request. It replaces gin.Context.ClientIP() in the chi-based handler
-// layer.
+// request, used by RequestMetadata middleware to populate the request
+// context for downstream service-layer audit logging.
 //
 // Resolution order honours the trusted-proxy boundary: header values are
 // trusted only when the immediate transport peer (r.RemoteAddr) sits in

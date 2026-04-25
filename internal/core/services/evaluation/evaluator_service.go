@@ -28,9 +28,9 @@ const (
 	manualTriggerStream = "evaluation:manual-triggers"
 )
 
-type evaluatorService struct {
+type EvaluatorService struct {
 	repo             evaluation.EvaluatorRepository
-	executionService evaluation.EvaluatorExecutionService
+	executions *EvaluatorExecutionService
 	traceRepo        observability.TraceRepository
 	redis            *database.RedisDB
 	logger           *slog.Logger
@@ -38,21 +38,21 @@ type evaluatorService struct {
 
 func NewEvaluatorService(
 	repo evaluation.EvaluatorRepository,
-	executionService evaluation.EvaluatorExecutionService,
+	executions *EvaluatorExecutionService,
 	traceRepo observability.TraceRepository,
 	redis *database.RedisDB,
 	logger *slog.Logger,
-) evaluation.EvaluatorService {
-	return &evaluatorService{
+) *EvaluatorService {
+	return &EvaluatorService{
 		repo:             repo,
-		executionService: executionService,
+		executions: executions,
 		traceRepo:        traceRepo,
 		redis:            redis,
 		logger:           logger,
 	}
 }
 
-func (s *evaluatorService) Create(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *evaluation.CreateEvaluatorRequest) (*evaluation.Evaluator, error) {
+func (s *EvaluatorService) Create(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *evaluation.CreateEvaluatorRequest) (*evaluation.Evaluator, error) {
 	rule := evaluation.NewEvaluator(projectID, req.Name, req.ScorerType, req.ScorerConfig)
 
 	if req.Description != nil {
@@ -114,7 +114,7 @@ func (s *evaluatorService) Create(ctx context.Context, projectID uuid.UUID, user
 	return rule, nil
 }
 
-func (s *evaluatorService) Update(ctx context.Context, id uuid.UUID, projectID uuid.UUID, req *evaluation.UpdateEvaluatorRequest) (*evaluation.Evaluator, error) {
+func (s *EvaluatorService) Update(ctx context.Context, id uuid.UUID, projectID uuid.UUID, req *evaluation.UpdateEvaluatorRequest) (*evaluation.Evaluator, error) {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
@@ -189,7 +189,7 @@ func (s *evaluatorService) Update(ctx context.Context, id uuid.UUID, projectID u
 	return rule, nil
 }
 
-func (s *evaluatorService) Delete(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
+func (s *EvaluatorService) Delete(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
@@ -214,7 +214,7 @@ func (s *evaluatorService) Delete(ctx context.Context, id uuid.UUID, projectID u
 	return nil
 }
 
-func (s *evaluatorService) GetByID(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*evaluation.Evaluator, error) {
+func (s *EvaluatorService) GetByID(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*evaluation.Evaluator, error) {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
@@ -225,7 +225,7 @@ func (s *evaluatorService) GetByID(ctx context.Context, id uuid.UUID, projectID 
 	return rule, nil
 }
 
-func (s *evaluatorService) List(ctx context.Context, projectID uuid.UUID, filter *evaluation.EvaluatorFilter, params pagination.Params) ([]*evaluation.Evaluator, int64, error) {
+func (s *EvaluatorService) List(ctx context.Context, projectID uuid.UUID, filter *evaluation.EvaluatorFilter, params pagination.Params) ([]*evaluation.Evaluator, int64, error) {
 	rules, total, err := s.repo.GetByProjectID(ctx, projectID, filter, params)
 	if err != nil {
 		return nil, 0, appErrors.NewInternalError("failed to list evaluation rules", err)
@@ -233,7 +233,7 @@ func (s *evaluatorService) List(ctx context.Context, projectID uuid.UUID, filter
 	return rules, total, nil
 }
 
-func (s *evaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
+func (s *EvaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
@@ -262,7 +262,7 @@ func (s *evaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID
 	return nil
 }
 
-func (s *evaluatorService) Deactivate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
+func (s *EvaluatorService) Deactivate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
 		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
@@ -291,7 +291,7 @@ func (s *evaluatorService) Deactivate(ctx context.Context, id uuid.UUID, project
 	return nil
 }
 
-func (s *evaluatorService) GetActiveByProjectID(ctx context.Context, projectID uuid.UUID) ([]*evaluation.Evaluator, error) {
+func (s *EvaluatorService) GetActiveByProjectID(ctx context.Context, projectID uuid.UUID) ([]*evaluation.Evaluator, error) {
 	rules, err := s.repo.GetActiveByProjectID(ctx, projectID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get active evaluation rules", err)
@@ -299,7 +299,7 @@ func (s *evaluatorService) GetActiveByProjectID(ctx context.Context, projectID u
 	return rules, nil
 }
 
-func (s *evaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, opts *evaluation.TriggerOptions) (*evaluation.TriggerResponse, error) {
+func (s *EvaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, opts *evaluation.TriggerOptions) (*evaluation.TriggerResponse, error) {
 	// Validate evaluator exists (can trigger inactive evaluators for testing)
 	evaluator, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
@@ -309,7 +309,7 @@ func (s *evaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 		return nil, appErrors.NewInternalError("failed to get evaluator", err)
 	}
 
-	execution, err := s.executionService.StartExecution(ctx, evaluatorID, projectID, evaluation.TriggerTypeManual)
+	execution, err := s.executions.StartExecution(ctx, evaluatorID, projectID, evaluation.TriggerTypeManual)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to create execution record", err)
 	}
@@ -344,7 +344,7 @@ func (s *evaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	msgData, err := json.Marshal(triggerMsg)
 	if err != nil {
 		// Fail the execution since we can't publish
-		_ = s.executionService.FailExecution(ctx, execution.ID, projectID, "failed to serialize trigger message")
+		_ = s.executions.FailExecution(ctx, execution.ID, projectID, "failed to serialize trigger message")
 		return nil, appErrors.NewInternalError("failed to serialize trigger message", err)
 	}
 
@@ -356,7 +356,7 @@ func (s *evaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	}).Result()
 	if err != nil {
 		// Fail the execution since we can't publish
-		_ = s.executionService.FailExecution(ctx, execution.ID, projectID, "failed to queue trigger job")
+		_ = s.executions.FailExecution(ctx, execution.ID, projectID, "failed to queue trigger job")
 		return nil, appErrors.NewInternalError("failed to queue manual trigger job", err)
 	}
 
@@ -374,7 +374,7 @@ func (s *evaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	}, nil
 }
 
-func (s *evaluatorService) TestEvaluator(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, req *evaluation.TestEvaluatorRequest) (*evaluation.TestEvaluatorResponse, error) {
+func (s *EvaluatorService) TestEvaluator(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, req *evaluation.TestEvaluatorRequest) (*evaluation.TestEvaluatorResponse, error) {
 	// Validate evaluator exists
 	evaluator, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
@@ -509,7 +509,7 @@ func (s *evaluatorService) TestEvaluator(ctx context.Context, evaluatorID uuid.U
 // 2. Single span ID - if provided, fetch that specific span
 // 3. Trace ID + filters - if provided, filter by trace ID and apply rule filters
 // 4. Generic filter - apply time range, span names, and rule filters
-func (s *evaluatorService) queryMatchingSpans(
+func (s *EvaluatorService) queryMatchingSpans(
 	ctx context.Context,
 	projectID uuid.UUID,
 	rule *evaluation.Evaluator,
@@ -739,7 +739,7 @@ func splitPath(path string) []string {
 	return result
 }
 
-func (s *evaluatorService) GetAnalytics(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, params *evaluation.EvaluatorAnalyticsParams) (*evaluation.EvaluatorAnalyticsResponse, error) {
+func (s *EvaluatorService) GetAnalytics(ctx context.Context, evaluatorID uuid.UUID, projectID uuid.UUID, params *evaluation.EvaluatorAnalyticsParams) (*evaluation.EvaluatorAnalyticsResponse, error) {
 	// Validate evaluator exists
 	_, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
@@ -761,7 +761,7 @@ func (s *evaluatorService) GetAnalytics(ctx context.Context, evaluatorID uuid.UU
 		from = *params.From
 		to = *params.To
 	} else {
-		to = time.Now().UTC()
+		to = time.Now()
 		from = to.Add(-7 * 24 * time.Hour)
 	}
 
@@ -831,7 +831,7 @@ func buildPromptPreview(rule *evaluation.Evaluator) string {
 }
 
 // testWithSampleInput creates a synthetic span from manual input for dry-run testing.
-func (s *evaluatorService) testWithSampleInput(
+func (s *EvaluatorService) testWithSampleInput(
 	_ context.Context,
 	rule *evaluation.Evaluator,
 	sample *evaluation.TestSampleInput,
@@ -898,7 +898,7 @@ func (s *evaluatorService) testWithSampleInput(
 }
 
 // createSyntheticSpan creates an in-memory span from TestSampleInput for dry-run testing.
-func (s *evaluatorService) createSyntheticSpan(projectID uuid.UUID, sample *evaluation.TestSampleInput) *observability.Span {
+func (s *EvaluatorService) createSyntheticSpan(projectID uuid.UUID, sample *evaluation.TestSampleInput) *observability.Span {
 	now := time.Now()
 	syntheticID := uid.New().String()
 
@@ -937,7 +937,7 @@ func (s *evaluatorService) createSyntheticSpan(projectID uuid.UUID, sample *eval
 }
 
 // filterSpans filters spans by rule's SpanNames and FilterClause conditions
-func (s *evaluatorService) filterSpans(spans []*observability.Span, spanNames []string, filters []evaluation.FilterClause, limit int) []*observability.Span {
+func (s *EvaluatorService) filterSpans(spans []*observability.Span, spanNames []string, filters []evaluation.FilterClause, limit int) []*observability.Span {
 	var matched []*observability.Span
 	for _, span := range spans {
 		// Check span name filter first (most selective)
@@ -957,7 +957,7 @@ func (s *evaluatorService) filterSpans(spans []*observability.Span, spanNames []
 }
 
 // matchSpanFilters checks if a span matches ALL filter clauses (AND logic)
-func (s *evaluatorService) matchSpanFilters(span *observability.Span, filters []evaluation.FilterClause) bool {
+func (s *EvaluatorService) matchSpanFilters(span *observability.Span, filters []evaluation.FilterClause) bool {
 	for _, clause := range filters {
 		if !s.matchFilterClause(clause, span) {
 			return false
@@ -981,7 +981,7 @@ func matchesSpanNames(span *observability.Span, spanNames []string) bool {
 }
 
 // matchFilterClause evaluates a single filter clause against a span
-func (s *evaluatorService) matchFilterClause(clause evaluation.FilterClause, span *observability.Span) bool {
+func (s *EvaluatorService) matchFilterClause(clause evaluation.FilterClause, span *observability.Span) bool {
 	value := s.extractSpanFieldValue(span, clause.Field)
 
 	switch clause.Operator {
@@ -1011,7 +1011,7 @@ func (s *evaluatorService) matchFilterClause(clause evaluation.FilterClause, spa
 	case "regex":
 		matched, err := regexp.MatchString(fmt.Sprintf("%v", clause.Value), fmt.Sprintf("%v", value))
 		if err != nil {
-			s.logger.Warn("Invalid regex in filter clause - filter will not match",
+			s.logger.Warn("invalid regex in filter clause - filter will not match",
 				"pattern", clause.Value,
 				"field", clause.Field,
 				"error", err)
@@ -1035,7 +1035,7 @@ func (s *evaluatorService) matchFilterClause(clause evaluation.FilterClause, spa
 		cmp, ok := compareNumeric(value, clause.Value)
 		return ok && cmp <= 0
 	default:
-		s.logger.Warn("Unknown filter operator - filter will not match",
+		s.logger.Warn("unknown filter operator - filter will not match",
 			"operator", clause.Operator,
 			"field", clause.Field)
 		return false // Fail closed: unknown operators should not match
@@ -1043,7 +1043,7 @@ func (s *evaluatorService) matchFilterClause(clause evaluation.FilterClause, spa
 }
 
 // extractSpanFieldValue extracts a value from a span using dot notation for nested paths
-func (s *evaluatorService) extractSpanFieldValue(span *observability.Span, field string) any {
+func (s *EvaluatorService) extractSpanFieldValue(span *observability.Span, field string) any {
 	parts := strings.Split(field, ".")
 
 	// Handle top-level span fields

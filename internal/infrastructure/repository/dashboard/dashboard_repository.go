@@ -109,7 +109,7 @@ func (r *dashboardRepository) CountByProject(ctx context.Context, projectID uuid
 
 // GetByProjectID is the dynamic-filter list. Optional ILIKE on name,
 // pagination; total uses the same predicate for accuracy.
-func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid.UUID, filter *dashboardDomain.DashboardFilter) (*dashboardDomain.DashboardListResponse, error) {
+func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid.UUID, filter *dashboardDomain.DashboardFilter) ([]*dashboardDomain.Dashboard, int64, error) {
 	limit := 50
 	offset := 0
 	if filter != nil {
@@ -126,11 +126,11 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 	cntSQL, cntArgs, err := sq.Select("COUNT(*)").From("dashboards").Where(whereSQL, whereArgs...).
 		PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("build dashboard count query: %w", err)
+		return nil, 0, fmt.Errorf("build dashboard count query: %w", err)
 	}
 	var total int64
 	if err := r.tm.DB(ctx).QueryRow(ctx, cntSQL, cntArgs...).Scan(&total); err != nil {
-		return nil, fmt.Errorf("count dashboards: %w", err)
+		return nil, 0, fmt.Errorf("count dashboards: %w", err)
 	}
 
 	selSQL, selArgs, err := sq.Select(
@@ -142,12 +142,12 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 		Limit(uint64(limit)).Offset(uint64(offset)).
 		PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("build dashboard list query: %w", err)
+		return nil, 0, fmt.Errorf("build dashboard list query: %w", err)
 	}
 
 	rows, err := r.tm.DB(ctx).Query(ctx, selSQL, selArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboards: %w", err)
+		return nil, 0, fmt.Errorf("list dashboards: %w", err)
 	}
 	defer rows.Close()
 	out := make([]*dashboardDomain.Dashboard, 0)
@@ -164,24 +164,19 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 			&cfgRaw, &layoutRaw, &d.CreatedBy,
 			&d.CreatedAt, &d.UpdatedAt, &deletedAt, &d.IsLocked,
 		); err != nil {
-			return nil, fmt.Errorf("scan dashboard row: %w", err)
+			return nil, 0, fmt.Errorf("scan dashboard row: %w", err)
 		}
 		if description != nil {
 			d.Description = *description
 		}
 		if err := unmarshalDashboardContent(cfgRaw, layoutRaw, &d.Config, &d.Layout); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		d.DeletedAt = deletedAt
 		out = append(out, &d)
 	}
 
-	return &dashboardDomain.DashboardListResponse{
-		Dashboards: out,
-		Total:      total,
-		Limit:      limit,
-		Offset:     offset,
-	}, rows.Err()
+	return out, total, rows.Err()
 }
 
 // buildDashboardFilter returns a sqlizer-ready WHERE clause + args.

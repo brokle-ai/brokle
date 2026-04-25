@@ -171,13 +171,6 @@ func (e *EvaluatorExecution) ToResponse() *EvaluatorExecutionResponse {
 	}
 }
 
-type EvaluatorExecutionListResponse struct {
-	Executions []*EvaluatorExecutionResponse `json:"executions"`
-	Total      int64                         `json:"total"`
-	Page       int                           `json:"page"`
-	Limit      int                           `json:"limit"`
-}
-
 // Filter for listing executions
 type ExecutionFilter struct {
 	Status      *ExecutionStatus

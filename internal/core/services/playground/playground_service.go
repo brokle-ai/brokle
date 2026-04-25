@@ -13,49 +13,51 @@ import (
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
+	credentials "brokle/internal/core/services/credentials"
+	promptService "brokle/internal/core/services/prompt"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
-type playgroundService struct {
+type PlaygroundService struct {
 	repo               playgroundDomain.SessionRepository
-	credentialsService credentialsDomain.ProviderCredentialService
-	compilerService    promptDomain.CompilerService
-	executionService   promptDomain.ExecutionService
+	credentials *credentials.ProviderCredentialService
+	compiler    *promptService.CompilerService
+	exec   *promptService.ExecutionService
 	logger             *slog.Logger
 }
 
 func NewPlaygroundService(
 	repo playgroundDomain.SessionRepository,
-	credentialsService credentialsDomain.ProviderCredentialService,
-	compilerService promptDomain.CompilerService,
-	executionService promptDomain.ExecutionService,
+	credentials *credentials.ProviderCredentialService,
+	compiler *promptService.CompilerService,
+	exec *promptService.ExecutionService,
 	logger *slog.Logger,
-) playgroundDomain.PlaygroundService {
-	return &playgroundService{
+) *PlaygroundService {
+	return &PlaygroundService{
 		repo:               repo,
-		credentialsService: credentialsService,
-		compilerService:    compilerService,
-		executionService:   executionService,
+		credentials: credentials,
+		compiler:    compiler,
+		exec:   exec,
 		logger:             logger,
 	}
 }
 
 // All sessions are saved (no ephemeral sessions).
-func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreatePlaygroundSessionRequest) (*playgroundDomain.SessionResponse, error) {
+func (s *PlaygroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreatePlaygroundSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("Name required", "name is required")
+		return nil, appErrors.NewValidationError("name required", "name is required")
 	}
 	if len(req.Name) > playgroundDomain.MaxNameLength {
-		return nil, appErrors.NewValidationError("Name too long", "name must be 200 characters or less")
+		return nil, appErrors.NewValidationError("name too long", "name must be 200 characters or less")
 	}
 
 	if len(req.Windows) == 0 {
-		return nil, appErrors.NewValidationError("Windows required", "windows must be provided")
+		return nil, appErrors.NewValidationError("windows required", "windows must be provided")
 	}
 
 	if len(req.Tags) > playgroundDomain.MaxTagsCount {
-		return nil, appErrors.NewValidationError("Too many tags", "maximum 10 tags allowed")
+		return nil, appErrors.NewValidationError("too many tags", "maximum 10 tags allowed")
 	}
 
 	now := time.Now()
@@ -93,7 +95,7 @@ func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDo
 			"error", err,
 			"project_id", req.ProjectID,
 		)
-		return nil, appErrors.NewInternalError("Failed to create session", err)
+		return nil, appErrors.NewInternalError("failed to create session", err)
 	}
 
 	s.logger.Info("playground session created",
@@ -105,19 +107,19 @@ func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDo
 	return session.ToResponse(), nil
 }
 
-func (s *playgroundService) GetSession(ctx context.Context, sessionID uuid.UUID) (*playgroundDomain.SessionResponse, error) {
+func (s *PlaygroundService) GetSession(ctx context.Context, sessionID uuid.UUID) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, sessionID)
 	if err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return nil, appErrors.NewNotFoundError("Session not found")
+			return nil, appErrors.NewNotFoundError("session not found")
 		}
-		return nil, appErrors.NewInternalError("Failed to retrieve session", err)
+		return nil, appErrors.NewInternalError("failed to retrieve session", err)
 	}
 
 	return session.ToResponse(), nil
 }
 
-func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDomain.ListSessionsRequest) ([]*playgroundDomain.PlaygroundSessionSummary, error) {
+func (s *PlaygroundService) ListSessions(ctx context.Context, req *playgroundDomain.ListSessionsRequest) ([]*playgroundDomain.PlaygroundSessionSummary, error) {
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
@@ -136,7 +138,7 @@ func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDom
 	}
 
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to list sessions", err)
+		return nil, appErrors.NewInternalError("failed to list sessions", err)
 	}
 
 	summaries := make([]*playgroundDomain.PlaygroundSessionSummary, len(sessions))
@@ -147,18 +149,18 @@ func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDom
 	return summaries, nil
 }
 
-func (s *playgroundService) UpdateSession(ctx context.Context, req *playgroundDomain.UpdateSessionRequest) (*playgroundDomain.SessionResponse, error) {
+func (s *PlaygroundService) UpdateSession(ctx context.Context, req *playgroundDomain.UpdateSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, req.SessionID)
 	if err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return nil, appErrors.NewNotFoundError("Session not found")
+			return nil, appErrors.NewNotFoundError("session not found")
 		}
-		return nil, appErrors.NewInternalError("Failed to retrieve session", err)
+		return nil, appErrors.NewInternalError("failed to retrieve session", err)
 	}
 
 	if req.Name != nil {
 		if len(*req.Name) > playgroundDomain.MaxNameLength {
-			return nil, appErrors.NewValidationError("Name too long", "name must be 200 characters or less")
+			return nil, appErrors.NewValidationError("name too long", "name must be 200 characters or less")
 		}
 		session.Name = req.Name
 	}
@@ -167,7 +169,7 @@ func (s *playgroundService) UpdateSession(ctx context.Context, req *playgroundDo
 	}
 	if req.Tags != nil {
 		if len(req.Tags) > playgroundDomain.MaxTagsCount {
-			return nil, appErrors.NewValidationError("Too many tags", "maximum 10 tags allowed")
+			return nil, appErrors.NewValidationError("too many tags", "maximum 10 tags allowed")
 		}
 		session.Tags = req.Tags
 	}
@@ -189,18 +191,18 @@ func (s *playgroundService) UpdateSession(ctx context.Context, req *playgroundDo
 			"error", err,
 			"session_id", req.SessionID,
 		)
-		return nil, appErrors.NewInternalError("Failed to update session", err)
+		return nil, appErrors.NewInternalError("failed to update session", err)
 	}
 
 	return session.ToResponse(), nil
 }
 
-func (s *playgroundService) DeleteSession(ctx context.Context, sessionID uuid.UUID) error {
+func (s *PlaygroundService) DeleteSession(ctx context.Context, sessionID uuid.UUID) error {
 	if err := s.repo.Delete(ctx, sessionID); err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("Session not found")
+			return appErrors.NewNotFoundError("session not found")
 		}
-		return appErrors.NewInternalError("Failed to delete session", err)
+		return appErrors.NewInternalError("failed to delete session", err)
 	}
 
 	s.logger.Info("playground session deleted",
@@ -210,64 +212,64 @@ func (s *playgroundService) DeleteSession(ctx context.Context, sessionID uuid.UU
 	return nil
 }
 
-func (s *playgroundService) UpdateLastRun(ctx context.Context, req *playgroundDomain.UpdateLastRunRequest) error {
+func (s *PlaygroundService) UpdateLastRun(ctx context.Context, req *playgroundDomain.UpdateLastRunRequest) error {
 	if req.LastRun == nil {
-		return appErrors.NewValidationError("Last run required", "last_run cannot be empty")
+		return appErrors.NewValidationError("last run required", "last_run cannot be empty")
 	}
 
 	lastRunJSON, err := json.Marshal(req.LastRun)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to serialize last run", err)
+		return appErrors.NewInternalError("failed to serialize last run", err)
 	}
 
 	if err := s.repo.UpdateLastRun(ctx, req.SessionID, playgroundDomain.JSON(lastRunJSON)); err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("Session not found")
+			return appErrors.NewNotFoundError("session not found")
 		}
 		s.logger.Error("failed to update last run",
 			"error", err,
 			"session_id", req.SessionID,
 		)
-		return appErrors.NewInternalError("Failed to update last run", err)
+		return appErrors.NewInternalError("failed to update last run", err)
 	}
 
 	return nil
 }
 
-func (s *playgroundService) UpdateWindows(ctx context.Context, sessionID uuid.UUID, windows json.RawMessage) error {
+func (s *PlaygroundService) UpdateWindows(ctx context.Context, sessionID uuid.UUID, windows json.RawMessage) error {
 	if err := s.repo.UpdateWindows(ctx, sessionID, playgroundDomain.JSON(windows)); err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("Session not found")
+			return appErrors.NewNotFoundError("session not found")
 		}
 		s.logger.Error("failed to update windows",
 			"error", err,
 			"session_id", sessionID,
 		)
-		return appErrors.NewInternalError("Failed to update windows", err)
+		return appErrors.NewInternalError("failed to update windows", err)
 	}
 
 	return nil
 }
 
-func (s *playgroundService) ValidateProjectAccess(ctx context.Context, sessionID uuid.UUID, projectID uuid.UUID) error {
+func (s *PlaygroundService) ValidateProjectAccess(ctx context.Context, sessionID uuid.UUID, projectID uuid.UUID) error {
 	exists, err := s.repo.ExistsByProjectID(ctx, sessionID, projectID)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to validate access", err)
+		return appErrors.NewInternalError("failed to validate access", err)
 	}
 	if !exists {
-		return appErrors.NewNotFoundError("Session not found")
+		return appErrors.NewNotFoundError("session not found")
 	}
 	return nil
 }
 
 // ExecutePrompt executes a prompt with full orchestration:
 // credential resolution → variable extraction → execution → session update
-func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDomain.ExecuteRequest) (*playgroundDomain.ExecuteResponse, error) {
+func (s *PlaygroundService) ExecutePrompt(ctx context.Context, req *playgroundDomain.ExecuteRequest) (*playgroundDomain.ExecuteResponse, error) {
 	startTime := time.Now()
 
-	variables, err := s.compilerService.ExtractVariables(req.Template, req.PromptType)
+	variables, err := s.compiler.ExtractVariables(req.Template, req.PromptType)
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid template", err.Error())
+		return nil, appErrors.NewValidationError("invalid template", err.Error())
 	}
 
 	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
@@ -281,14 +283,14 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 		Variables: variables,
 	}
 
-	execResp, err := s.executionService.Execute(ctx, promptResp, req.Variables, resolvedConfig)
+	execResp, err := s.exec.Execute(ctx, promptResp, req.Variables, resolvedConfig)
 	if err != nil {
 		s.logger.Error("playground execution failed",
 			"error", err,
 			"project_id", req.ProjectID.String(),
 			"organization_id", req.OrganizationID.String(),
 		)
-		return nil, appErrors.NewInternalError("Execution failed", err)
+		return nil, appErrors.NewInternalError("execution failed", err)
 	}
 
 	// Update session last_run (async, non-blocking)
@@ -309,12 +311,12 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 	}, nil
 }
 
-func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDomain.StreamRequest) (*playgroundDomain.StreamResponse, error) {
+func (s *PlaygroundService) StreamPrompt(ctx context.Context, req *playgroundDomain.StreamRequest) (*playgroundDomain.StreamResponse, error) {
 	startTime := time.Now()
 
-	variables, err := s.compilerService.ExtractVariables(req.Template, req.PromptType)
+	variables, err := s.compiler.ExtractVariables(req.Template, req.PromptType)
 	if err != nil {
-		return nil, appErrors.NewValidationError("Invalid template", err.Error())
+		return nil, appErrors.NewValidationError("invalid template", err.Error())
 	}
 
 	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
@@ -328,14 +330,14 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 		Variables: variables,
 	}
 
-	eventChan, resultChan, err := s.executionService.ExecuteStream(ctx, promptResp, req.Variables, resolvedConfig)
+	eventChan, resultChan, err := s.exec.ExecuteStream(ctx, promptResp, req.Variables, resolvedConfig)
 	if err != nil {
 		s.logger.Error("playground stream execution failed",
 			"error", err,
 			"project_id", req.ProjectID.String(),
 			"organization_id", req.OrganizationID.String(),
 		)
-		return nil, appErrors.NewInternalError("Stream execution failed", err)
+		return nil, appErrors.NewInternalError("stream execution failed", err)
 	}
 
 	// Wrap result channel to intercept for session update
@@ -349,40 +351,40 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 
 // resolveCredentials resolves organization-scoped credentials for execution.
 // Requires both provider and credential_id to be specified.
-func (s *playgroundService) resolveCredentials(ctx context.Context, orgID uuid.UUID, overrides *promptDomain.ModelConfig) (*promptDomain.ModelConfig, error) {
+func (s *PlaygroundService) resolveCredentials(ctx context.Context, orgID uuid.UUID, overrides *promptDomain.ModelConfig) (*promptDomain.ModelConfig, error) {
 	if overrides == nil {
 		overrides = &promptDomain.ModelConfig{}
 	}
 
 	// Provider must be explicitly specified
 	if overrides.Provider == "" {
-		return nil, appErrors.NewValidationError("Provider required", "provider must be specified")
+		return nil, appErrors.NewValidationError("provider required", "provider must be specified")
 	}
 
 	// Credential ID is required (no fallback to adapter-based lookup)
 	if overrides.CredentialID == nil || *overrides.CredentialID == uuid.Nil {
-		return nil, appErrors.NewValidationError("Credential required", "credential_id must be specified")
+		return nil, appErrors.NewValidationError("credential required", "credential_id must be specified")
 	}
 
-	if s.credentialsService == nil {
-		return nil, appErrors.NewInternalError("Credentials service not configured", nil)
+	if s.credentials == nil {
+		return nil, appErrors.NewInternalError("credentials service not configured", nil)
 	}
 
 	credID := *overrides.CredentialID
 
-	keyConfig, err := s.credentialsService.GetExecutionConfig(ctx, orgID, credID, credentialsDomain.Provider(overrides.Provider))
+	keyConfig, err := s.credentials.GetExecutionConfig(ctx, orgID, credID, credentialsDomain.Provider(overrides.Provider))
 	if err != nil {
 		// Handle specific errors for better UX
 		if errors.Is(err, credentialsDomain.ErrAdapterMismatch) {
-			return nil, appErrors.NewValidationError("Credential mismatch", err.Error())
+			return nil, appErrors.NewValidationError("credential mismatch", err.Error())
 		}
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return nil, appErrors.NewNotFoundError("Credential not found")
+			return nil, appErrors.NewNotFoundError("credential not found")
 		}
 		if errors.Is(err, credentialsDomain.ErrNoKeyConfigured) {
-			return nil, appErrors.NewNotFoundError("No credentials configured")
+			return nil, appErrors.NewNotFoundError("no credentials configured")
 		}
-		return nil, appErrors.NewInternalError("Failed to resolve credentials", err)
+		return nil, appErrors.NewInternalError("failed to resolve credentials", err)
 	}
 
 	overrides.APIKey = keyConfig.APIKey
@@ -404,7 +406,7 @@ func (s *playgroundService) resolveCredentials(ctx context.Context, orgID uuid.U
 }
 
 // wrapResultForSessionUpdate intercepts the result channel to update session.
-func (s *playgroundService) wrapResultForSessionUpdate(
+func (s *PlaygroundService) wrapResultForSessionUpdate(
 	ctx context.Context,
 	sessionID *uuid.UUID,
 	resultChan <-chan *promptDomain.StreamResult,
@@ -427,7 +429,7 @@ func (s *playgroundService) wrapResultForSessionUpdate(
 	return wrappedChan
 }
 
-func (s *playgroundService) updateSessionLastRun(
+func (s *PlaygroundService) updateSessionLastRun(
 	ctx context.Context,
 	sessionID uuid.UUID,
 	execResp *promptDomain.ExecutePromptResponse,
@@ -471,7 +473,7 @@ func (s *playgroundService) updateSessionLastRun(
 	}
 }
 
-func (s *playgroundService) updateStreamSessionLastRun(
+func (s *PlaygroundService) updateStreamSessionLastRun(
 	ctx context.Context,
 	sessionID uuid.UUID,
 	result *promptDomain.StreamResult,

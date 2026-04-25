@@ -10,6 +10,7 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
@@ -22,13 +23,19 @@ func NewLabelRepository(tm *db.TxManager) promptDomain.LabelRepository {
 }
 
 func (r *labelRepository) Create(ctx context.Context, l *promptDomain.Label) error {
-	return r.tm.Queries(ctx).CreatePromptLabel(ctx, gen.CreatePromptLabelParams{
+	if err := r.tm.Queries(ctx).CreatePromptLabel(ctx, gen.CreatePromptLabelParams{
 		ID:        l.ID,
 		PromptID:  l.PromptID,
 		VersionID: l.VersionID,
 		Name:      l.Name,
 		CreatedBy: l.CreatedBy,
-	})
+	}); err != nil {
+		if appErrors.IsUniqueViolation(err) {
+			return fmt.Errorf("create prompt label %s: %w", l.Name, promptDomain.ErrLabelAlreadyExists)
+		}
+		return fmt.Errorf("create prompt label %s: %w", l.Name, err)
+	}
+	return nil
 }
 
 func (r *labelRepository) GetByID(ctx context.Context, id uuid.UUID) (*promptDomain.Label, error) {

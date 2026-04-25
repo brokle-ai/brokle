@@ -1,3 +1,4 @@
+// Package comment contains the comment domain: comments, reactions, and thread entities.
 package comment
 
 import (
@@ -25,17 +26,17 @@ func (e EntityType) IsValid() bool {
 }
 
 type Comment struct {
-	ID         uuid.UUID      `json:"id"`
-	EntityType EntityType     `json:"entity_type"`
-	EntityID   string         `json:"entity_id"` // trace_id or span_id
-	ProjectID  uuid.UUID      `json:"project_id"`
-	ParentID   *uuid.UUID     `json:"parent_id,omitempty"` // For reply threading (one level deep)
-	Content    string         `json:"content"`
-	CreatedBy  *uuid.UUID     `json:"created_by"`
-	UpdatedBy  *uuid.UUID     `json:"updated_by,omitempty"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	DeletedAt  *time.Time     `json:"-"`
+	ID         uuid.UUID  `json:"id"`
+	EntityType EntityType `json:"entity_type"`
+	EntityID   string     `json:"entity_id"` // trace_id or span_id
+	ProjectID  uuid.UUID  `json:"project_id"`
+	ParentID   *uuid.UUID `json:"parent_id,omitempty"` // For reply threading (one level deep)
+	Content    string     `json:"content"`
+	CreatedBy  *uuid.UUID `json:"created_by"`
+	UpdatedBy  *uuid.UUID `json:"updated_by,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	DeletedAt  *time.Time `json:"-"`
 }
 
 func NewComment(entityType EntityType, entityID string, projectID, createdBy uuid.UUID, content string) *Comment {

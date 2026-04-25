@@ -49,18 +49,26 @@ func registerDashboardOps(r chi.Router, h *dashboardHandler) {
 		r.Put("/{id}", h.updateScore)
 	})
 
-	r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
-		r.Get("/scores", h.listProjectScores)
-		r.Get("/scores/analytics", h.getScoreAnalytics)
-		r.Get("/scores/names", h.getScoreNames)
-		r.Get("/sessions", h.listSessions)
-		r.Route("/filter-presets", func(r chi.Router) {
-			r.Post("/", h.createFilterPreset)
-			r.Get("/", h.listFilterPresets)
-			r.Get("/{id}", h.getFilterPreset)
-			r.Patch("/{id}", h.updateFilterPreset)
-			r.Delete("/{id}", h.deleteFilterPreset)
-		})
+	// Project-scoped routes. Mounted as sibling prefixes rather than a
+	// single r.Route("/api/v1/projects/{projectId}", ...) wrapper, so
+	// they don't Mount-collide with the evaluation handler's
+	// /api/v1/projects/{projectId}/{score-configs,datasets,...}
+	// siblings on the same chi tree (chi panics on duplicate Mount
+	// patterns; see gotcha #31).
+	r.Route("/api/v1/projects/{projectId}/scores", func(r chi.Router) {
+		r.Get("/", h.listProjectScores)
+		r.Get("/analytics", h.getScoreAnalytics)
+		r.Get("/names", h.getScoreNames)
+	})
+
+	r.Get("/api/v1/projects/{projectId}/sessions", h.listSessions)
+
+	r.Route("/api/v1/projects/{projectId}/filter-presets", func(r chi.Router) {
+		r.Post("/", h.createFilterPreset)
+		r.Get("/", h.listFilterPresets)
+		r.Get("/{id}", h.getFilterPreset)
+		r.Patch("/{id}", h.updateFilterPreset)
+		r.Delete("/{id}", h.deleteFilterPreset)
 	})
 }
 
@@ -785,12 +793,12 @@ func (h *dashboardHandler) getScoreAnalytics(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *dashboardHandler) getScoreNames(w http.ResponseWriter, r *http.Request) {
-	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
+	projectID, err := request.URLParamUUID(r, "projectId")
+	if err != nil {
 		response.WriteError(w, err)
 		return
 	}
-	projectID := chi.URLParam(r, "projectId")
-	names, err := h.scoreAnalytics.GetDistinctScoreNames(r.Context(), projectID)
+	names, err := h.scoreAnalytics.GetDistinctScoreNames(r.Context(), projectID.String())
 	if err != nil {
 		response.WriteError(w, err)
 		return

@@ -19,21 +19,21 @@ import (
 // UserSession represents an active user session with secure token management.
 // SECURITY: Access tokens are NOT stored - only session metadata and hashed refresh tokens.
 type UserSession struct {
-	ExpiresAt           time.Time   `json:"expires_at"`
-	UpdatedAt           time.Time   `json:"updated_at"`
-	CreatedAt           time.Time   `json:"created_at"`
-	RefreshExpiresAt    time.Time   `json:"refresh_expires_at"`
+	ExpiresAt           time.Time      `json:"expires_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
+	CreatedAt           time.Time      `json:"created_at"`
+	RefreshExpiresAt    time.Time      `json:"refresh_expires_at"`
 	DeviceInfo          map[string]any `json:"device_info,omitempty"`
-	IPAddress           *string     `json:"ip_address,omitempty"`
-	UserAgent           *string     `json:"user_agent,omitempty"`
-	LastUsedAt          *time.Time  `json:"last_used_at,omitempty"`
-	RevokedAt           *time.Time  `json:"revoked_at,omitempty"`
-	CurrentJTI          string      `json:"-"`
-	RefreshTokenHash    string      `json:"-"`
-	RefreshTokenVersion int         `json:"refresh_token_version"`
-	ID                  uuid.UUID   `json:"id"`
-	UserID              uuid.UUID   `json:"user_id"`
-	IsActive            bool        `json:"is_active"`
+	IPAddress           *string        `json:"ip_address,omitempty"`
+	UserAgent           *string        `json:"user_agent,omitempty"`
+	LastUsedAt          *time.Time     `json:"last_used_at,omitempty"`
+	RevokedAt           *time.Time     `json:"revoked_at,omitempty"`
+	CurrentJTI          string         `json:"-"`
+	RefreshTokenHash    string         `json:"-"`
+	RefreshTokenVersion int            `json:"refresh_token_version"`
+	ID                  uuid.UUID      `json:"id"`
+	UserID              uuid.UUID      `json:"user_id"`
+	IsActive            bool           `json:"is_active"`
 }
 
 // BlacklistedToken represents a revoked access token for immediate revocation capability.
@@ -64,17 +64,17 @@ type SessionStats struct {
 // Organization is derived via projects.organization_id (no redundant storage)
 // Status: Determined by deleted_at (soft delete) and expires_at (expiration)
 type APIKey struct {
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	LastUsedAt *time.Time     `json:"last_used_at,omitempty"`
-	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
-	KeyHash    string         `json:"-"`
-	KeyPreview string         `json:"key_preview"`
-	Name       string         `json:"name"`
-	ID         uuid.UUID      `json:"id"`
-	ProjectID  uuid.UUID      `json:"project_id"`
-	UserID     uuid.UUID      `json:"user_id"`
+	KeyHash    string     `json:"-"`
+	KeyPreview string     `json:"key_preview"`
+	Name       string     `json:"name"`
+	ID         uuid.UUID  `json:"id"`
+	ProjectID  uuid.UUID  `json:"project_id"`
+	UserID     uuid.UUID  `json:"user_id"`
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -499,8 +499,8 @@ func NewPermission(resource, action, description string) *Permission {
 		Resource:    resource,
 		Action:      action,
 		Description: shared.NilIfEmpty(description),
-		ScopeLevel:  ScopeLevelOrganization, // Default to organization level
-		Category:    shared.NilIfEmpty(resource),   // Default category to resource name
+		ScopeLevel:  ScopeLevelOrganization,      // Default to organization level
+		Category:    shared.NilIfEmpty(resource), // Default category to resource name
 		CreatedAt:   time.Now(),
 	}
 }
@@ -671,21 +671,6 @@ type AssignRoleRequest struct {
 	RoleID uuid.UUID `json:"role_id" validate:"required"`
 }
 
-// RoleListResponse represents a list of roles with metadata
-type RoleListResponse struct {
-	Roles      []*Role `json:"roles"`
-	TotalCount int     `json:"total_count"`
-	Page       int     `json:"page,omitempty"`
-	PageSize   int     `json:"page_size,omitempty"`
-}
-
-// PermissionListResponse represents a list of permissions with metadata
-type PermissionListResponse struct {
-	Permissions []*Permission `json:"permissions"`
-	TotalCount  int           `json:"total_count"`
-	Page        int           `json:"page,omitempty"`
-	PageSize    int           `json:"page_size,omitempty"`
-}
 
 // UserPermissionsResponse represents a user's effective permissions across all scopes
 type UserPermissionsResponse struct {
@@ -716,4 +701,3 @@ type RoleStatistics struct {
 	ProjectRoles      int            `json:"project_roles"`
 	PermissionCount   int            `json:"permission_count"`
 }
-

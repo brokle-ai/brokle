@@ -1,7 +1,6 @@
 package playground
 
 import (
-	"context"
 	"encoding/json"
 
 	"github.com/google/uuid"
@@ -87,7 +86,7 @@ type ExecuteRequest struct {
 
 // ExecuteResponse wraps execution result with metadata.
 type ExecuteResponse struct {
-	CompiledPrompt any         `json:"compiled_prompt"`
+	CompiledPrompt any                 `json:"compiled_prompt"`
 	Response       *prompt.LLMResponse `json:"response,omitempty"`
 	LatencyMs      int64               `json:"latency_ms"`
 	Error          string              `json:"error,omitempty"`
@@ -108,45 +107,4 @@ type StreamRequest struct {
 type StreamResponse struct {
 	EventChan  <-chan prompt.StreamEvent
 	ResultChan <-chan *prompt.StreamResult
-}
-
-// ----------------------------
-// Service Interface
-// ----------------------------
-
-// PlaygroundService defines the service interface for playground session management.
-type PlaygroundService interface {
-	// CreateSession creates a new session.
-	// All sessions are saved (no ephemeral sessions).
-	CreateSession(ctx context.Context, req *CreatePlaygroundSessionRequest) (*SessionResponse, error)
-
-	// GetSession retrieves a session by ID.
-	// Returns ErrSessionNotFound if not found.
-	GetSession(ctx context.Context, sessionID uuid.UUID) (*SessionResponse, error)
-
-	// ListSessions retrieves sessions for a project (sidebar list).
-	ListSessions(ctx context.Context, req *ListSessionsRequest) ([]*PlaygroundSessionSummary, error)
-
-	// UpdateSession updates session content and metadata.
-	UpdateSession(ctx context.Context, req *UpdateSessionRequest) (*SessionResponse, error)
-
-	// DeleteSession removes a session.
-	DeleteSession(ctx context.Context, sessionID uuid.UUID) error
-
-	// UpdateLastRun updates the last execution result.
-	UpdateLastRun(ctx context.Context, req *UpdateLastRunRequest) error
-
-	// UpdateWindows updates the multi-window comparison state.
-	UpdateWindows(ctx context.Context, sessionID uuid.UUID, windows json.RawMessage) error
-
-	// ValidateProjectAccess checks if a session belongs to the given project.
-	// Returns ErrSessionNotFound if not found or doesn't belong to project.
-	ValidateProjectAccess(ctx context.Context, sessionID uuid.UUID, projectID uuid.UUID) error
-
-	// ExecutePrompt executes a prompt with full orchestration:
-	// credential resolution → variable extraction → execution → session update
-	ExecutePrompt(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error)
-
-	// StreamPrompt executes a streaming prompt with full orchestration.
-	StreamPrompt(ctx context.Context, req *StreamRequest) (*StreamResponse, error)
 }

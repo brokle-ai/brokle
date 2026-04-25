@@ -10,19 +10,20 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"brokle/internal/core/domain/website"
+	websiteService "brokle/internal/core/services/website"
 	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
 type handler struct {
-	svc    website.WebsiteService
+	svc    *websiteService.WebsiteService
 	logger *slog.Logger
 }
 
 // RegisterRoutes mounts the public website routes on r. Expected
 // mount context: the unauthenticated dashPublic chi group (LimitByIP).
-func RegisterRoutes(r chi.Router, svc website.WebsiteService, logger *slog.Logger) {
+func RegisterRoutes(r chi.Router, svc *websiteService.WebsiteService, logger *slog.Logger) {
 	h := &handler{svc: svc, logger: logger}
 	r.Post("/api/v1/website/contact", h.submitContact)
 }

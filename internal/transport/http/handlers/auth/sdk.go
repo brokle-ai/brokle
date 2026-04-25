@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	authDomain "brokle/internal/core/domain/auth"
+	authService "brokle/internal/core/services/auth"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 )
@@ -20,7 +20,7 @@ import (
 // RegisterSDKRoutes mounts the SDK-plane auth routes on r. Expected
 // mount context: the SDK-public chi group (LimitByIP +
 // LimitByKeyPrefix). X-API-Key / Authorization: Bearer accepted.
-func RegisterSDKRoutes(r chi.Router, apiKeySvc authDomain.APIKeyService, logger *slog.Logger) {
+func RegisterSDKRoutes(r chi.Router, apiKeySvc *authService.APIKeyService, logger *slog.Logger) {
 	h := &sdkHandler{apiKeySvc: apiKeySvc, logger: logger}
 	r.Post("/v1/auth/validate-key", h.validateAPIKey)
 }

@@ -110,7 +110,7 @@ type RoleRepository interface {
 
 	// System template role queries
 	GetByScopeType(ctx context.Context, scopeType string) ([]*Role, error)
-	GetAllRoles(ctx context.Context) ([]*Role, error)
+	ListRoles(ctx context.Context) ([]*Role, error)
 	GetSystemRoles(ctx context.Context) ([]*Role, error)
 
 	// Custom scoped role queries
@@ -158,8 +158,6 @@ type PermissionRepository interface {
 	GetByResource(ctx context.Context, resource string) ([]*Permission, error)
 	GetByNames(ctx context.Context, names []string) ([]*Permission, error)
 	GetByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)
-	ListPermissions(ctx context.Context, limit, offset int) ([]*Permission, int, error)
-	SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*Permission, int, error)
 
 	// Scope-level queries (NEW)
 	GetByScopeLevel(ctx context.Context, scopeLevel ScopeLevel) ([]*Permission, error)

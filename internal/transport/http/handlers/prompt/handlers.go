@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	promptService "brokle/internal/core/services/prompt"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
@@ -26,16 +27,16 @@ import (
 )
 
 type handler struct {
-	promptSvc   promptDomain.PromptService
-	compilerSvc promptDomain.CompilerService
+	promptSvc   *promptService.PromptService
+	compilerSvc *promptService.CompilerService
 	logger      *slog.Logger
 }
 
 // RegisterRoutes mounts the dashboard-plane prompt routes on r.
 func RegisterRoutes(
 	r chi.Router,
-	promptSvc promptDomain.PromptService,
-	compilerSvc promptDomain.CompilerService,
+	promptSvc *promptService.PromptService,
+	compilerSvc *promptService.CompilerService,
 	logger *slog.Logger,
 ) {
 	h := &handler{promptSvc: promptSvc, compilerSvc: compilerSvc, logger: logger}
@@ -70,7 +71,7 @@ func RegisterRoutes(
 // derived from the API key.
 func RegisterSDKRoutes(
 	r chi.Router,
-	promptSvc promptDomain.PromptService,
+	promptSvc *promptService.PromptService,
 	logger *slog.Logger,
 ) {
 	h := &handler{promptSvc: promptSvc, logger: logger}

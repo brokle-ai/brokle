@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"brokle/internal/core/domain/auth"
-	orgDomain "brokle/internal/core/domain/organization"
+	authService "brokle/internal/core/services/auth"
+	organizationService "brokle/internal/core/services/organization"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
@@ -26,10 +26,10 @@ import (
 // middleware. This is the canonical chi shape — see go-chi/jwtauth's
 // Verifier(*JWTAuth), go-chi/oauth's NewBearerAuthentication.
 type AuthDeps struct {
-	JWT       auth.JWTService
-	Blacklist auth.BlacklistedTokenService
-	OrgMember auth.OrganizationMemberService
-	Project   orgDomain.ProjectService
+	JWT       *authService.JWTService
+	Blacklist *authService.BlacklistedTokenService
+	OrgMember *authService.OrganizationMemberService
+	Project   *organizationService.ProjectService
 	Logger    *slog.Logger
 }
 

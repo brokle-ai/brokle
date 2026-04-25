@@ -229,4 +229,3 @@ func NewUserProfile(userID uuid.UUID) *UserProfile {
 		UpdatedAt: time.Now(),
 	}
 }
-

@@ -1,3 +1,4 @@
+// Package storage implements blob storage: S3 upload, download, offloading, and reference tracking.
 package storage
 
 import (
@@ -18,14 +19,11 @@ import (
 	"brokle/pkg/uid"
 )
 
-// Ensure BlobStorageService implements the interface
-var _ storage.BlobStorageService = (*BlobStorageService)(nil)
-
 // BlobStorageService implements business logic for blob storage management
 type BlobStorageService struct {
 	blobRepo storage.BlobStorageRepository
 	s3Client *infraStorage.S3Client
-	config   *config.BlobStorageConfig
+	cfg   *config.BlobStorageConfig
 	logger   *slog.Logger
 }
 
@@ -39,7 +37,7 @@ func NewBlobStorageService(
 	return &BlobStorageService{
 		blobRepo: blobRepo,
 		s3Client: s3Client,
-		config:   cfg,
+		cfg:   cfg,
 		logger:   logger,
 	}
 }
@@ -111,7 +109,7 @@ func (s *BlobStorageService) DeleteBlobReference(ctx context.Context, id string)
 	// S3 deletion is best-effort
 	if s.s3Client != nil {
 		if err := s.s3Client.Delete(ctx, blob.BucketPath); err != nil {
-			s.logger.Warn("Failed to delete from S3, continuing with reference deletion", "error", err)
+			s.logger.Warn("failed to delete from S3, continuing with reference deletion", "error", err)
 		}
 	}
 
@@ -157,7 +155,7 @@ func (s *BlobStorageService) GetBlobsByProjectID(ctx context.Context, projectID 
 
 // ShouldOffload returns true if content exceeds the configured threshold (default: 10KB)
 func (s *BlobStorageService) ShouldOffload(content string) bool {
-	return len(content) > s.config.Threshold
+	return len(content) > s.cfg.Threshold
 }
 
 // UploadToS3 uploads content to S3 and creates a blob reference
@@ -180,7 +178,7 @@ func (s *BlobStorageService) UploadToS3(ctx context.Context, content string, pro
 		EntityType: entityType,
 		EntityID:   entityID,
 		EventID:    eventID,
-		BucketName: s.config.BucketName,
+		BucketName: s.cfg.BucketName,
 		BucketPath: s3Key,
 		FileSizeBytes: func() *uint64 {
 			size := uint64(len(contentBytes))
