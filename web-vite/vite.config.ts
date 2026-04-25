@@ -28,6 +28,13 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    // Some CJS deps (and their bundled checks) reference `process.env.NODE_ENV`
+    // in browser-shipped code. Vite normally handles this via esbuild dev
+    // transforms, but Rolldown + a couple of transitive imports leak through
+    // — define a literal here so the browser never sees an undefined `process`.
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development'),
+    },
     server: {
       port: 3001,
       strictPort: true,
