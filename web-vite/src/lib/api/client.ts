@@ -10,41 +10,85 @@ import type { paths as SdkPaths } from './generated/sdk'
 // replayed request ALSO gets 401, we surrender instead of looping.
 const RETRY_HEADER = 'X-Brokle-Retried'
 
-// Paths whose 401 means "the operation failed" (bad credentials,
-// invalid OAuth state, expired reset token, missing refresh cookie),
-// NOT "your session expired." These endpoints establish or manage the
-// session — they have no session to refresh — so the auth-retry-via-
-// refresh path must be skipped, otherwise:
-//   - Login 401 (wrong password) silently fires a /auth/refresh, and
-//     the original "Invalid email or password" message gets replaced
-//     by a synthesized "session expired."
-//   - Refresh 401 would recurse via the same code path until the
-//     RETRY_HEADER short-circuits — wasteful even when bounded.
-//   - Logout 401 (already logged out) triggers a pointless refresh.
+// Public auth endpoints (no session required). Refresh-retry must be
+// SKIPPED for these — their 401 means "wrong credentials" / "expired
+// reset token" / "missing refresh cookie" / etc., not "session
+// expired and refreshable." Mirrors the backend's
+// `RegisterPublicRoutes` set in
+// `internal/transport/http/handlers/auth/routes.go`.
 //
-// Mirrors SigNoz's exclusion list at
-// `competitors/signoz/frontend/src/api/index.ts:111-120` and the
-// `shouldRefresh(error)` URL-predicate documented in
-// `axios-auth-refresh` (~2M weekly DLs). 401 is industry-standard
-// for "wrong credentials" (RFC 9110 §15.5.2, OWASP, GitHub, Auth0,
-// Stripe); the backend is correct, the client must distinguish.
-function isAuthBoundaryPath(url: string): boolean {
+// All OTHER /api/v1/auth/* paths are session-authenticated
+// (`RegisterProtectedRoutes`: /auth/me, /auth/logout,
+// /auth/change-password, /auth/profile, /auth/sessions[/...]) and
+// MUST go through normal refresh-retry — an expired access token on
+// those should rotate via the refresh cookie, not surface as a
+// "session expired" forced re-login.
+const PUBLIC_AUTH_PATHS = new Set<string>([
+  '/api/v1/auth/login',
+  '/api/v1/auth/signup',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/google',
+  '/api/v1/auth/google/callback',
+  '/api/v1/auth/github',
+  '/api/v1/auth/github/callback',
+  '/api/v1/auth/complete-oauth-signup',
+])
+
+// Same idea but for paths with a dynamic suffix (e.g. session_id).
+// Trailing slash is significant — prevents matching unrelated paths
+// like /api/v1/auth/exchange-sessions.
+const PUBLIC_AUTH_PREFIXES: readonly string[] = [
+  '/api/v1/auth/exchange-session/',
+]
+
+export function isAuthBoundaryPath(url: string): boolean {
   try {
+    // Derive the deployment's path prefix from the same API_URL
+    // rawFetch uses to build request URLs, so they cannot drift.
+    // Handles every shape: '' (relative), 'http://localhost:8080'
+    // (absolute, no prefix), '/backend', 'https://host/proxy',
+    // 'https://host/proxy/' (trailing slash stripped).
+    const apiBase = new URL(
+      getRuntimeConfig().API_URL || '/',
+      window.location.origin,
+    )
+    const prefix = apiBase.pathname.replace(/\/$/, '')
     const pathname = url.startsWith('http')
       ? new URL(url).pathname
       : (url.split('?')[0] ?? '')
-    return pathname.startsWith('/api/v1/auth/')
+
+    // Strip the deployment prefix once so the allow-list is checked
+    // against the backend's logical paths.
+    const normalized =
+      prefix && pathname.startsWith(prefix)
+        ? pathname.slice(prefix.length)
+        : pathname
+
+    if (PUBLIC_AUTH_PATHS.has(normalized)) return true
+    return PUBLIC_AUTH_PREFIXES.some((p) => normalized.startsWith(p))
   } catch {
     return false
   }
 }
 
+// Inject the current CSRF token from the cookie into mutation
+// requests. Idempotent: safe to call multiple times on the same
+// Headers object — the latest cookie value wins. This matters for
+// retry paths after `refreshWithLock`, because /auth/refresh rotates
+// the csrf_token cookie alongside access/refresh, so the retried
+// request MUST re-read the cookie or the backend's double-submit
+// check fails (header[old] ≠ cookie[new]).
+function applyCsrfHeader(headers: Headers, method: string): void {
+  if (!MUTATION_METHODS.has(method.toUpperCase())) return
+  const csrf = readCsrfCookie()
+  if (csrf) headers.set('X-CSRF-Token', csrf)
+}
+
 const csrfMiddleware: Middleware = {
   async onRequest({ request }) {
-    if (MUTATION_METHODS.has(request.method.toUpperCase())) {
-      const csrf = readCsrfCookie()
-      if (csrf) request.headers.set('X-CSRF-Token', csrf)
-    }
+    applyCsrfHeader(request.headers, request.method)
     return request
   },
 }
@@ -67,6 +111,10 @@ const authRetryMiddleware: Middleware = {
     const retry = new Request(request, {
       headers: new Headers(request.headers),
     })
+    // Refresh rotated the csrf_token cookie; the preserved CSRF
+    // header is now stale and the backend's double-submit check
+    // would 403. Re-read the cookie on every retry.
+    applyCsrfHeader(retry.headers, retry.method)
     retry.headers.set(RETRY_HEADER, '1')
     return fetch(retry)
   },
@@ -110,10 +158,7 @@ export async function rawFetch(input: string, init: RequestInit = {}): Promise<R
   const url = input.startsWith('http') ? input : `${cfg.API_URL}${input}`
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = new Headers(init.headers)
-  if (MUTATION_METHODS.has(method)) {
-    const csrf = readCsrfCookie()
-    if (csrf) headers.set('X-CSRF-Token', csrf)
-  }
+  applyCsrfHeader(headers, method)
 
   const resp = await fetch(url, { ...init, headers, credentials: 'include' })
 
@@ -131,7 +176,13 @@ export async function rawFetch(input: string, init: RequestInit = {}): Promise<R
       // expired" stand-in.
       await throwTypedError(resp)
     }
+    // Rebuild headers from the caller's init (NOT the augmented
+    // `headers` above) and re-inject CSRF from the freshly-rotated
+    // cookie. The previous request's CSRF token is stale because
+    // /auth/refresh issues a new csrf_token cookie alongside
+    // access/refresh; sending the old one would 403 the retry.
     const retryHeaders = new Headers(init.headers)
+    applyCsrfHeader(retryHeaders, method)
     retryHeaders.set(RETRY_HEADER, '1')
     const retryResp = await fetch(url, {
       ...init,

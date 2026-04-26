@@ -156,6 +156,18 @@ else
   printf '\033[32m✓\033[0m no orphan domain sentinels\n'
 fi
 
+header "Repository nil-slice trap (CLAUDE.md gotcha #23)"
+# Go's encoding/json serialises nil slices as `null`. List-bearing
+# repository methods that declare `var x []T` and conditionally
+# append produce `data: null` for empty result sets, violating
+# the wire contract (`data: []` always) and crashing typed-as-array
+# frontend consumers. Use `make([]T, 0[, cap])` at construction so
+# empty result sets serialise as `[]`. Same canonical Go pattern
+# as SigNoz's `pkg/transition/v5_to_v4.go:18-24`.
+check "no \`var x []T\` in repository files (use \`make([]T, 0)\`)" \
+  '^[[:space:]]*var[[:space:]]+[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]+\[\]' \
+  'internal/infrastructure/repository/'
+
 header "Go conventions (complementing forbidigo)"
 # Migrations must go through CLI — hand-written files get silently ignored.
 # This catches files named without the framework's timestamp prefix.

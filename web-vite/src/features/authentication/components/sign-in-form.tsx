@@ -21,6 +21,7 @@ import { PasswordInput } from '@/components/ui/password-input'
 import { login } from '@/features/authentication/api/auth-api'
 import { buildOAuthUrl } from '@/features/authentication/utils/oauth'
 import { BrokleError } from '@/lib/api/errors'
+import { parseRedirectTo } from '@/lib/auth/redirect'
 import { resetSession } from '@/lib/auth/session'
 import { cn } from '@/lib/utils'
 
@@ -86,7 +87,15 @@ export function SignInForm({ className, redirectTo, ...props }: SignInFormProps)
     try {
       await loginMutation.mutateAsync(data)
       resetSession(router.options.context.queryClient)
-      await navigate({ to: redirectTo ?? '/', replace: true })
+      // `redirectTo` is a URL string from the `?redirect=` query
+      // param. It may include search params (e.g. `/accept-invite?
+      // token=…`). TanStack Router's `to` is pathname-only; search
+      // and hash must be split out. parseRedirectTo also enforces
+      // a same-origin guard against open-redirect attacks.
+      await navigate({
+        ...parseRedirectTo(redirectTo),
+        replace: true,
+      })
     } catch (error) {
       setAuthError(deriveLoginError(error))
     }

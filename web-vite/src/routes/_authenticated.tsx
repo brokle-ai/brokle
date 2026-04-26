@@ -8,26 +8,31 @@ import { useAuthStore } from '@/stores/auth-store'
 // session validity (CLAUDE.md gotcha #22), so the guard asks
 // `/v1/users/me` rather than trusting a local snapshot.
 //
-// Cache strategy: `currentUserQueryOptions` has `staleTime: 5min` +
-// `retry: false`, so in-tab navigations hit the cache (no extra round
-// trip). Cold reloads pay one `/me` request and seed the Zustand store
-// for the rest of the session.
+// Cache strategy: `currentUserQueryOptions` has a short `staleTime`
+// (30s). The gate uses `fetchQuery` (NOT `ensureQueryData`) so it
+// honours that staleness: cache fresh → return cached, no /me round
+// trip; cache stale (>30s) or missing → refetch. `ensureQueryData`
+// returns cached data regardless of staleness, which would let an
+// expired backend session keep admitting navigations indefinitely
+// after the first successful /me.
 //
-// `context.auth` from main.tsx is now a fast-path UI hint (header
-// avatar, sidebar), not a security gate. The gate is this beforeLoad.
+// Bounded admission window: 30s is long enough for typical click
+// cadence (no /me storm on rapid navigation), short enough that a
+// session-ended state surfaces within a half-minute on the next
+// nav.
+//
+// `context.auth` from main.tsx is a fast-path UI hint (header avatar,
+// sidebar), not a security gate. The gate is this beforeLoad.
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
     try {
-      const user = await context.queryClient.ensureQueryData(
+      const user = await context.queryClient.fetchQuery(
         currentUserQueryOptions(),
       )
       // Always mirror the latest /me into the store. Backend is
-      // authority on every field (default_organization_id, first_name,
-      // is_email_verified, …); skipping on matching ids would pin them
-      // to the cold-load snapshot. `ensureQueryData` returns the cached
-      // reference unchanged when the query is fresh, so this is a
-      // Zustand no-op for warm in-tab navigations (selectors compare
-      // user references via Object.is).
+      // authority on every field (default_organization_id,
+      // first_name, is_email_verified, …); on cache hits this writes
+      // the same reference (Zustand no-op for selectors via Object.is).
       useAuthStore.getState().setUser(user)
     } catch (err) {
       if (err instanceof AuthenticationError) {

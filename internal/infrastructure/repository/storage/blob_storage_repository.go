@@ -222,7 +222,7 @@ func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*storage.BlobStorag
 }
 
 func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*storage.BlobStorageFileLog, error) {
-	var blobs []*storage.BlobStorageFileLog
+	blobs := make([]*storage.BlobStorageFileLog, 0)
 
 	for rows.Next() {
 		var blob storage.BlobStorageFileLog

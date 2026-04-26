@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { registerSessionReset } from '@/lib/auth/session'
 import type {
   ChatMessage,
   ModelConfig,
@@ -494,3 +495,9 @@ export const usePlaygroundStore = create<PlaygroundState>()((set, get) => ({
     set({ windows: newWindows })
   },
 }))
+
+// Account-scoped state — wipe when crossing the auth boundary so the
+// next user doesn't inherit the previous user's windows / run
+// history / shared variables. Module-load side effect (matches
+// Zustand's own `create()` pattern of self-initialising on import).
+registerSessionReset(() => usePlaygroundStore.getState().clearAll())

@@ -1,6 +1,7 @@
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import type { QueryClient } from '@tanstack/react-query'
+import { NuqsAdapter } from 'nuqs/adapters/tanstack-router'
 import { Suspense } from 'react'
 import { RootErrorFallback } from '@/components/layout/root-error-fallback'
 
@@ -26,14 +27,20 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 })
 
 function RootLayout() {
+  // NuqsAdapter mounts inside the router (not in main.tsx) because
+  // `nuqs/adapters/tanstack-router` uses `useLocation`/`useRouter`
+  // hooks that require the <RouterProvider> context. Wrapping the
+  // Outlet here puts every descendant route inside the adapter so
+  // every `useQueryStates`/`useQueryState` consumer (dashboards,
+  // datasets, prompts) resolves without per-feature setup.
   return (
-    <>
+    <NuqsAdapter>
       <Outlet />
       {import.meta.env.DEV && (
         <Suspense fallback={null}>
           <TanStackRouterDevtools position="bottom-right" />
         </Suspense>
       )}
-    </>
+    </NuqsAdapter>
   )
 }

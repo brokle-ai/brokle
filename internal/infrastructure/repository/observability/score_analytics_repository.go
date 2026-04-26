@@ -140,7 +140,7 @@ func (r *scoreAnalyticsRepository) GetTimeSeries(ctx context.Context, filter *ob
 	}
 	defer rows.Close()
 
-	var points []observability.TraceTimeSeriesPoint
+	points := make([]observability.TraceTimeSeriesPoint, 0)
 	for rows.Next() {
 		var point observability.TraceTimeSeriesPoint
 		if err := rows.Scan(&point.Timestamp, &point.AvgValue, &point.Count); err != nil {
@@ -350,7 +350,7 @@ func (r *scoreAnalyticsRepository) GetHeatmap(ctx context.Context, filter *obser
 	}
 	defer rows.Close()
 
-	var cells []observability.HeatmapCell
+	cells := make([]observability.HeatmapCell, 0)
 	for rows.Next() {
 		var bin1, bin2 int64
 		var count uint64
@@ -517,7 +517,7 @@ func (r *scoreAnalyticsRepository) GetDistinctScoreNames(ctx context.Context, pr
 	}
 	defer rows.Close()
 
-	var names []string
+	names := make([]string, 0)
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
@@ -647,7 +647,7 @@ func (r *scoreAnalyticsRepository) GetExperimentScoreSummary(ctx context.Context
 	}
 	defer rows.Close()
 
-	var summaries []observability.ExperimentScoreSummary
+	summaries := make([]observability.ExperimentScoreSummary, 0)
 	for rows.Next() {
 		var s observability.ExperimentScoreSummary
 		if err := rows.Scan(&s.ExperimentID, &s.ScoreName, &s.Count, &s.SumValue, &s.MinValue, &s.MaxValue); err != nil {
@@ -707,7 +707,7 @@ func (r *scoreAnalyticsRepository) GetSourceDistribution(ctx context.Context, pr
 	}
 	defer rows.Close()
 
-	var points []observability.SourceDistributionPoint
+	points := make([]observability.SourceDistributionPoint, 0)
 	for rows.Next() {
 		var p observability.SourceDistributionPoint
 		var sourceEnum uint8
@@ -768,7 +768,7 @@ func (r *scoreAnalyticsRepository) GetDailySummary(ctx context.Context, projectI
 	}
 	defer rows.Close()
 
-	var points []observability.DailySummaryPoint
+	points := make([]observability.DailySummaryPoint, 0)
 	for rows.Next() {
 		var p observability.DailySummaryPoint
 		if err := rows.Scan(&p.Day, &p.Count, &p.SumValue, &p.MinValue, &p.MaxValue); err != nil {

@@ -1,21 +1,55 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth-store'
 
-// Single primitive for crossing the auth boundary. Every login,
-// logout, and terminal-401 path goes through this so the cache-reset
-// invariant cannot drift between call sites.
+// Two primitives for crossing the auth boundary, picked by call site:
 //
-// Order is load-bearing:
-//   1. Drop the Zustand mirror first so any concurrent render cannot
-//      observe a post-clear cache miss against the previous user.
-//   2. Wipe the React Query cache. Cancels in-flight queries and
-//      removes every cached entry — required for cross-account
-//      isolation because most query keys are org-/project-scoped, not
-//      user-scoped (TanStack Query Discussion #7839).
+//   resetSession(qc)        — full reset INCLUDING queryClient.clear().
+//                             Use from sites where observers are about
+//                             to unmount (login success, logout, route-
+//                             guard catch path → throw redirect).
 //
-// Callers seed the new session AFTER calling this — `setUser` then
-// `setQueryData(authKeys.currentUser(), user)` — and finally navigate.
+//   notifySessionEnded()    — auth store + registered store callbacks,
+//                             but NO queryClient.clear(). Use from
+//                             observer hooks (`useCurrentUser`) that
+//                             fire on AuthenticationError. qc.clear()
+//                             would remove the observer's active query,
+//                             causing React Query to immediately
+//                             recreate it and re-fire the failed
+//                             request in a loop on routes that stay
+//                             mounted while unauthenticated (e.g.
+//                             /accept-invite).
+//
+// Both invoke the registered Zustand store reset callbacks (e.g.
+// `usePlaygroundStore.clearAll`) so account-scoped non-query state is
+// wiped uniformly. Preferences-only stores (UI theme/font/sidebar)
+// MUST NOT register so prefs survive logout.
+//
+// Pattern: https://zustand.docs.pmnd.rs/guides/how-to-reset-state
+const sessionResetCallbacks = new Set<() => void>()
+
+export function registerSessionReset(callback: () => void): void {
+  sessionResetCallbacks.add(callback)
+}
+
+function runRegisteredCallbacks(): void {
+  for (const cb of sessionResetCallbacks) {
+    try {
+      cb()
+    } catch (err) {
+      // Per-store reset failure must not block the auth boundary;
+      // every other registered reset still runs. Log for diagnostics.
+      console.error('[session] reset callback failed', err)
+    }
+  }
+}
+
+export function notifySessionEnded(): void {
+  useAuthStore.getState().expireSession()
+  runRegisteredCallbacks()
+}
+
 export function resetSession(queryClient: QueryClient): void {
   useAuthStore.getState().expireSession()
   queryClient.clear()
+  runRegisteredCallbacks()
 }

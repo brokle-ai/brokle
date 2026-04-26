@@ -142,7 +142,7 @@ func (r *widgetQueryRepository) ExecuteHistogramQuery(
 
 	// ClickHouse histogram() returns an array of tuples (lower, upper, count)
 	for rows.Next() {
-		var buckets [][]float64
+		buckets := make([][]float64, 0)
 
 		if err := rows.Scan(&buckets); err != nil {
 			return nil, fmt.Errorf("scan histogram row: %w", err)

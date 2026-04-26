@@ -7,10 +7,13 @@ export const authKeys = {
   currentUser: () => [...authKeys.all, 'currentUser'] as const,
 } as const
 
-// `staleTime: 5min` matches the backend session TTL granularity and
-// neutralises TanStack Router issue #3997 — `beforeLoad` +
-// `ensureQueryData` now read from cache on every in-tab navigation,
-// not the network.
+// `staleTime: 30s` is the bounded admission window for the auth
+// gate (`_authenticated.beforeLoad` via `ensureQueryData`). Short
+// enough that a session-ended state surfaces within a half-minute
+// on the next navigation; long enough that rapid intra-tree clicks
+// hit the cache and don't fire `/me` on every page change. Same
+// cache is read by component-side `useQuery(currentUserQueryOptions())`
+// (header avatar, sidebar) — staleness is acceptable there too.
 export const currentUserQueryOptions = () =>
   queryOptions({
     queryKey: authKeys.currentUser(),
@@ -18,6 +21,6 @@ export const currentUserQueryOptions = () =>
       const resp = await rawFetch('/api/v1/users/me', { method: 'GET' })
       return (await resp.json()) as SessionUser
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     retry: false,
   })

@@ -90,10 +90,10 @@ func (r *cacheRepository) Delete(ctx context.Context, key string) error {
 func (r *cacheRepository) DeleteByPattern(ctx context.Context, pattern string) error {
 	// Use SCAN to find matching keys (safer than KEYS for production)
 	var cursor uint64
-	var keysToDelete []string
+	keysToDelete := make([]string, 0)
 
 	for {
-		var keys []string
+		keys := make([]string, 0)
 		var err error
 		keys, cursor, err = r.db.Scan(ctx, cursor, pattern, 100)
 		if err != nil {
