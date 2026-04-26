@@ -1,11 +1,29 @@
 // Package project is the dashboard-plane project handler domain.
-// Exposes /api/v1/projects CRUD + archive/unarchive. Dashboard plane.
 //
-// Authorisation: RequireAuth guards every operation; membership in
-// the project's organisation is verified per-op via the organization
-// member service (list/create) or ProjectService.ValidateProjectAccess
-// (get/update/delete/archive/unarchive — the service checks membership
-// through the project's org).
+// Routes (mounted in internal/server/routes.go):
+//
+//   - GET    /api/v1/organizations/{orgId}/projects   — list   (org-scoped)
+//   - POST   /api/v1/organizations/{orgId}/projects   — create (org-scoped)
+//   - GET    /api/v1/projects/{projectId}             — get
+//   - PUT    /api/v1/projects/{projectId}             — update
+//   - DELETE /api/v1/projects/{projectId}             — delete
+//   - POST   /api/v1/projects/{projectId}/archive
+//   - POST   /api/v1/projects/{projectId}/unarchive
+//
+// Authorisation:
+//   - List/Create are mounted under RequireOrganizationAccess, which
+//     pins orgID into ctx after verifying membership. Handlers read
+//     orgID via httpctx.MustGetOrganizationID — never from the body or
+//     query string. URL is the single source of truth for tenancy
+//     (Stripe / GitHub / PostHog convention).
+//   - Get/Update/Delete/Archive/Unarchive are mounted under
+//     RequireProjectAccess, which validates membership in the
+//     project's org and pins both projectID and orgID into ctx.
+//
+// No handler-level membership re-checks: the middleware enforcement
+// is the single layer; the project service uses
+// ValidateProjectAccess for the project-scoped ops as a service-side
+// invariant guard, not as defence-in-depth duplication.
 package project
 
 import (
@@ -14,11 +32,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
+	organizationService "brokle/internal/core/services/organization"
 
 	"brokle/internal/core/domain/organization"
-	organizationService "brokle/internal/core/services/organization"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
@@ -26,38 +42,14 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	projectSvc *organizationService.ProjectService
-	orgSvc     *organizationService.OrganizationService
-	memberSvc  *organizationService.MemberService
 	logger     *slog.Logger
 }
 
-// RegisterRoutes mounts the project routes on r. Expected mount
-// context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(
-	r chi.Router,
-	projectSvc *organizationService.ProjectService,
-	orgSvc *organizationService.OrganizationService,
-	memberSvc *organizationService.MemberService,
-	logger *slog.Logger,
-) {
-	h := &handler{
-		projectSvc: projectSvc,
-		orgSvc:     orgSvc,
-		memberSvc:  memberSvc,
-		logger:     logger,
-	}
-
-	r.Route("/api/v1/projects", func(r chi.Router) {
-		r.Get("/", h.list)
-		r.Post("/", h.create)
-		r.Get("/{projectId}", h.get)
-		r.Put("/{projectId}", h.update)
-		r.Delete("/{projectId}", h.delete)
-		r.Post("/{projectId}/archive", h.archive)
-		r.Post("/{projectId}/unarchive", h.unarchive)
-	})
+// New constructs the project handler.
+func New(projectSvc *organizationService.ProjectService, logger *slog.Logger) *Handler {
+	return &Handler{projectSvc: projectSvc, logger: logger}
 }
 
 func toProject(p *organization.Project) project {
@@ -74,8 +66,21 @@ func toProject(p *organization.Project) project {
 
 // ----- list ------------------------------------------------------------
 
-func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	userID := httpctx.MustGetUserID(r.Context())
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
+
+	// Reject query overrides of URL scope. If a future caller mistakenly
+	// sends `?organization_id=` thinking it controls scope, fail loudly
+	// with 422 — silent ignore was exactly the bug class that produced
+	// the cross-org regression after the URL refactor.
+	if r.URL.Query().Has("organization_id") {
+		response.WriteError(w, appErrors.NewValidationError(
+			"Unknown query parameter",
+			"organization_id is set by the URL path, not the query string",
+			appErrors.WithParam("organization_id"),
+		))
+		return
+	}
 
 	q := r.URL.Query()
 	page, limit, err := request.QueryPagination(r)
@@ -92,61 +97,15 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 	if params.SortDir != "asc" && params.SortDir != "desc" {
 		params.SortDir = "desc"
 	}
-
-	var projects []*organization.Project
-	orgIDStr := q.Get("organization_id")
 	status := q.Get("status")
 	search := q.Get("search")
 
-	if orgIDStr != "" {
-		orgID, err := uuid.Parse(orgIDStr)
-		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid organization ID",
-				"organization_id must be a valid UUID",
-				appErrors.WithParam("organization_id"),
-			))
-			return
-		}
-
-		isMember, err := h.memberSvc.IsMember(r.Context(), userID, orgID)
-		if err != nil {
-			h.logger.WarnContext(r.Context(), "project: membership check failed",
-				"user_id", userID, "org_id", orgID, "error", err)
-			response.WriteError(w, err)
-			return
-		}
-		if !isMember {
-			response.WriteError(w, appErrors.NewForbiddenError(
-				"You don't have access to this organization"))
-			return
-		}
-
-		projects, err = h.projectSvc.GetProjectsByOrganization(r.Context(), orgID)
-		if err != nil {
-			h.logger.WarnContext(r.Context(), "project: list by org failed",
-				"user_id", userID, "org_id", orgID, "error", err)
-			response.WriteError(w, err)
-			return
-		}
-	} else {
-		userOrgs, err := h.orgSvc.GetUserOrganizations(r.Context(), userID)
-		if err != nil {
-			h.logger.WarnContext(r.Context(), "project: user-orgs lookup failed",
-				"user_id", userID, "error", err)
-			response.WriteError(w, err)
-			return
-		}
-		for _, org := range userOrgs {
-			orgProjects, err := h.projectSvc.GetProjectsByOrganization(r.Context(), org.ID)
-			if err != nil {
-				h.logger.WarnContext(r.Context(),
-					"project: skip org due to projects lookup failure",
-					"user_id", userID, "org_id", org.ID, "error", err)
-				continue
-			}
-			projects = append(projects, orgProjects...)
-		}
+	projects, err := h.projectSvc.GetProjectsByOrganization(r.Context(), orgID)
+	if err != nil {
+		h.logger.WarnContext(r.Context(), "project: list by org failed",
+			"org_id", orgID, "error", err)
+		response.WriteError(w, err)
+		return
 	}
 
 	filtered := make([]*organization.Project, 0, len(projects))
@@ -191,35 +150,17 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 
 // ----- create ----------------------------------------------------------
 
-func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 
+	// pkg/request.DecodeJSON enforces DisallowUnknownFields. A client
+	// sending `organization_id` in the body gets a 422 here — the
+	// cross-tenant write attack class is structurally impossible
+	// because createProjectBody has no tenancy field at all.
 	var body createProjectBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
-		return
-	}
-
-	orgID, err := uuid.Parse(body.OrganizationID)
-	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid organization ID",
-			"organization_id must be a valid UUID",
-			appErrors.WithParam("organization_id"),
-		))
-		return
-	}
-
-	isMember, err := h.memberSvc.IsMember(r.Context(), userID, orgID)
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "project: membership check failed",
-			"user_id", userID, "org_id", orgID, "error", err)
-		response.WriteError(w, err)
-		return
-	}
-	if !isMember {
-		response.WriteError(w, appErrors.NewForbiddenError(
-			"You don't have permission to create projects in this organization"))
 		return
 	}
 
@@ -241,7 +182,7 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 
 // ----- get -------------------------------------------------------------
 
-func (h *handler) get(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -266,7 +207,7 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 
 // ----- update ----------------------------------------------------------
 
-func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -310,7 +251,7 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 
 // ----- delete ----------------------------------------------------------
 
-func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -339,7 +280,7 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 
 // ----- archive / unarchive --------------------------------------------
 
-func (h *handler) archive(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -363,7 +304,7 @@ func (h *handler) archive(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) unarchive(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Unarchive(w http.ResponseWriter, r *http.Request) {
 	projectID, err := request.URLParamUUID(r, "projectId")
 	if err != nil {
 		response.WriteError(w, err)

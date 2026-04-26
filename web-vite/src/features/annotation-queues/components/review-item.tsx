@@ -61,9 +61,9 @@ type ScoresState = Record<string, ScoreInputValue>
 // When a span-typed item arrives we must resolve its parent trace ID
 // before the trace viewer can render. The endpoint mirrors the
 // backend's span-get response shape (same `Span` DTO as the list).
-async function getSpanByID(spanId: string): Promise<Span> {
+async function getSpanByID(projectId: string, spanId: string): Promise<Span> {
   const resp = await rawFetch(
-    `/api/v1/spans/${encodeURIComponent(spanId)}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/spans/${encodeURIComponent(spanId)}`,
     { method: 'GET' },
   )
   return (await resp.json()) as Span
@@ -344,6 +344,7 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
             </CardHeader>
             <CardContent>
               <ReviewObjectView
+                projectId={projectId}
                 objectType={currentItem.object_type}
                 objectId={currentItem.object_id}
               />
@@ -438,6 +439,7 @@ export function ReviewItem({ orgId, projectId, queueId }: ReviewItemProps) {
 }
 
 interface ReviewObjectViewProps {
+  projectId: string
   objectType: 'trace' | 'span'
   objectId: string
 }
@@ -449,10 +451,10 @@ interface ReviewObjectViewProps {
 // the review route rather than reusing TraceDetail keeps the surface
 // focused on "read the prompt, score it" without importing the full
 // trace timeline UI.
-function ReviewObjectView({ objectType, objectId }: ReviewObjectViewProps) {
+function ReviewObjectView({ projectId, objectType, objectId }: ReviewObjectViewProps) {
   const spanLookup = useQuery({
-    queryKey: ['review-span-lookup', objectId],
-    queryFn: () => getSpanByID(objectId),
+    queryKey: ['review-span-lookup', projectId, objectId],
+    queryFn: () => getSpanByID(projectId, objectId),
     enabled: objectType === 'span',
     staleTime: 30 * 1000,
   })
@@ -460,11 +462,11 @@ function ReviewObjectView({ objectType, objectId }: ReviewObjectViewProps) {
   const traceId =
     objectType === 'trace' ? objectId : spanLookup.data?.trace_id
   const trace = useQuery({
-    ...traceDetailQueryOptions(traceId ?? ''),
+    ...traceDetailQueryOptions(projectId, traceId ?? ''),
     enabled: Boolean(traceId),
   })
   const spans = useQuery({
-    ...traceSpansQueryOptions(traceId ?? ''),
+    ...traceSpansQueryOptions(projectId, traceId ?? ''),
     enabled: Boolean(traceId),
   })
 

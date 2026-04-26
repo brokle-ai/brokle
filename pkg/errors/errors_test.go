@@ -94,21 +94,6 @@ func TestAppErrorIs(t *testing.T) {
 	}
 }
 
-// TestCodeOrTypeFallback verifies the wire-format invariant: the
-// `code` field is never empty in the rendered envelope. When Code is
-// unset, CodeOrType falls back to string(Type).
-func TestCodeOrTypeFallback(t *testing.T) {
-	bare := New(TypeRateLimit, "slow down")
-	if bare.CodeOrType() != string(TypeRateLimit) {
-		t.Errorf("CodeOrType() with empty Code = %q, want %q", bare.CodeOrType(), TypeRateLimit)
-	}
-
-	withCode := New(TypeRateLimit, "slow down", WithCode("quota_exceeded"))
-	if withCode.CodeOrType() != "quota_exceeded" {
-		t.Errorf("CodeOrType() with Code = %q, want %q", withCode.CodeOrType(), "quota_exceeded")
-	}
-}
-
 // TestFunctionalOptions sanity-checks the variadic-options pattern —
 // each option must mutate only its own field, options must compose,
 // and the typed constructors must default Type / Code consistently.
@@ -176,8 +161,13 @@ func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
 	if inner["type"] != string(TypeAuthentication) {
 		t.Errorf("error.type = %q, want %q", inner["type"], TypeAuthentication)
 	}
-	if inner["code"] != string(TypeAuthentication) {
-		t.Errorf("error.code = %q, want %q (CodeOrType fallback)", inner["code"], TypeAuthentication)
+	// `code` is OPTIONAL — Stripe behaviour. The constructor used here
+	// (NewUnauthorizedError) does not set Code, so the wire envelope
+	// must OMIT the field (omitempty) rather than echo Type. This pins
+	// the post-fix behaviour against regressing back to the old
+	// CodeOrType fallback.
+	if _, exists := inner["code"]; exists {
+		t.Errorf("error.code must be omitted when unset; got %v", inner["code"])
 	}
 	if inner["message"] != "Invalid email or password" {
 		t.Errorf("error.message = %q, want %q", inner["message"], "Invalid email or password")

@@ -28,46 +28,21 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	svc      *dashboardService.DashboardService
 	query    *dashboardService.WidgetQueryService
 	template *dashboardService.TemplateService
 	logger   *slog.Logger
 }
 
-// RegisterRoutes mounts the dashboard routes on r. Expected mount
-// context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs the dashboard handler.
+func New(
 	svc *dashboardService.DashboardService,
 	query *dashboardService.WidgetQueryService,
 	template *dashboardService.TemplateService,
 	logger *slog.Logger,
-) {
-	h := &handler{svc: svc, query: query, template: template, logger: logger}
-
-	r.Route("/api/v1/projects/{projectId}/dashboards", func(r chi.Router) {
-		r.Get("/", h.list)
-		r.Post("/", h.create)
-		r.Post("/import", h.importDashboard)
-		r.Post("/from-template", h.createFromTemplate)
-		r.Get("/variable-options", h.variableOptions)
-		r.Route("/{dashboardId}", func(r chi.Router) {
-			r.Get("/", h.get)
-			r.Put("/", h.update)
-			r.Delete("/", h.delete)
-			r.Post("/duplicate", h.duplicate)
-			r.Post("/lock", h.lock)
-			r.Post("/unlock", h.unlock)
-			r.Get("/export", h.export)
-			r.Post("/execute", h.executeDashboard)
-			r.Post("/widgets/{widgetId}/execute", h.executeWidget)
-		})
-	})
-
-	r.Get("/api/v1/dashboards/view-definitions", h.viewDefinitions)
-	r.Get("/api/v1/dashboard-templates", h.listTemplates)
-	r.Get("/api/v1/dashboard-templates/{templateId}", h.getTemplate)
+) *Handler {
+	return &Handler{svc: svc, query: query, template: template, logger: logger}
 }
 
 // userIDPtr returns a *uuid.UUID when an authenticated user is present
@@ -84,12 +59,8 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 
 // ---- list -------------------------------------------------------------
 
-func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	limit, err := request.QueryInt(r, "limit", 0)
 	if err != nil {
 		response.WriteError(w, err)
@@ -125,12 +96,8 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 
 // ---- create -----------------------------------------------------------
 
-func (h *handler) create(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body dashboardDomain.CreateDashboardRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -155,12 +122,8 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 
 // ---- get --------------------------------------------------------------
 
-func (h *handler) get(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -176,12 +139,8 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 
 // ---- update -----------------------------------------------------------
 
-func (h *handler) update(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -202,12 +161,8 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 
 // ---- delete -----------------------------------------------------------
 
-func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -222,12 +177,8 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 
 // ---- duplicate --------------------------------------------------------
 
-func (h *handler) duplicate(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Duplicate(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -255,12 +206,8 @@ func (h *handler) duplicate(w http.ResponseWriter, r *http.Request) {
 
 // ---- lock / unlock ----------------------------------------------------
 
-func (h *handler) lock(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Lock(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -274,12 +221,8 @@ func (h *handler) lock(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, dash)
 }
 
-func (h *handler) unlock(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Unlock(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -295,12 +238,8 @@ func (h *handler) unlock(w http.ResponseWriter, r *http.Request) {
 
 // ---- export / import --------------------------------------------------
 
-func (h *handler) export(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -314,12 +253,8 @@ func (h *handler) export(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exp)
 }
 
-func (h *handler) importDashboard(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ImportDashboard(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body dashboardDomain.DashboardImportRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -348,12 +283,8 @@ func (b *executeDashboardBody) toDomainTimeRange() *dashboardDomain.DashboardTim
 	}
 }
 
-func (h *handler) executeDashboard(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ExecuteDashboard(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -379,12 +310,8 @@ func (h *handler) executeDashboard(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, results)
 }
 
-func (h *handler) executeWidget(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ExecuteWidget(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	dashboardID, err := request.URLParamUUID(r, "dashboardId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -423,7 +350,7 @@ func (h *handler) executeWidget(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *handler) viewDefinitions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ViewDefinitions(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.query.GetViewDefinitions(r.Context())
 	if err != nil {
 		response.WriteError(w, err)
@@ -432,12 +359,8 @@ func (h *handler) viewDefinitions(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, resp)
 }
 
-func (h *handler) variableOptions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) VariableOptions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	view := r.URL.Query().Get("view")
 	dimension := r.URL.Query().Get("dimension")
 	if view == "" {
@@ -478,7 +401,7 @@ func (h *handler) variableOptions(w http.ResponseWriter, r *http.Request) {
 
 // ---- templates --------------------------------------------------------
 
-func (h *handler) listTemplates(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	templates, err := h.template.ListTemplates(r.Context())
 	if err != nil {
 		response.WriteError(w, err)
@@ -487,7 +410,7 @@ func (h *handler) listTemplates(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, templates)
 }
 
-func (h *handler) getTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID, err := request.URLParamUUID(r, "templateId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -501,12 +424,8 @@ func (h *handler) getTemplate(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, tmpl)
 }
 
-func (h *handler) createFromTemplate(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateFromTemplate(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body dashboardDomain.CreateFromTemplateRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)

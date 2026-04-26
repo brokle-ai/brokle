@@ -3,30 +3,16 @@ package evaluation
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-func registerExecutionRoutes(r chi.Router, h *handler) {
-	r.Route("/evaluators/{evaluatorId}/executions", func(r chi.Router) {
-		r.Get("/", h.listExecutions)
-		r.Get("/latest", h.getLatestExecution)
-		r.Get("/{executionId}", h.getExecution)
-		r.Get("/{executionId}/detail", h.getExecutionDetail)
-	})
-}
-
-func (h *handler) listExecutions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListExecutions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -64,12 +50,8 @@ func (h *handler) listExecutions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) getLatestExecution(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetLatestExecution(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -87,12 +69,8 @@ func (h *handler) getLatestExecution(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exec.ToResponse())
 }
 
-func (h *handler) getExecution(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetExecution(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	// evaluatorId is parsed for validation only.
 	if _, err := request.URLParamUUID(r, "evaluatorId"); err != nil {
 		response.WriteError(w, err)
@@ -111,12 +89,8 @@ func (h *handler) getExecution(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exec.ToResponse())
 }
 
-func (h *handler) getExecutionDetail(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetExecutionDetail(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)

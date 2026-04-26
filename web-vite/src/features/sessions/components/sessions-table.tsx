@@ -33,7 +33,7 @@ interface SessionsTableProps {
   /**
    * Project context — required for the inline expansion to fetch
    * traces scoped to a session via the traces list endpoint
-   * (`/api/v1/traces?session_id=...`).
+   * (`/api/v1/projects/{projectId}/traces?session_id=...`).
    */
   projectId: string
   /**

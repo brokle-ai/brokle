@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
@@ -17,13 +16,7 @@ import (
 	"brokle/pkg/uid"
 )
 
-// registerSDKScoreRoutes wires the SDK-plane score ingestion routes.
-func registerSDKScoreRoutes(r chi.Router, h *handler) {
-	r.Post("/v1/scores", h.sdkCreateScore)
-	r.Post("/v1/scores/batch", h.sdkCreateScoreBatch)
-}
-
-func (h *handler) sdkCreateScore(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCreateScore(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	var body CreateScoreRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -52,7 +45,7 @@ func (h *handler) sdkCreateScore(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, toSubmittedScoreResponse(score))
 }
 
-func (h *handler) sdkCreateScoreBatch(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCreateScoreBatch(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	var body BatchScoreRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -93,7 +86,7 @@ func (h *handler) sdkCreateScoreBatch(w http.ResponseWriter, r *http.Request) {
 // ScoreConfig when one exists. Absence of a config is allowed
 // (unvalidated ingestion); lookup errors other than not-found fail
 // closed.
-func (h *handler) validateScoreAgainstConfig(
+func (h *Handler) validateScoreAgainstConfig(
 	ctx context.Context,
 	projectID uuid.UUID,
 	name, scoreType string,
@@ -149,7 +142,7 @@ func (h *handler) validateScoreAgainstConfig(
 	return nil
 }
 
-func (h *handler) buildScore(projectID uuid.UUID, req *CreateScoreRequest) *observability.Score {
+func (h *Handler) buildScore(projectID uuid.UUID, req *CreateScoreRequest) *observability.Score {
 	metadata := json.RawMessage("{}")
 	if req.Metadata != nil {
 		if b, err := json.Marshal(req.Metadata); err == nil {

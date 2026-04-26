@@ -1,4 +1,4 @@
-# System Permissions (65 total)
+# System Permissions (86 total)
 # Format: resource:action
 
 permissions:
@@ -167,3 +167,59 @@ permissions:
     description: "Update prompt templates"
   - name: "prompts:delete"
     description: "Delete prompt templates"
+
+  # Scores Management (observability scores attached to traces/spans)
+  - name: "scores:read"
+    description: "View scores"
+  - name: "scores:write"
+    description: "Create and update scores"
+  - name: "scores:delete"
+    description: "Delete scores"
+
+  # Dashboards Management (custom project dashboards)
+  - name: "dashboards:read"
+    description: "View dashboards and widgets"
+  - name: "dashboards:write"
+    description: "Create and update dashboards and widgets"
+  - name: "dashboards:delete"
+    description: "Delete dashboards"
+  - name: "dashboards:execute"
+    description: "Execute dashboard and widget queries"
+
+  # Annotation Queues (HITL review)
+  - name: "annotation-queues:read"
+    description: "View annotation queues, items, and assignments"
+  - name: "annotation-queues:write"
+    description: "Create, update annotation queues, items, and assignments"
+  - name: "annotation-queues:delete"
+    description: "Delete annotation queues, items, and assignments"
+
+  # Evaluations (datasets, experiments, evaluators, score-configs)
+  - name: "evaluations:read"
+    description: "View datasets, experiments, evaluators, and score configs"
+  - name: "evaluations:write"
+    description: "Create and update datasets, experiments, evaluators, and score configs"
+  - name: "evaluations:delete"
+    description: "Delete datasets, experiments, evaluators, and score configs"
+
+  # Playground
+  - name: "playground:read"
+    description: "View playground sessions"
+  - name: "playground:execute"
+    description: "Execute prompts in the playground"
+
+  # Comments (trace-attached discussion threads)
+  - name: "comments:read"
+    description: "View comments on traces"
+  - name: "comments:write"
+    description: "Create and update comments and reactions"
+  - name: "comments:delete"
+    description: "Delete comments"
+
+  # Filter Presets (saved trace/span filter sets)
+  - name: "filter-presets:read"
+    description: "View saved filter presets"
+  - name: "filter-presets:write"
+    description: "Create and update filter presets"
+  - name: "filter-presets:delete"
+    description: "Delete filter presets"

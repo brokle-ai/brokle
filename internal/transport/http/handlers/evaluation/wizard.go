@@ -3,29 +3,14 @@ package evaluation
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-func registerWizardRoutes(r chi.Router, h *handler) {
-	r.Route("/experiments/wizard", func(r chi.Router) {
-		r.Post("/", h.wizardCreate)
-		r.Post("/validate", h.wizardValidate)
-		r.Post("/estimate", h.wizardEstimate)
-	})
-	r.Get("/datasets/{datasetId}/fields", h.wizardDatasetFields)
-	r.Get("/experiments/{experimentId}/config", h.wizardGetConfig)
-}
-
-func (h *handler) wizardCreate(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) WizardCreate(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body evaluationDomain.CreateExperimentFromWizardRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -39,12 +24,8 @@ func (h *handler) wizardCreate(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, exp.ToResponse())
 }
 
-func (h *handler) wizardValidate(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) WizardValidate(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body evaluationDomain.ValidateStepRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -58,12 +39,8 @@ func (h *handler) wizardValidate(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, res)
 }
 
-func (h *handler) wizardEstimate(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) WizardEstimate(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body evaluationDomain.EstimateCostRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -77,12 +54,8 @@ func (h *handler) wizardEstimate(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, res)
 }
 
-func (h *handler) wizardDatasetFields(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) WizardDatasetFields(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -96,12 +69,8 @@ func (h *handler) wizardDatasetFields(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, res)
 }
 
-func (h *handler) wizardGetConfig(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) WizardGetConfig(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)

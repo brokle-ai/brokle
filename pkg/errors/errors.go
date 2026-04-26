@@ -135,9 +135,12 @@ type ErrorDetail struct {
 }
 
 // AppError is the canonical HTTP-aware domain error. Construct with one
-// of the typed New* helpers below or as a struct literal in tests; Type
-// and Message are required, Code defaults to string(Type) on the wire
-// when unset.
+// of the typed New* helpers below or as a struct literal in tests. Type
+// and Message are required; Code is OPTIONAL — set it via WithCode only
+// when you want to give SDK consumers a specific subcode to branch on
+// beyond Type. Defaults to empty (omitted from the wire) — matches
+// Stripe behaviour: code is present only when programmatically
+// actionable.
 //
 // The struct exists at the package boundary intentionally — domain
 // services return *AppError, the response renderer reads its fields
@@ -212,7 +215,7 @@ func (e *AppError) MarshalJSON() ([]byte, error) {
 	}{
 		Error: inner{
 			Type:    string(e.Type),
-			Code:    e.CodeOrType(),
+			Code:    e.Code,
 			Message: e.Message,
 			Details: e.Details,
 			Param:   e.Param,
@@ -231,16 +234,6 @@ type inner struct {
 	Details string        `json:"details,omitempty"`
 	Param   string        `json:"param,omitempty"`
 	Errors  []ErrorDetail `json:"errors,omitempty"`
-}
-
-// CodeOrType returns the explicit Code, falling back to the Type's
-// string form when Code is empty. Used by the wire renderer to ensure
-// the on-the-wire `code` field is never empty.
-func (e *AppError) CodeOrType() string {
-	if e.Code != "" {
-		return e.Code
-	}
-	return string(e.Type)
 }
 
 // Is implements errors.Is matching: a target *AppError matches when its

@@ -21,10 +21,10 @@ export const Route = createFileRoute(
   loader: ({ params, context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(
-        traceDetailQueryOptions(params.traceId),
+        traceDetailQueryOptions(params.projectId, params.traceId),
       ),
       context.queryClient.ensureQueryData(
-        traceSpansQueryOptions(params.traceId),
+        traceSpansQueryOptions(params.projectId, params.traceId),
       ),
     ]),
   errorComponent: TraceDetailErrorBoundary,
@@ -49,8 +49,12 @@ function TraceDetailErrorBoundary({ error }: { error: Error }) {
 
 function TraceDetailPage() {
   const { orgId, projectId, traceId } = Route.useParams()
-  const { data: trace } = useSuspenseQuery(traceDetailQueryOptions(traceId))
-  const { data: spans } = useSuspenseQuery(traceSpansQueryOptions(traceId))
+  const { data: trace } = useSuspenseQuery(
+    traceDetailQueryOptions(projectId, traceId),
+  )
+  const { data: spans } = useSuspenseQuery(
+    traceSpansQueryOptions(projectId, traceId),
+  )
 
   return (
     <TraceDetail

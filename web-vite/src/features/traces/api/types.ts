@@ -125,8 +125,8 @@ export interface ChatMlMessage {
 }
 
 // Trace annotation scores — endpoint:
-//   GET/POST /api/v1/traces/{traceId}/scores?project_id=...
-//   DELETE /api/v1/traces/{traceId}/scores/{scoreId}?project_id=...
+//   GET/POST /api/v1/projects/{projectId}/traces/{traceId}/scores
+//   DELETE /api/v1/projects/{projectId}/traces/{traceId}/scores/{scoreId}
 //
 // Shape mirrors observability.AnnotationResponse: numeric storage via
 // `value` (also 1.0/0.0 for BOOLEAN), categorical via `string_value`.
@@ -159,7 +159,7 @@ export interface CreateTraceAnnotationRequest {
 }
 
 // Trace comments — endpoint:
-//   GET/POST /api/v1/traces/{traceId}/comments?project_id=...
+//   GET/POST /api/v1/projects/{projectId}/traces/{traceId}/comments
 //   POST .../comments/{commentId}/replies
 //   POST .../comments/{commentId}/reactions
 //

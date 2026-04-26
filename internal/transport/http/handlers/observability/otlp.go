@@ -1,10 +1,9 @@
 // OTLP HTTP ingestion (traces, logs, metrics).
 //
 // The OTLP HTTP endpoints accept raw protobuf (and protobuf-JSON) bodies
-// per the OpenTelemetry spec. They are mounted as plain chi handlers via
-// RegisterOTLPRoutes alongside the rest of the SDK plane. The routes MUST
-// be wired under the same chi Group that attaches middleware.RequireSDKAuth
-// + middleware.LimitByAPIKey.
+// per the OpenTelemetry spec. They are mounted in internal/server/routes.go
+// alongside the rest of the SDK plane and MUST be wired under the chi Group
+// that attaches middleware.RequireSDKAuth + middleware.LimitByAPIKey.
 //
 // Endpoints:
 //
@@ -31,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -48,14 +46,6 @@ import (
 	"brokle/pkg/response"
 	"brokle/pkg/uid"
 )
-
-// registerOTLPOps wires the three OTLP HTTP ingestion endpoints as
-// chi handlers. Called from RegisterOTLPRoutes in handlers.go.
-func registerOTLPOps(r chi.Router, h *otlpHandler) {
-	r.Post("/v1/traces", h.handleTraces)
-	r.Post("/v1/logs", h.handleLogs)
-	r.Post("/v1/metrics", h.handleMetrics)
-}
 
 const otlpMaxRequestSize = 10 * 1024 * 1024 // 10MB, matches OTEL Collector default
 
@@ -149,7 +139,7 @@ func writeOTLPServiceError(w http.ResponseWriter, err error) {
 // TRACES
 // ==================================================================
 
-func (h *otlpHandler) handleTraces(w http.ResponseWriter, r *http.Request) {
+func (h *OTLPHandler) HandleTraces(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := h.deps.Logger
 
@@ -313,7 +303,7 @@ func (h *otlpHandler) handleTraces(w http.ResponseWriter, r *http.Request) {
 // LOGS
 // ==================================================================
 
-func (h *otlpHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
+func (h *OTLPHandler) HandleLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := h.deps.Logger
 
@@ -401,7 +391,7 @@ func (h *otlpHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 // METRICS
 // ==================================================================
 
-func (h *otlpHandler) handleMetrics(w http.ResponseWriter, r *http.Request) {
+func (h *OTLPHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := h.deps.Logger
 

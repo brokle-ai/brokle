@@ -42,7 +42,7 @@ export function TraceTagsEditor({
     mutationFn: (nextTags: string[]) =>
       updateTraceTags(projectId, traceId, nextTags),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: tracesKeys.detail(traceId) })
+      queryClient.invalidateQueries({ queryKey: tracesKeys.detail(projectId, traceId) })
       queryClient.invalidateQueries({ queryKey: tracesKeys.lists() })
     },
     onError: (err) => {

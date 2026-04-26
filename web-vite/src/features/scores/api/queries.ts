@@ -12,16 +12,19 @@ import type {
   UpdateScoreConfigRequest,
 } from './types'
 
-// Deletes a single score by trace + score id. Mirrors the backend
-// DELETE /api/v1/traces/{id}/scores/{scoreId} (observability handler,
-// delete-trace-score). Returns nothing on success (204).
+// Deletes a single score by project + trace + score id. Mirrors the
+// backend DELETE /api/v1/projects/{projectId}/traces/{id}/scores/{scoreId}
+// (observability handler, delete-trace-score). Returns nothing on
+// success (204).
 export async function deleteTraceScore(
+  projectId: string,
   traceId: string,
   scoreId: string,
 ): Promise<void> {
-  await rawFetch(`/api/v1/traces/${traceId}/scores/${scoreId}`, {
-    method: 'DELETE',
-  })
+  await rawFetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/scores/${encodeURIComponent(scoreId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 export const scoresKeys = {

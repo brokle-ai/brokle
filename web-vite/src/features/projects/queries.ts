@@ -19,19 +19,25 @@ export interface UpdateProjectRequest {
 }
 
 export interface CreateProjectRequest {
-  organization_id: string
   name: string
   description?: string
 }
 
+// createProject targets `POST /api/v1/organizations/{orgId}/projects`.
+// Tenancy lives in the URL path, never the body — backend rejects any
+// `organization_id` body field with 422 (DisallowUnknownFields).
 export async function createProject(
+  orgId: string,
   data: CreateProjectRequest,
 ): Promise<Project> {
-  const resp = await rawFetch('/api/v1/projects', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
+  const resp = await rawFetch(
+    `/api/v1/organizations/${encodeURIComponent(orgId)}/projects`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
   return (await resp.json()) as Project
 }
 
@@ -66,12 +72,11 @@ export const projectListQueryOptions = (orgId: string) =>
   queryOptions({
     queryKey: projectKeys.listForOrg(orgId),
     queryFn: async () => {
-      // Dashboard-plane list endpoint is flat `/api/v1/projects` with an
-      // `organization_id` filter — NOT `/organizations/:id/projects`.
-      const params = new URLSearchParams({ organization_id: orgId, limit: '100' })
-      const resp = await rawFetch(`/api/v1/projects?${params.toString()}`, {
-        method: 'GET',
-      })
+      const params = new URLSearchParams({ limit: '100' })
+      const resp = await rawFetch(
+        `/api/v1/organizations/${encodeURIComponent(orgId)}/projects?${params.toString()}`,
+        { method: 'GET' },
+      )
       return (await resp.json()) as ListResponse<Project>
     },
     staleTime: 5 * 60 * 1000,

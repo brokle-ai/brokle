@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/transport/http/httpctx"
@@ -17,60 +16,6 @@ import (
 	"brokle/pkg/response"
 	"brokle/pkg/uid"
 )
-
-// registerDashboardOps wires every dashboard-plane observability route
-// onto r. Called from RegisterRoutes in handlers.go.
-func registerDashboardOps(r chi.Router, h *dashboardHandler) {
-	r.Route("/api/v1/traces", func(r chi.Router) {
-		r.Get("/", h.listTraces)
-		r.Get("/filter-options", h.getTraceFilterOptions)
-		r.Get("/attributes", h.discoverAttributes)
-		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", h.getTrace)
-			r.Delete("/", h.deleteTrace)
-			r.Get("/spans", h.getTraceSpans)
-			r.Get("/scores", h.getTraceScores)
-			r.Post("/scores", h.createTraceScore)
-			r.Delete("/scores/{scoreId}", h.deleteTraceScore)
-			r.Put("/tags", h.updateTraceTags)
-			r.Put("/bookmark", h.updateTraceBookmark)
-		})
-	})
-
-	r.Route("/api/v1/spans", func(r chi.Router) {
-		r.Get("/", h.listSpans)
-		r.Get("/{id}", h.getSpan)
-		r.Delete("/{id}", h.deleteSpan)
-	})
-
-	r.Route("/api/v1/scores", func(r chi.Router) {
-		r.Get("/", h.listScores)
-		r.Get("/{id}", h.getScore)
-		r.Put("/{id}", h.updateScore)
-	})
-
-	// Project-scoped routes. Mounted as sibling prefixes rather than a
-	// single r.Route("/api/v1/projects/{projectId}", ...) wrapper, so
-	// they don't Mount-collide with the evaluation handler's
-	// /api/v1/projects/{projectId}/{score-configs,datasets,...}
-	// siblings on the same chi tree (chi panics on duplicate Mount
-	// patterns; see gotcha #31).
-	r.Route("/api/v1/projects/{projectId}/scores", func(r chi.Router) {
-		r.Get("/", h.listProjectScores)
-		r.Get("/analytics", h.getScoreAnalytics)
-		r.Get("/names", h.getScoreNames)
-	})
-
-	r.Get("/api/v1/projects/{projectId}/sessions", h.listSessions)
-
-	r.Route("/api/v1/projects/{projectId}/filter-presets", func(r chi.Router) {
-		r.Post("/", h.createFilterPreset)
-		r.Get("/", h.listFilterPresets)
-		r.Get("/{id}", h.getFilterPreset)
-		r.Patch("/{id}", h.updateFilterPreset)
-		r.Delete("/{id}", h.deleteFilterPreset)
-	})
-}
 
 // ---- shared helpers -------------------------------------------------
 
@@ -156,24 +101,11 @@ func validateStatusList(values []string, field string) error {
 	return nil
 }
 
-// parseProjectIDQuery parses the `project_id` query parameter as a UUID.
-func parseProjectIDQuery(r *http.Request) (uuid.UUID, error) {
-	raw := r.URL.Query().Get("project_id")
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError(
-			"Invalid project ID", "project_id must be a valid UUID",
-			appErrors.WithParam("project_id"),
-		)
-	}
-	return id, nil
-}
-
 // ==================================================================
 // TRACES
 // ==================================================================
 
-func (h *dashboardHandler) listTraces(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) ListTraces(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 
@@ -295,7 +227,7 @@ func (h *dashboardHandler) listTraces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *dashboardHandler) getTrace(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) GetTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
@@ -309,7 +241,7 @@ func (h *dashboardHandler) getTrace(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, summary)
 }
 
-func (h *dashboardHandler) deleteTrace(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) DeleteTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
@@ -322,7 +254,7 @@ func (h *dashboardHandler) deleteTrace(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *dashboardHandler) getTraceSpans(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
@@ -336,14 +268,10 @@ func (h *dashboardHandler) getTraceSpans(w http.ResponseWriter, r *http.Request)
 	response.Success(w, spans)
 }
 
-func (h *dashboardHandler) getTraceScores(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) GetTraceScores(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
-		return
-	}
-	if _, err := parseProjectIDQuery(r); err != nil {
-		response.WriteError(w, err)
 		return
 	}
 	scores, err := h.scores.GetScoresByTraceID(r.Context(), id)
@@ -358,17 +286,13 @@ func (h *dashboardHandler) getTraceScores(w http.ResponseWriter, r *http.Request
 	response.Success(w, out)
 }
 
-func (h *dashboardHandler) createTraceScore(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) CreateTraceScore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
 		return
 	}
-	projectID, err := parseProjectIDQuery(r)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+	projectID := httpctx.MustGetProjectID(r.Context())
 
 	var body CreateAnnotationRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -414,7 +338,7 @@ func (h *dashboardHandler) createTraceScore(w http.ResponseWriter, r *http.Reque
 	response.Created(w, toAnnotationResponse(score))
 }
 
-func (h *dashboardHandler) deleteTraceScore(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) DeleteTraceScore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
@@ -422,10 +346,6 @@ func (h *dashboardHandler) deleteTraceScore(w http.ResponseWriter, r *http.Reque
 	}
 	scoreID, err := request.URLParamUUID(r, "scoreId")
 	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	if _, err := parseProjectIDQuery(r); err != nil {
 		response.WriteError(w, err)
 		return
 	}
@@ -457,17 +377,13 @@ func (h *dashboardHandler) deleteTraceScore(w http.ResponseWriter, r *http.Reque
 	response.NoContent(w)
 }
 
-func (h *dashboardHandler) updateTraceTags(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) UpdateTraceTags(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
 		return
 	}
-	projectID, err := parseProjectIDQuery(r)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body observability.UpdateTraceTagsRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -485,17 +401,13 @@ func (h *dashboardHandler) updateTraceTags(w http.ResponseWriter, r *http.Reques
 	response.Success(w, map[string]any{"tags": tags})
 }
 
-func (h *dashboardHandler) updateTraceBookmark(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) UpdateTraceBookmark(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
 		return
 	}
-	projectID, err := parseProjectIDQuery(r)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body struct {
 		Bookmarked bool `json:"bookmarked"`
 	}
@@ -510,12 +422,8 @@ func (h *dashboardHandler) updateTraceBookmark(w http.ResponseWriter, r *http.Re
 	response.Success(w, map[string]any{"bookmarked": body.Bookmarked})
 }
 
-func (h *dashboardHandler) getTraceFilterOptions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := parseProjectIDQuery(r)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) GetTraceFilterOptions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	opts, err := h.traces.GetFilterOptions(r.Context(), projectID)
 	if err != nil {
 		response.WriteError(w, err)
@@ -524,12 +432,8 @@ func (h *dashboardHandler) getTraceFilterOptions(w http.ResponseWriter, r *http.
 	response.Success(w, opts)
 }
 
-func (h *dashboardHandler) discoverAttributes(w http.ResponseWriter, r *http.Request) {
-	projectID, err := parseProjectIDQuery(r)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) DiscoverAttributes(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 	limit, err := request.QueryInt(r, "limit", 0)
 	if err != nil {
@@ -560,7 +464,7 @@ func (h *dashboardHandler) discoverAttributes(w http.ResponseWriter, r *http.Req
 // SPANS
 // ==================================================================
 
-func (h *dashboardHandler) listSpans(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) ListSpans(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 	filter := &observability.SpanFilter{ProjectID: projectID}
@@ -592,7 +496,7 @@ func (h *dashboardHandler) listSpans(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, listSpansResponse{Data: spans, Pagination: newPaginationMeta(params, total)})
 }
 
-func (h *dashboardHandler) getSpan(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) GetSpan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
@@ -606,7 +510,7 @@ func (h *dashboardHandler) getSpan(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, span)
 }
 
-func (h *dashboardHandler) deleteSpan(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) DeleteSpan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
@@ -645,7 +549,7 @@ func applyScoreFilter(r *http.Request, f *observability.ScoreFilter) pagination.
 	return params
 }
 
-func (h *dashboardHandler) listScores(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) ListScores(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	filter := &observability.ScoreFilter{ProjectID: projectID}
 	params := applyScoreFilter(r, filter)
@@ -666,32 +570,7 @@ func (h *dashboardHandler) listScores(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *dashboardHandler) listProjectScores(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	filter := &observability.ScoreFilter{ProjectID: projectID}
-	params := applyScoreFilter(r, filter)
-
-	scores, err := h.scores.GetScoresByFilter(r.Context(), filter)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	total, err := h.scores.CountScores(r.Context(), filter)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, listScoresResponse{
-		Data:       toTraceScoreResponses(scores),
-		Pagination: newPaginationMeta(params, total),
-	})
-}
-
-func (h *dashboardHandler) getScore(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) GetScore(w http.ResponseWriter, r *http.Request) {
 	id, err := request.URLParamUUID(r, "id")
 	if err != nil {
 		response.WriteError(w, err)
@@ -705,7 +584,7 @@ func (h *dashboardHandler) getScore(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, toTraceScoreResponse(score))
 }
 
-func (h *dashboardHandler) updateScore(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) UpdateScore(w http.ResponseWriter, r *http.Request) {
 	id, err := request.URLParamUUID(r, "id")
 	if err != nil {
 		response.WriteError(w, err)
@@ -744,12 +623,8 @@ func (h *dashboardHandler) updateScore(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, toTraceScoreResponse(updated))
 }
 
-func (h *dashboardHandler) getScoreAnalytics(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) GetScoreAnalytics(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 	scoreName := q.Get("score_name")
 	if scoreName == "" {
@@ -792,12 +667,8 @@ func (h *dashboardHandler) getScoreAnalytics(w http.ResponseWriter, r *http.Requ
 	response.Success(w, analytics)
 }
 
-func (h *dashboardHandler) getScoreNames(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) GetScoreNames(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	names, err := h.scoreAnalytics.GetDistinctScoreNames(r.Context(), projectID.String())
 	if err != nil {
 		response.WriteError(w, err)
@@ -810,12 +681,8 @@ func (h *dashboardHandler) getScoreNames(w http.ResponseWriter, r *http.Request)
 // SESSIONS
 // ==================================================================
 
-func (h *dashboardHandler) listSessions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 	filter := &observability.SessionFilter{ProjectID: projectID}
 	if v := q.Get("search"); v != "" {
@@ -865,12 +732,8 @@ func (h *dashboardHandler) listSessions(w http.ResponseWriter, r *http.Request) 
 // FILTER PRESETS
 // ==================================================================
 
-func (h *dashboardHandler) createFilterPreset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) CreateFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body observability.CreateFilterPresetRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -885,12 +748,8 @@ func (h *dashboardHandler) createFilterPreset(w http.ResponseWriter, r *http.Req
 	response.Created(w, preset)
 }
 
-func (h *dashboardHandler) listFilterPresets(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) ListFilterPresets(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	userID := httpctx.MustGetUserID(r.Context())
 	var tableName *string
 	if v := r.URL.Query().Get("table_name"); v != "" {
@@ -913,12 +772,8 @@ func (h *dashboardHandler) listFilterPresets(w http.ResponseWriter, r *http.Requ
 	response.Success(w, presets)
 }
 
-func (h *dashboardHandler) getFilterPreset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) GetFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
 		response.WriteError(w, err)
@@ -933,12 +788,8 @@ func (h *dashboardHandler) getFilterPreset(w http.ResponseWriter, r *http.Reques
 	response.Success(w, preset)
 }
 
-func (h *dashboardHandler) updateFilterPreset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) UpdateFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
 		response.WriteError(w, err)
@@ -958,12 +809,8 @@ func (h *dashboardHandler) updateFilterPreset(w http.ResponseWriter, r *http.Req
 	response.Success(w, preset)
 }
 
-func (h *dashboardHandler) deleteFilterPreset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *DashboardHandler) DeleteFilterPreset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	presetID, err := request.URLParamUUID(r, "id")
 	if err != nil {
 		response.WriteError(w, err)

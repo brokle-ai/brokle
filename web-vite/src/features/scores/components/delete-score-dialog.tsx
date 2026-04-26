@@ -14,6 +14,7 @@ import { deleteTraceScore, scoresKeys } from '../api/queries'
 
 interface DeleteScoreDialogProps {
   scoreId: string
+  projectId: string
   traceId: string | undefined
   scoreName: string
   open: boolean
@@ -26,6 +27,7 @@ interface DeleteScoreDialogProps {
 // when `trace_id` is undefined.
 export function DeleteScoreDialog({
   scoreId,
+  projectId,
   traceId,
   scoreName,
   open,
@@ -36,7 +38,7 @@ export function DeleteScoreDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!traceId) throw new Error('Only trace-scoped scores can be deleted')
-      return deleteTraceScore(traceId, scoreId)
+      return deleteTraceScore(projectId, traceId, scoreId)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: scoresKeys.lists() })

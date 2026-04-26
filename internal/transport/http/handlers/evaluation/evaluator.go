@@ -3,44 +3,20 @@ package evaluation
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/transport/http/handlers/shared"
+	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-// registerEvaluatorRoutes mounts evaluator CRUD + lifecycle under
-// /api/v1/projects/{projectId}/evaluators.
-func registerEvaluatorRoutes(r chi.Router, h *handler) {
-	r.Route("/evaluators", func(r chi.Router) {
-		r.Post("/", h.createEvaluator)
-		r.Get("/", h.listEvaluators)
-		r.Route("/{evaluatorId}", func(r chi.Router) {
-			r.Get("/", h.getEvaluator)
-			r.Put("/", h.updateEvaluator)
-			r.Delete("/", h.deleteEvaluator)
-			r.Post("/activate", h.activateEvaluator)
-			r.Post("/deactivate", h.deactivateEvaluator)
-			r.Post("/trigger", h.triggerEvaluator)
-			r.Post("/test", h.testEvaluator)
-			r.Get("/analytics", h.getEvaluatorAnalytics)
-		})
-	})
-}
-
 // ---- handlers -------------------------------------------------------
 
-func (h *handler) createEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body evaluationDomain.CreateEvaluatorRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -54,12 +30,8 @@ func (h *handler) createEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, ev.ToResponse())
 }
 
-func (h *handler) listEvaluators(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListEvaluators(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	q := r.URL.Query()
 	allowedSortFields := []string{"name", "status", "sampling_rate", "created_at", "updated_at"}
 	sortBy, err := pagination.ValidateSortField(q.Get("sort_by"), allowedSortFields)
@@ -113,12 +85,8 @@ func (h *handler) listEvaluators(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) getEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -132,12 +100,8 @@ func (h *handler) getEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ev.ToResponse())
 }
 
-func (h *handler) updateEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -156,12 +120,8 @@ func (h *handler) updateEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ev.ToResponse())
 }
 
-func (h *handler) deleteEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -174,12 +134,8 @@ func (h *handler) deleteEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) activateEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ActivateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -192,12 +148,8 @@ func (h *handler) activateEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, &shared.MessageResponse{Message: "evaluator activated"})
 }
 
-func (h *handler) deactivateEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeactivateEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -210,12 +162,8 @@ func (h *handler) deactivateEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, &shared.MessageResponse{Message: "evaluator deactivated"})
 }
 
-func (h *handler) triggerEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) TriggerEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -234,12 +182,8 @@ func (h *handler) triggerEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusAccepted, res)
 }
 
-func (h *handler) testEvaluator(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) TestEvaluator(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -258,12 +202,8 @@ func (h *handler) testEvaluator(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, res)
 }
 
-func (h *handler) getEvaluatorAnalytics(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetEvaluatorAnalytics(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	evaluatorID, err := request.URLParamUUID(r, "evaluatorId")
 	if err != nil {
 		response.WriteError(w, err)

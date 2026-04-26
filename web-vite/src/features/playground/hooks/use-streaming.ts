@@ -19,6 +19,7 @@ export interface CapturedInputs {
 }
 
 interface UseStreamingOptions {
+  projectId: string
   onStart?: () => void
   onContent?: (content: string) => void
   onEnd?: (
@@ -29,7 +30,8 @@ interface UseStreamingOptions {
   onError?: (error: string) => void
 }
 
-export const useStreaming = (options?: UseStreamingOptions) => {
+export const useStreaming = (options: UseStreamingOptions) => {
+  const { projectId } = options
   const [isStreaming, setIsStreaming] = useState(false)
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -64,12 +66,15 @@ export const useStreaming = (options?: UseStreamingOptions) => {
         // rawFetch handles CSRF, auth, refresh-on-401 consistently with the
         // rest of the dashboard plane. Streaming still works because fetch's
         // Response.body is an async iterable regardless of middleware.
-        const response = await rawFetch('/api/v1/playground/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(request),
-          signal: abortControllerRef.current.signal,
-        })
+        const response = await rawFetch(
+          `/api/v1/projects/${encodeURIComponent(projectId)}/playground/stream`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal: abortControllerRef.current.signal,
+          },
+        )
 
         const reader = response.body?.getReader()
         if (!reader) {

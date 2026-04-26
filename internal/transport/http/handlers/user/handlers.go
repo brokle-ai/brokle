@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	orgDomain "brokle/internal/core/domain/organization"
@@ -27,34 +26,26 @@ import (
 	"brokle/pkg/utils"
 )
 
-type handler struct {
+type Handler struct {
 	userSvc    *userService.UserService
 	profileSvc *userService.ProfileService
 	orgSvc     *organizationService.OrganizationService
 	logger     *slog.Logger
 }
 
-// RegisterRoutes mounts the user-profile routes on r. Expected mount
-// context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(
-	r chi.Router,
+// New constructs a Handler with all required services.
+func New(
 	userSvc *userService.UserService,
 	profileSvc *userService.ProfileService,
 	orgSvc *organizationService.OrganizationService,
 	logger *slog.Logger,
-) {
-	h := &handler{userSvc: userSvc, profileSvc: profileSvc, orgSvc: orgSvc, logger: logger}
-
-	r.Route("/api/v1/users/me", func(r chi.Router) {
-		r.Get("/", h.getProfile)
-		r.Patch("/", h.updateProfile)
-		r.Put("/default-organization", h.setDefaultOrganization)
-	})
+) *Handler {
+	return &Handler{userSvc: userSvc, profileSvc: profileSvc, orgSvc: orgSvc, logger: logger}
 }
 
 // ----- get-user-profile ------------------------------------------------
 
-func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.buildProfile(r.Context())
 	if err != nil {
 		response.WriteError(w, err)
@@ -65,7 +56,7 @@ func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
 
 // buildProfile is shared between GET and the PATCH echo so the two
 // endpoints emit byte-identical response shapes.
-func (h *handler) buildProfile(ctx context.Context) (getProfileResponse, error) {
+func (h *Handler) buildProfile(ctx context.Context) (getProfileResponse, error) {
 	userID := httpctx.MustGetUserID(ctx)
 
 	u, err := h.userSvc.GetUser(ctx, userID)
@@ -160,7 +151,7 @@ func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []org
 
 // ----- update-user-profile ---------------------------------------------
 
-func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body updateUserProfileBody
@@ -202,7 +193,7 @@ func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 
 // ----- set-default-organization ----------------------------------------
 
-func (h *handler) setDefaultOrganization(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SetDefaultOrganization(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body setDefaultOrgBody

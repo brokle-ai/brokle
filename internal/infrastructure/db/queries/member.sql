@@ -123,19 +123,6 @@ WHERE om.user_id = $1
   AND om.status = 'active'
   AND om.deleted_at IS NULL;
 
--- name: UserHasPermissionGlobal :one
-SELECT EXISTS (
-    SELECT 1
-    FROM organization_members om
-    JOIN roles r             ON r.id  = om.role_id
-    JOIN role_permissions rp ON rp.role_id = r.id
-    JOIN permissions p       ON p.id  = rp.permission_id
-    WHERE om.user_id = $1
-      AND om.status = 'active'
-      AND om.deleted_at IS NULL
-      AND (p.resource || ':' || p.action)::text = $2::text
-);
-
 -- name: BulkUpdateMemberRoles :exec
 UPDATE organization_members AS om
 SET role_id    = v.role_id,

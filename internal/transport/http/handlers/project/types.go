@@ -25,11 +25,17 @@ type projectListBody struct {
 	Pagination *response.Pagination `json:"pagination"`
 }
 
-// createProjectBody — POST /api/v1/projects.
+// createProjectBody — POST /api/v1/organizations/{orgId}/projects.
+//
+// Tenancy lives in the URL path, not the body — Stripe / GitHub /
+// PostHog convention. NEVER add `organization_id` here. The orgID is
+// pinned into ctx by RequireOrganizationAccess upstream and read by
+// the handler via httpctx.MustGetOrganizationID. pkg/request.DecodeJSON
+// enforces DisallowUnknownFields, so any client sending
+// `organization_id` in the body gets a 422.
 type createProjectBody struct {
-	Name           string `json:"name"                  validate:"required,min=2,max=100"`
-	Description    string `json:"description,omitempty" validate:"omitempty,max=500"`
-	OrganizationID string `json:"organization_id"       validate:"required"`
+	Name        string `json:"name"                  validate:"required,min=2,max=100"`
+	Description string `json:"description,omitempty" validate:"omitempty,max=500"`
 }
 
 // updateProjectBody — PUT /api/v1/projects/{projectId}.

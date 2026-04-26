@@ -1,13 +1,9 @@
 package auth
 
 import (
-	"log/slog"
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
-	authService "brokle/internal/core/services/auth"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 )
@@ -17,17 +13,9 @@ import (
 // SDKs bootstrap their credentials before they can authenticate to
 // anything else.
 
-// RegisterSDKRoutes mounts the SDK-plane auth routes on r. Expected
-// mount context: the SDK-public chi group (LimitByIP +
-// LimitByKeyPrefix). X-API-Key / Authorization: Bearer accepted.
-func RegisterSDKRoutes(r chi.Router, apiKeySvc *authService.APIKeyService, logger *slog.Logger) {
-	h := &sdkHandler{apiKeySvc: apiKeySvc, logger: logger}
-	r.Post("/v1/auth/validate-key", h.validateAPIKey)
-}
-
 // ----- validate-api-key ----------------------------------------------
 
-func (h *sdkHandler) validateAPIKey(w http.ResponseWriter, r *http.Request) {
+func (h *SDKHandler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Header.Get("X-API-Key")
 	if apiKey == "" {
 		if v, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {

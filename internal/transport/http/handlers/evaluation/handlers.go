@@ -6,9 +6,9 @@
 //   - SDK plane (RequireSDKAuth) — dataset + experiment + score
 //     ingestion under /v1/... with the project derived from the API key.
 //
-// The two registration entrypoints (RegisterRoutes / RegisterSDKRoutes)
-// share handler-method implementations; the only difference is how the
-// project ID is sourced (path parameter vs. SDK auth context).
+// Both surfaces share handler-method implementations; the only difference
+// is how the project ID is sourced (path parameter vs. SDK auth context).
+// Routes are wired centrally in internal/server/routes.go.
 package evaluation
 
 import (
@@ -16,7 +16,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationService "brokle/internal/core/services/evaluation"
@@ -28,7 +27,7 @@ import (
 
 // ---- handler aggregate ----------------------------------------------
 
-type handler struct {
+type Handler struct {
 	scoreConfigSvc      *evaluationService.ScoreConfigService
 	datasetSvc          *evaluationService.DatasetService
 	datasetItemSvc      *evaluationService.DatasetItemService
@@ -42,10 +41,9 @@ type handler struct {
 	logger              *slog.Logger
 }
 
-// RegisterRoutes mounts the dashboard-plane evaluation routes on r.
-// Expected mount context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs a Handler with all services any evaluation Register*
+// function might need (dashboard + SDK).
+func New(
 	scoreConfigSvc *evaluationService.ScoreConfigService,
 	datasetSvc *evaluationService.DatasetService,
 	datasetItemSvc *evaluationService.DatasetItemService,
@@ -55,9 +53,10 @@ func RegisterRoutes(
 	experimentWizardSvc *evaluationService.ExperimentWizardService,
 	evaluatorSvc *evaluationService.EvaluatorService,
 	evaluatorExecSvc *evaluationService.EvaluatorExecutionService,
+	scoreSvc *obsServices.ScoreService,
 	logger *slog.Logger,
-) {
-	h := &handler{
+) *Handler {
+	return &Handler{
 		scoreConfigSvc:      scoreConfigSvc,
 		datasetSvc:          datasetSvc,
 		datasetItemSvc:      datasetItemSvc,
@@ -67,60 +66,9 @@ func RegisterRoutes(
 		experimentWizardSvc: experimentWizardSvc,
 		evaluatorSvc:        evaluatorSvc,
 		evaluatorExecSvc:    evaluatorExecSvc,
+		scoreSvc:            scoreSvc,
 		logger:              logger,
 	}
-
-	// All evaluation dashboard routes sit under a single
-	// r.Route("/api/v1/projects/{projectId}", ...) Mount. The wizard +
-	// execution sub-registrations reference each other's prefixes
-	// (/experiments/wizard, /datasets/{id}/fields,
-	// /evaluators/{id}/executions), so collapsing them into one Mount
-	// subrouter keeps the trie clean: each sub-file Mounts a distinct
-	// deeper prefix (/score-configs, /datasets, /experiments,
-	// /evaluators) and the cross-referencing wizard/execution nodes
-	// live as siblings inside that same subrouter.
-	//
-	// Observability's project-scoped routes (/scores, /sessions,
-	// /filter-presets) Mount as siblings on the parent tree with
-	// distinct deeper prefixes. chi's radix trie routes static-deeper
-	// before wildcard-shallower, so both coexist without collision.
-	r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
-		registerScoreConfigRoutes(r, h)
-		registerDashboardDatasetRoutes(r, h)
-		registerDashboardExperimentRoutes(r, h)
-		registerEvaluatorRoutes(r, h)
-		registerExecutionRoutes(r, h)
-		registerWizardRoutes(r, h)
-	})
-}
-
-// RegisterSDKRoutes mounts the SDK-plane evaluation routes on r. The
-// project is derived from the API key (MustGetProjectID).
-func RegisterSDKRoutes(
-	r chi.Router,
-	scoreConfigSvc *evaluationService.ScoreConfigService,
-	datasetSvc *evaluationService.DatasetService,
-	datasetItemSvc *evaluationService.DatasetItemService,
-	datasetVersionSvc *evaluationService.DatasetVersionService,
-	experimentSvc *evaluationService.ExperimentService,
-	experimentItemSvc *evaluationService.ExperimentItemService,
-	scoreSvc *obsServices.ScoreService,
-	logger *slog.Logger,
-) {
-	h := &handler{
-		scoreConfigSvc:    scoreConfigSvc,
-		datasetSvc:        datasetSvc,
-		datasetItemSvc:    datasetItemSvc,
-		datasetVersionSvc: datasetVersionSvc,
-		experimentSvc:     experimentSvc,
-		experimentItemSvc: experimentItemSvc,
-		scoreSvc:          scoreSvc,
-		logger:            logger,
-	}
-
-	registerSDKDatasetRoutes(r, h)
-	registerSDKExperimentRoutes(r, h)
-	registerSDKScoreRoutes(r, h)
 }
 
 // ---- shared helpers -------------------------------------------------

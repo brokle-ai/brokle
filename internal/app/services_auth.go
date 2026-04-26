@@ -41,6 +41,12 @@ func ProvideAuthServices(
 		authRepos.Role,
 	)
 
+	projectMemberService := authService.NewProjectMemberService(
+		authRepos.ProjectMember,
+		authRepos.OrganizationMember,
+		authRepos.Role,
+	)
+
 	blacklistedTokenService := authService.NewBlacklistedTokenService(
 		authRepos.BlacklistedToken,
 	)
@@ -96,6 +102,7 @@ func ProvideAuthServices(
 		Role:                roleService,
 		Permission:          permissionService,
 		OrganizationMembers: orgMemberService,
+		ProjectMembers:      projectMemberService,
 		BlacklistedTokens:   blacklistedTokenService,
 		Scope:               scopeService,
 		OAuthProvider:       oauthProvider,

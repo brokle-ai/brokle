@@ -4,88 +4,19 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-// ---- dashboard dataset routes ---------------------------------------
-
-// registerDashboardDatasetRoutes mounts datasets + items + versions
-// under /api/v1/projects/{projectId}/datasets.
-func registerDashboardDatasetRoutes(r chi.Router, h *handler) {
-	r.Route("/datasets", func(r chi.Router) {
-		r.Post("/", h.dashCreateDataset)
-		r.Get("/", h.dashListDatasets)
-		r.Route("/{datasetId}", func(r chi.Router) {
-			r.Get("/", h.dashGetDataset)
-			r.Put("/", h.dashUpdateDataset)
-			r.Delete("/", h.dashDeleteDataset)
-			r.Get("/info", h.dashGetDatasetWithVersionInfo)
-			r.Post("/pin", h.dashPinDatasetVersion)
-
-			r.Route("/items", func(r chi.Router) {
-				r.Get("/", h.dashListDatasetItems)
-				r.Post("/", h.dashCreateDatasetItem)
-				r.Delete("/{itemId}", h.dashDeleteDatasetItem)
-				r.Get("/export", h.dashExportDatasetItems)
-				r.Post("/import-json", h.dashImportItemsJSON)
-				r.Post("/import-csv", h.dashImportItemsCSV)
-				r.Post("/from-traces", h.dashItemsFromTraces)
-				r.Post("/from-spans", h.dashItemsFromSpans)
-			})
-
-			r.Route("/versions", func(r chi.Router) {
-				r.Post("/", h.dashCreateDatasetVersion)
-				r.Get("/", h.dashListDatasetVersions)
-				r.Get("/{versionId}", h.dashGetDatasetVersion)
-				r.Get("/{versionId}/items", h.dashGetDatasetVersionItems)
-			})
-		})
-	})
-}
-
-// ---- SDK dataset routes ---------------------------------------------
-
-func registerSDKDatasetRoutes(r chi.Router, h *handler) {
-	r.Route("/v1/datasets", func(r chi.Router) {
-		r.Post("/", h.sdkCreateDataset)
-		r.Get("/", h.sdkListDatasets)
-		r.Route("/{datasetId}", func(r chi.Router) {
-			r.Get("/", h.sdkGetDataset)
-			r.Patch("/", h.sdkUpdateDataset)
-			r.Delete("/", h.sdkDeleteDataset)
-			r.Get("/info", h.sdkGetDatasetWithVersionInfo)
-			r.Post("/pin", h.sdkPinDatasetVersion)
-
-			r.Route("/items", func(r chi.Router) {
-				r.Post("/", h.sdkBatchCreateDatasetItems)
-				r.Get("/", h.sdkListDatasetItems)
-				r.Get("/export", h.sdkExportDatasetItems)
-				r.Post("/import-json", h.sdkImportItemsJSON)
-				r.Post("/import-csv", h.sdkImportItemsCSV)
-				r.Post("/from-traces", h.sdkItemsFromTraces)
-				r.Post("/from-spans", h.sdkItemsFromSpans)
-			})
-
-			r.Route("/versions", func(r chi.Router) {
-				r.Post("/", h.sdkCreateDatasetVersion)
-				r.Get("/", h.sdkListDatasetVersions)
-				r.Get("/{versionId}", h.sdkGetDatasetVersion)
-				r.Get("/{versionId}/items", h.sdkGetDatasetVersionItems)
-			})
-		})
-	})
-}
-
 // ---- shared bodies --------------------------------------------------
 
-func (h *handler) createDatasetCore(ctx context.Context, projectID uuid.UUID, body *CreateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
+func (h *Handler) createDatasetCore(ctx context.Context, projectID uuid.UUID, body *CreateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetRequest{
 		Name:        body.Name,
 		Description: body.Description,
@@ -100,7 +31,7 @@ func (h *handler) createDatasetCore(ctx context.Context, projectID uuid.UUID, bo
 	return ds.ToResponse(), nil
 }
 
-func (h *handler) listDatasetsCore(
+func (h *Handler) listDatasetsCore(
 	ctx context.Context,
 	projectID uuid.UUID,
 	search, sortBy, sortDir string,
@@ -133,7 +64,7 @@ func (h *handler) listDatasetsCore(
 	return out, total, params, nil
 }
 
-func (h *handler) updateDatasetCore(ctx context.Context, projectID, datasetID uuid.UUID, body *UpdateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
+func (h *Handler) updateDatasetCore(ctx context.Context, projectID, datasetID uuid.UUID, body *UpdateDatasetRequest) (*evaluationDomain.DatasetResponse, error) {
 	domainReq := &evaluationDomain.UpdateDatasetRequest{
 		Name:        body.Name,
 		Description: body.Description,
@@ -148,7 +79,7 @@ func (h *handler) updateDatasetCore(ctx context.Context, projectID, datasetID uu
 
 // ---- shared import bodies -------------------------------------------
 
-func (h *handler) importItemsJSONCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromJSONRequest) (*BulkImportResponse, error) {
+func (h *Handler) importItemsJSONCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromJSONRequest) (*BulkImportResponse, error) {
 	if body.Source != "" {
 		src := evaluationDomain.DatasetItemSource(body.Source)
 		if !src.IsValid() {
@@ -168,7 +99,7 @@ func (h *handler) importItemsJSONCore(ctx context.Context, datasetID, projectID 
 	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) importItemsCSVCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromCSVRequest) (*BulkImportResponse, error) {
+func (h *Handler) importItemsCSVCore(ctx context.Context, datasetID, projectID uuid.UUID, body *ImportFromCSVRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.ImportDatasetItemsFromCSVRequest{
 		Content:     body.Content,
 		HasHeader:   body.HasHeader,
@@ -186,7 +117,7 @@ func (h *handler) importItemsCSVCore(ctx context.Context, datasetID, projectID u
 	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) itemsFromTracesCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromTracesRequest) (*BulkImportResponse, error) {
+func (h *Handler) itemsFromTracesCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromTracesRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetItemsFromTracesRequest{
 		TraceIDs:    body.TraceIDs,
 		Deduplicate: body.Deduplicate,
@@ -199,7 +130,7 @@ func (h *handler) itemsFromTracesCore(ctx context.Context, datasetID, projectID 
 	return toBulkImportResponse(result), nil
 }
 
-func (h *handler) itemsFromSpansCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromSpansRequest) (*BulkImportResponse, error) {
+func (h *Handler) itemsFromSpansCore(ctx context.Context, datasetID, projectID uuid.UUID, body *CreateFromSpansRequest) (*BulkImportResponse, error) {
 	domainReq := &evaluationDomain.CreateDatasetItemsFromSpansRequest{
 		SpanIDs:     body.SpanIDs,
 		Deduplicate: body.Deduplicate,
@@ -214,12 +145,8 @@ func (h *handler) itemsFromSpansCore(ctx context.Context, datasetID, projectID u
 
 // ---- dashboard handlers ---------------------------------------------
 
-func (h *handler) dashCreateDataset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashCreateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body CreateDatasetRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -233,12 +160,8 @@ func (h *handler) dashCreateDataset(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, ds)
 }
 
-func (h *handler) dashListDatasets(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashListDatasets(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	page, limit, err := readPagination(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -256,12 +179,8 @@ func (h *handler) dashListDatasets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashGetDataset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -275,12 +194,8 @@ func (h *handler) dashGetDataset(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ds.ToResponse())
 }
 
-func (h *handler) dashUpdateDataset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashUpdateDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -299,12 +214,8 @@ func (h *handler) dashUpdateDataset(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ds)
 }
 
-func (h *handler) dashDeleteDataset(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashDeleteDataset(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -317,12 +228,8 @@ func (h *handler) dashDeleteDataset(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) dashListDatasetItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashListDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -348,12 +255,8 @@ func (h *handler) dashListDatasetItems(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashCreateDatasetItem(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashCreateDatasetItem(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -372,12 +275,8 @@ func (h *handler) dashCreateDatasetItem(w http.ResponseWriter, r *http.Request) 
 	response.Created(w, toDatasetItemResponse(item))
 }
 
-func (h *handler) dashDeleteDatasetItem(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashDeleteDatasetItem(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -395,12 +294,8 @@ func (h *handler) dashDeleteDatasetItem(w http.ResponseWriter, r *http.Request) 
 	response.NoContent(w)
 }
 
-func (h *handler) dashExportDatasetItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashExportDatasetItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -420,7 +315,7 @@ func (h *handler) dashExportDatasetItems(w http.ResponseWriter, r *http.Request)
 
 // ---- dashboard import flows ----------------------------------------
 
-func (h *handler) dashImportItemsJSON(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DashImportItemsJSON(w http.ResponseWriter, r *http.Request) {
 	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body ImportFromJSONRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -430,7 +325,7 @@ func (h *handler) dashImportItemsJSON(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashImportItemsCSV(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DashImportItemsCSV(w http.ResponseWriter, r *http.Request) {
 	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body ImportFromCSVRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -440,7 +335,7 @@ func (h *handler) dashImportItemsCSV(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashItemsFromTraces(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DashItemsFromTraces(w http.ResponseWriter, r *http.Request) {
 	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body CreateFromTracesRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -450,7 +345,7 @@ func (h *handler) dashItemsFromTraces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashItemsFromSpans(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DashItemsFromSpans(w http.ResponseWriter, r *http.Request) {
 	h.runDashImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body CreateFromSpansRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -460,16 +355,12 @@ func (h *handler) dashItemsFromSpans(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) runDashImport(
+func (h *Handler) runDashImport(
 	w http.ResponseWriter,
 	r *http.Request,
 	do func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error),
 ) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -485,12 +376,8 @@ func (h *handler) runDashImport(
 
 // ---- dashboard dataset versions ------------------------------------
 
-func (h *handler) dashCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -511,12 +398,8 @@ func (h *handler) dashCreateDatasetVersion(w http.ResponseWriter, r *http.Reques
 	response.Created(w, v.ToResponse())
 }
 
-func (h *handler) dashListDatasetVersions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashListDatasetVersions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -534,12 +417,8 @@ func (h *handler) dashListDatasetVersions(w http.ResponseWriter, r *http.Request
 	response.Success(w, out)
 }
 
-func (h *handler) dashGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -558,12 +437,8 @@ func (h *handler) dashGetDatasetVersion(w http.ResponseWriter, r *http.Request) 
 	response.Success(w, v.ToResponse())
 }
 
-func (h *handler) dashGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -594,12 +469,8 @@ func (h *handler) dashGetDatasetVersionItems(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (h *handler) dashPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -618,12 +489,8 @@ func (h *handler) dashPinDatasetVersion(w http.ResponseWriter, r *http.Request) 
 	response.Success(w, ds.ToResponse())
 }
 
-func (h *handler) dashGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -639,7 +506,7 @@ func (h *handler) dashGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.R
 
 // ---- SDK dataset handlers -------------------------------------------
 
-func (h *handler) sdkCreateDataset(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCreateDataset(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	var body CreateDatasetRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -654,7 +521,7 @@ func (h *handler) sdkCreateDataset(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, ds)
 }
 
-func (h *handler) sdkListDatasets(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkListDatasets(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	page, limit, err := readPagination(r)
 	if err != nil {
@@ -673,7 +540,7 @@ func (h *handler) sdkListDatasets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkGetDataset(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkGetDataset(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -688,7 +555,7 @@ func (h *handler) sdkGetDataset(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ds.ToResponse())
 }
 
-func (h *handler) sdkUpdateDataset(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkUpdateDataset(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -708,7 +575,7 @@ func (h *handler) sdkUpdateDataset(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ds)
 }
 
-func (h *handler) sdkDeleteDataset(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkDeleteDataset(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -722,7 +589,7 @@ func (h *handler) sdkDeleteDataset(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) sdkBatchCreateDatasetItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkBatchCreateDatasetItems(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -744,7 +611,7 @@ func (h *handler) sdkBatchCreateDatasetItems(w http.ResponseWriter, r *http.Requ
 	response.Created(w, &CountResponse{Created: count})
 }
 
-func (h *handler) sdkListDatasetItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkListDatasetItems(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -771,7 +638,7 @@ func (h *handler) sdkListDatasetItems(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkExportDatasetItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkExportDatasetItems(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -790,7 +657,7 @@ func (h *handler) sdkExportDatasetItems(w http.ResponseWriter, r *http.Request) 
 	response.Success(w, out)
 }
 
-func (h *handler) sdkImportItemsJSON(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkImportItemsJSON(w http.ResponseWriter, r *http.Request) {
 	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body ImportFromJSONRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -800,7 +667,7 @@ func (h *handler) sdkImportItemsJSON(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkImportItemsCSV(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkImportItemsCSV(w http.ResponseWriter, r *http.Request) {
 	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body ImportFromCSVRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -810,7 +677,7 @@ func (h *handler) sdkImportItemsCSV(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkItemsFromTraces(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkItemsFromTraces(w http.ResponseWriter, r *http.Request) {
 	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body CreateFromTracesRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -820,7 +687,7 @@ func (h *handler) sdkItemsFromTraces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkItemsFromSpans(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkItemsFromSpans(w http.ResponseWriter, r *http.Request) {
 	h.runSDKImport(w, r, func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error) {
 		var body CreateFromSpansRequest
 		if err := request.DecodeJSON(r, &body); err != nil {
@@ -830,7 +697,7 @@ func (h *handler) sdkItemsFromSpans(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) runSDKImport(
+func (h *Handler) runSDKImport(
 	w http.ResponseWriter,
 	r *http.Request,
 	do func(ctx context.Context, datasetID, projectID uuid.UUID) (*BulkImportResponse, error),
@@ -851,7 +718,7 @@ func (h *handler) runSDKImport(
 
 // ---- SDK dataset versions ------------------------------------------
 
-func (h *handler) sdkCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCreateDatasetVersion(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -871,7 +738,7 @@ func (h *handler) sdkCreateDatasetVersion(w http.ResponseWriter, r *http.Request
 	response.Created(w, v.ToResponse())
 }
 
-func (h *handler) sdkListDatasetVersions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkListDatasetVersions(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -890,7 +757,7 @@ func (h *handler) sdkListDatasetVersions(w http.ResponseWriter, r *http.Request)
 	response.Success(w, out)
 }
 
-func (h *handler) sdkGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -910,7 +777,7 @@ func (h *handler) sdkGetDatasetVersion(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, v.ToResponse())
 }
 
-func (h *handler) sdkGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkGetDatasetVersionItems(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -942,7 +809,7 @@ func (h *handler) sdkGetDatasetVersionItems(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *handler) sdkPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {
@@ -962,7 +829,7 @@ func (h *handler) sdkPinDatasetVersion(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, ds.ToResponse())
 }
 
-func (h *handler) sdkGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkGetDatasetWithVersionInfo(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	datasetID, err := request.URLParamUUID(r, "datasetId")
 	if err != nil {

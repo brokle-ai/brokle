@@ -65,7 +65,7 @@ header "chi Mount invariant (one r.Route per prefix per tree)"
 # comment lines. An exact match on the r.Route code form after any
 # amount of whitespace means the call is real, not a reference in docs.
 mount_hits="$(grep -rEn --color=never '^\s*r\.Route\("(/api/v1|/v1)[^"]*"' \
-  internal/transport/http/handlers/ --include='*.go' 2>/dev/null || true)"
+  internal/transport/http/handlers/ --include='*.go' --exclude='*_test.go' 2>/dev/null || true)"
 if [ -n "$mount_hits" ]; then
   # Extract the pattern from each line, count duplicates across files.
   dup_patterns="$(printf '%s\n' "$mount_hits" \

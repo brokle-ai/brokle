@@ -61,6 +61,11 @@ func New(deps Deps) (*Server, error) {
 	// route (go-chi/chi/v5/mux.go:100-104).
 	installGlobalMiddleware(mux, deps)
 
+	// Construct the Handlers bundle once. Each handler package's New()
+	// receives only the services it consumes — see handlers.go.
+	// addRoutes references handler methods via deps.Handlers.X.Method.
+	deps.Handlers = NewHandlers(deps)
+
 	// Domain routes + group-scoped middleware (auth, rate limit,
 	// CORS, CSRF). Sub-routers (r.Route / r.Group) have independent
 	// middleware stacks and can add more layers without violating

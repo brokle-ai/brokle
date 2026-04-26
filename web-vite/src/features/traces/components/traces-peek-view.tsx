@@ -62,11 +62,11 @@ export function TracesPeekView({ orgId, projectId }: TracesPeekViewProps) {
   // don't prefetch. Stale windows match the list query's 30s.
   // ------------------------------------------------------------------
   const traceQuery = useQuery({
-    ...traceDetailQueryOptions(peekId ?? ''),
+    ...traceDetailQueryOptions(projectId, peekId ?? ''),
     enabled: !!peekId,
   })
   const spansQuery = useQuery({
-    ...traceSpansQueryOptions(peekId ?? ''),
+    ...traceSpansQueryOptions(projectId, peekId ?? ''),
     enabled: !!peekId,
   })
 

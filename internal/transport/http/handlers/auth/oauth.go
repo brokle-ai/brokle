@@ -38,19 +38,19 @@ import (
 
 // ----- initiate-google-oauth ---------------------------------------
 
-func (h *handler) initiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) InitiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
 	h.initiateOAuth(w, r, "google", r.URL.Query().Get("invitation_token"))
 }
 
 // ----- initiate-github-oauth ---------------------------------------
 
-func (h *handler) initiateGithubOAuth(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) InitiateGithubOAuth(w http.ResponseWriter, r *http.Request) {
 	h.initiateOAuth(w, r, "github", r.URL.Query().Get("invitation_token"))
 }
 
 // initiateOAuth is the shared path both provider-specific initiators
 // dispatch to.
-func (h *handler) initiateOAuth(w http.ResponseWriter, r *http.Request, provider, invitationToken string) {
+func (h *Handler) initiateOAuth(w http.ResponseWriter, r *http.Request, provider, invitationToken string) {
 	var invitePtr *string
 	if invitationToken != "" {
 		invitePtr = &invitationToken
@@ -77,20 +77,20 @@ func (h *handler) initiateOAuth(w http.ResponseWriter, r *http.Request, provider
 
 // ----- google-oauth-callback -------------------------------------
 
-func (h *handler) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GoogleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	h.oauthCallback(w, r, "google")
 }
 
 // ----- github-oauth-callback -------------------------------------
 
-func (h *handler) githubOAuthCallback(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GithubOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	h.oauthCallback(w, r, "github")
 }
 
 // oauthCallback is the shared path both provider-specific callbacks
 // dispatch to. All exit paths redirect; errors become query params
 // on the signin redirect.
-func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request, provider string) {
+func (h *Handler) oauthCallback(w http.ResponseWriter, r *http.Request, provider string) {
 	ctx := r.Context()
 	frontend := h.cfg.Server.AppURL
 	redirect := func(u string) {
@@ -203,7 +203,7 @@ func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request, provider
 
 // ----- complete-oauth-signup ---------------------------------------
 
-func (h *handler) completeOAuthSignup(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CompleteOAuthSignup(w http.ResponseWriter, r *http.Request) {
 	var body completeOAuthSignupBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -290,7 +290,7 @@ func (h *handler) completeOAuthSignup(w http.ResponseWriter, r *http.Request) {
 
 // ----- exchange-login-session --------------------------------------
 
-func (h *handler) exchangeLoginSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ExchangeLoginSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "session_id")
 
 	sessionData, err := h.authSvc.GetLoginTokenSession(r.Context(), sessionID)

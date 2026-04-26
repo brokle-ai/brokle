@@ -134,17 +134,6 @@ func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.C
 	return perms, nil
 }
 
-func (r *organizationMemberRepository) HasUserPermission(ctx context.Context, userID uuid.UUID, permission string) (bool, error) {
-	ok, err := r.tm.Queries(ctx).UserHasPermissionGlobal(ctx, gen.UserHasPermissionGlobalParams{
-		UserID: userID,
-		Column2: permission,
-	})
-	if err != nil {
-		return false, fmt.Errorf("check permission %s for user %s: %w", permission, userID, err)
-	}
-	return ok, nil
-}
-
 func (r *organizationMemberRepository) CheckUserPermissions(ctx context.Context, userID uuid.UUID, permissions []string) (map[string]bool, error) {
 	if len(permissions) == 0 {
 		return map[string]bool{}, nil

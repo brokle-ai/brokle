@@ -15,6 +15,7 @@ import { DeleteScoreDialog } from './delete-score-dialog'
 
 interface ScoresTableProps {
   rows: ScoreListItem[]
+  projectId: string
   onRowClick?: (row: ScoreListItem) => void
 }
 
@@ -68,7 +69,7 @@ function SourceBadge({ source }: { source: ScoreSource }) {
   }
 }
 
-export function ScoresTable({ rows, onRowClick }: ScoresTableProps) {
+export function ScoresTable({ rows, projectId, onRowClick }: ScoresTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<ScoreListItem | null>(null)
 
   if (rows.length === 0) {
@@ -143,6 +144,7 @@ export function ScoresTable({ rows, onRowClick }: ScoresTableProps) {
       {deleteTarget && (
         <DeleteScoreDialog
           scoreId={deleteTarget.id}
+          projectId={projectId}
           traceId={deleteTarget.trace_id}
           scoreName={deleteTarget.name}
           open={true}

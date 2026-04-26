@@ -123,12 +123,10 @@ func (s *OrganizationMemberService) GetUserPermissionsInOrganization(ctx context
 	return s.orgMemberRepo.GetUserPermissionsInOrganization(ctx, userID, orgID)
 }
 
-// CheckUserPermission checks if a user has a specific permission
-func (s *OrganizationMemberService) CheckUserPermission(ctx context.Context, userID uuid.UUID, permission string) (bool, error) {
-	return s.orgMemberRepo.HasUserPermission(ctx, userID, permission)
-}
-
-// CheckUserPermissions checks multiple permissions for a user
+// CheckUserPermissions checks multiple permissions for a user across every
+// org they belong to. Used by the org-agnostic /api/v1/rbac/users/{userId}/
+// permissions/check endpoint. The scope-aware permission middleware uses
+// ProjectMemberService.CheckUserPermissionsInScope instead.
 func (s *OrganizationMemberService) CheckUserPermissions(ctx context.Context, userID uuid.UUID, permissions []string) (map[string]bool, error) {
 	return s.orgMemberRepo.CheckUserPermissions(ctx, userID, permissions)
 }

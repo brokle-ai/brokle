@@ -53,7 +53,7 @@ export function CreateProjectDialog({
 
   const mutation = useMutation({
     mutationFn: (input: CreateProjectFormData) =>
-      createProject({ organization_id: organizationId, name: input.name }),
+      createProject(organizationId, { name: input.name }),
     onSuccess: (project) => {
       toast.success(`Project "${project.name}" created`)
       qc.invalidateQueries({ queryKey: projectKeys.listForOrg(organizationId) })

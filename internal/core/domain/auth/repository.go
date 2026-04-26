@@ -196,7 +196,6 @@ type OrganizationMemberRepository interface {
 
 	// Permission queries
 	GetUserEffectivePermissions(ctx context.Context, userID uuid.UUID) ([]string, error)
-	HasUserPermission(ctx context.Context, userID uuid.UUID, permission string) (bool, error)
 	CheckUserPermissions(ctx context.Context, userID uuid.UUID, permissions []string) (map[string]bool, error)
 	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID uuid.UUID) ([]string, error)
 
@@ -222,6 +221,28 @@ type MemberRoleUpdate struct {
 	UserID         uuid.UUID `json:"user_id"`
 	OrganizationID uuid.UUID `json:"organization_id"`
 	RoleID         uuid.UUID `json:"role_id"`
+}
+
+// ProjectMemberRepository defines the interface for project membership.
+// Project membership is a Langfuse-style role-elevation override on top of
+// the user's organization role — not a replacement. The MAX-semantics
+// resolver lives in ListUserEffectivePermissionsInScope and is consumed by
+// the scope-aware permission middleware.
+type ProjectMemberRepository interface {
+	// Core CRUD
+	Create(ctx context.Context, member *ProjectMember) error
+	GetByUserAndProject(ctx context.Context, userID, projectID uuid.UUID) (*ProjectMember, error)
+	UpdateRole(ctx context.Context, userID, projectID, roleID uuid.UUID) error
+	Delete(ctx context.Context, userID, projectID uuid.UUID) error
+
+	// Membership queries
+	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*ProjectMember, error)
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]*ProjectMember, error)
+	IsMember(ctx context.Context, userID, projectID uuid.UUID) (bool, error)
+	GetMemberCount(ctx context.Context, projectID uuid.UUID) (int, error)
+
+	// Effective-permission resolution (MAX semantics across org+project roles)
+	ListUserEffectivePermissionsInScope(ctx context.Context, userID, orgID, projectID uuid.UUID) ([]string, error)
 }
 
 // RolePermissionRepository defines the interface for role-permission relationships.

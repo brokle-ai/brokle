@@ -20,15 +20,16 @@ export const tracesKeys = {
   list: (projectId: string, params: TraceListParams) =>
     [...tracesKeys.lists(), projectId, params] as const,
   details: () => [...tracesKeys.all, 'detail'] as const,
-  detail: (traceId: string) => [...tracesKeys.details(), traceId] as const,
-  spansOf: (traceId: string) =>
-    [...tracesKeys.detail(traceId), 'spans'] as const,
+  detail: (projectId: string, traceId: string) =>
+    [...tracesKeys.details(), projectId, traceId] as const,
+  spansOf: (projectId: string, traceId: string) =>
+    [...tracesKeys.detail(projectId, traceId), 'spans'] as const,
   scoresOf: (traceId: string, projectId: string) =>
-    [...tracesKeys.detail(traceId), 'scores', projectId] as const,
+    [...tracesKeys.detail(projectId, traceId), 'scores'] as const,
   annotations: (traceId: string, projectId: string) =>
-    [...tracesKeys.detail(traceId), 'annotations', projectId] as const,
+    [...tracesKeys.detail(projectId, traceId), 'annotations'] as const,
   comments: (traceId: string, projectId: string) =>
-    [...tracesKeys.detail(traceId), 'comments', projectId] as const,
+    [...tracesKeys.detail(projectId, traceId), 'comments'] as const,
 } as const
 
 // Relative time ranges surfaced in the filter bar. Translated to a
@@ -89,7 +90,6 @@ export const traceListQueryOptions = (
     queryKey: tracesKeys.list(projectId, params),
     queryFn: async () => {
       const search = new URLSearchParams()
-      search.set('project_id', projectId)
       search.set('page', String(params.page))
       search.set('limit', String(params.limit))
       if (params.q && params.q.length > 0) {
@@ -112,20 +112,21 @@ export const traceListQueryOptions = (
         search.set('sort_by', params.sortBy)
         search.set('sort_dir', params.sortDir)
       }
-      const resp = await rawFetch(`/api/v1/traces?${search.toString()}`, {
-        method: 'GET',
-      })
+      const resp = await rawFetch(
+        `/api/v1/projects/${encodeURIComponent(projectId)}/traces?${search.toString()}`,
+        { method: 'GET' },
+      )
       return (await resp.json()) as TraceListResponse
     },
     staleTime: 30 * 1000,
   })
 
-export const traceDetailQueryOptions = (traceId: string) =>
+export const traceDetailQueryOptions = (projectId: string, traceId: string) =>
   queryOptions({
-    queryKey: tracesKeys.detail(traceId),
+    queryKey: tracesKeys.detail(projectId, traceId),
     queryFn: async () => {
       const resp = await rawFetch(
-        `/api/v1/traces/${encodeURIComponent(traceId)}`,
+        `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}`,
         { method: 'GET' },
       )
       return (await resp.json()) as TraceDetail
@@ -133,12 +134,12 @@ export const traceDetailQueryOptions = (traceId: string) =>
     staleTime: 30 * 1000,
   })
 
-export const traceSpansQueryOptions = (traceId: string) =>
+export const traceSpansQueryOptions = (projectId: string, traceId: string) =>
   queryOptions({
-    queryKey: tracesKeys.spansOf(traceId),
+    queryKey: tracesKeys.spansOf(projectId, traceId),
     queryFn: async () => {
       const resp = await rawFetch(
-        `/api/v1/traces/${encodeURIComponent(traceId)}/spans`,
+        `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/spans`,
         { method: 'GET' },
       )
       return (await resp.json()) as Span[]
@@ -148,12 +149,12 @@ export const traceSpansQueryOptions = (traceId: string) =>
 
 // ---------------- annotations + comments ------------------------------
 //
-// Both endpoints live under `/api/v1/traces/{traceId}` and require
-// `project_id` as a query param (tenant scoping — the trace lookup
-// also verifies `project_id` matches the trace's project). Mutation
-// functions are kept thin so callers compose them with `useMutation`
-// + their own invalidation. The drawer components attach the
-// invalidation logic.
+// Both endpoints are nested under
+// `/api/v1/projects/{projectId}/traces/{traceId}` (tenant scoping is
+// implicit in the path — the trace lookup verifies the trace belongs
+// to the addressed project). Mutation functions are kept thin so
+// callers compose them with `useMutation` + their own invalidation.
+// The drawer components attach the invalidation logic.
 
 export const traceAnnotationsQueryOptions = (
   projectId: string,
@@ -162,9 +163,8 @@ export const traceAnnotationsQueryOptions = (
   queryOptions({
     queryKey: tracesKeys.annotations(traceId, projectId),
     queryFn: async () => {
-      const params = new URLSearchParams({ project_id: projectId })
       const resp = await rawFetch(
-        `/api/v1/traces/${encodeURIComponent(traceId)}/scores?${params.toString()}`,
+        `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/scores`,
         { method: 'GET' },
       )
       const data = (await resp.json()) as TraceAnnotation[] | null
@@ -178,9 +178,8 @@ export async function createTraceAnnotation(
   traceId: string,
   data: CreateTraceAnnotationRequest,
 ): Promise<TraceAnnotation> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/scores?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/scores`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,9 +194,8 @@ export async function deleteTraceAnnotation(
   traceId: string,
   scoreId: string,
 ): Promise<void> {
-  const params = new URLSearchParams({ project_id: projectId })
   await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/scores/${scoreId}?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/scores/${encodeURIComponent(scoreId)}`,
     { method: 'DELETE' },
   )
 }
@@ -209,9 +207,8 @@ export const traceCommentsQueryOptions = (
   queryOptions({
     queryKey: tracesKeys.comments(traceId, projectId),
     queryFn: async () => {
-      const params = new URLSearchParams({ project_id: projectId })
       const resp = await rawFetch(
-        `/api/v1/traces/${encodeURIComponent(traceId)}/comments?${params.toString()}`,
+        `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/comments`,
         { method: 'GET' },
       )
       return (await resp.json()) as TraceCommentsListResponse
@@ -224,9 +221,8 @@ export async function createTraceComment(
   traceId: string,
   data: CreateTraceCommentRequest,
 ): Promise<TraceComment> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/comments?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/comments`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -242,9 +238,8 @@ export async function createTraceCommentReply(
   parentId: string,
   data: CreateTraceCommentRequest,
 ): Promise<TraceComment> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/comments/${parentId}/replies?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/comments/${encodeURIComponent(parentId)}/replies`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,9 +261,8 @@ export async function updateTraceTags(
   traceId: string,
   tags: string[],
 ): Promise<string[]> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/tags?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/tags`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -284,9 +278,8 @@ export async function updateTraceBookmark(
   traceId: string,
   bookmarked: boolean,
 ): Promise<boolean> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/bookmark?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/bookmark`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -303,9 +296,8 @@ export async function toggleTraceCommentReaction(
   commentId: string,
   data: ToggleReactionRequest,
 ): Promise<TraceReaction[]> {
-  const params = new URLSearchParams({ project_id: projectId })
   const resp = await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}/comments/${commentId}/reactions?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}/comments/${encodeURIComponent(commentId)}/reactions`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -478,18 +470,17 @@ export async function deleteFilterPreset(
 // ---------------- trace deletion --------------------------------------
 //
 // Single-row delete is wired against the `delete-trace` Huma op
-// (`DELETE /api/v1/traces/{id}?project_id=...`). The endpoint returns
-// HTTP 204 — no body to parse. Bulk delete is intentionally not
-// implemented here: the backend has no batch-delete operation, so the
-// list view's bulk-delete dialog stays in its "deferred" state until
-// `POST /api/v1/traces:batch-delete` (or similar) lands.
+// (`DELETE /api/v1/projects/{projectId}/traces/{id}`). The endpoint
+// returns HTTP 204 — no body to parse. Bulk delete is intentionally
+// not implemented here: the backend has no batch-delete operation, so
+// the list view's bulk-delete dialog stays in its "deferred" state
+// until a batch-delete operation lands.
 export async function deleteTrace(
   projectId: string,
   traceId: string,
 ): Promise<void> {
-  const params = new URLSearchParams({ project_id: projectId })
   await rawFetch(
-    `/api/v1/traces/${encodeURIComponent(traceId)}?${params.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/traces/${encodeURIComponent(traceId)}`,
     { method: 'DELETE' },
   )
 }

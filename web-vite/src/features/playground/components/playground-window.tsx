@@ -244,6 +244,7 @@ export function PlaygroundWindow({
 
   const { stream, abort, isStreaming, content, error, metrics } = useStreaming(
     {
+      projectId,
       onEnd: (finalContent, finalMetrics, capturedInputs) => {
         setWindowOutput(
           index,

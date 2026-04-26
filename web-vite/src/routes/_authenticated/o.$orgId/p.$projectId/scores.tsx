@@ -179,7 +179,7 @@ function ScoresPage() {
 
       <ScoresFilterBar value={filterValue} onChange={handleFilterChange} />
 
-      <ScoresTable rows={rows} onRowClick={setSelectedScore} />
+      <ScoresTable rows={rows} projectId={projectId} onRowClick={setSelectedScore} />
 
       <ScoreDetailSheet
         score={selectedScore}

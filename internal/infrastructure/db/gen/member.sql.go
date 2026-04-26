@@ -553,29 +553,3 @@ func (q *Queries) UpdateMemberStatus(ctx context.Context, arg UpdateMemberStatus
 	_, err := q.db.Exec(ctx, updateMemberStatus, arg.UserID, arg.OrganizationID, arg.Status)
 	return err
 }
-
-const userHasPermissionGlobal = `-- name: UserHasPermissionGlobal :one
-SELECT EXISTS (
-    SELECT 1
-    FROM organization_members om
-    JOIN roles r             ON r.id  = om.role_id
-    JOIN role_permissions rp ON rp.role_id = r.id
-    JOIN permissions p       ON p.id  = rp.permission_id
-    WHERE om.user_id = $1
-      AND om.status = 'active'
-      AND om.deleted_at IS NULL
-      AND (p.resource || ':' || p.action)::text = $2::text
-)
-`
-
-type UserHasPermissionGlobalParams struct {
-	UserID  uuid.UUID `json:"user_id"`
-	Column2 string    `json:"column_2"`
-}
-
-func (q *Queries) UserHasPermissionGlobal(ctx context.Context, arg UserHasPermissionGlobalParams) (bool, error) {
-	row := q.db.QueryRow(ctx, userHasPermissionGlobal, arg.UserID, arg.Column2)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}

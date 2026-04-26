@@ -24,8 +24,9 @@ import (
 )
 
 // buildAppError produces an AppError rich enough to exercise every
-// envelope field (Type, Code, Message, Details, Param) but without
-// any per-field `errors` array (that's framework-pipeline only).
+// envelope field (Type, Code, Message, Details, Param) with an
+// explicit Code — verifies that explicitly-set codes survive both
+// emission paths.
 func buildAppError() *appErrors.AppError {
 	return &appErrors.AppError{
 		Type:    appErrors.TypeNotFound,
@@ -37,20 +38,16 @@ func buildAppError() *appErrors.AppError {
 }
 
 // TestErrorShape_HandlerAndWriteErrorByteIdentical pins that
-// AppError.MarshalJSON (direct json.Marshal) and WriteError (chi
-// middleware path) emit byte-identical envelope bytes for the same
-// input. These are the two "pure" AppError paths — no per-field
-// Errors[] augmentation from a framework's validation layer.
+// AppError.MarshalJSON (direct json.Marshal) and WriteError emit
+// byte-identical envelope bytes for the same input.
 func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 	e := buildAppError()
 
-	// Path 1 — handler returns *AppError; the encoder calls json.Marshal.
 	handlerBytes, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("json.Marshal(AppError): %v", err)
 	}
 
-	// Path 3 — chi middleware rejects and calls WriteError.
 	rec := httptest.NewRecorder()
 	response.WriteError(rec, e)
 	// WriteError uses json.NewEncoder which appends a trailing newline;
@@ -65,34 +62,21 @@ func TestErrorShape_HandlerAndWriteErrorByteIdentical(t *testing.T) {
 	}
 }
 
-// TestErrorShape_StatusErrorMatchesAppError pins that statusError
-// (the internal wrapper NewError produces for status-only error
-// callers) produces byte-identical bytes to AppError.MarshalJSON when
-// no per-field Errors[] are present.
-//
-// We can't construct statusError directly (unexported) — we exercise
-// it by routing a handler-returned AppError through NewError exactly
-// the way framework-boundary error paths do: look up the first
-// *AppError in errs, wrap it, emit.
-func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
+// TestErrorShape_ResponseEnvelopeMatchesAppError pins that the
+// response.ErrorResponse marshalling path stays in lockstep with
+// AppError.MarshalJSON when no per-field Errors[] are present.
+func TestErrorShape_ResponseEnvelopeMatchesAppError(t *testing.T) {
 	e := buildAppError()
 
-	// Handler path.
 	handlerBytes, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("json.Marshal(AppError): %v", err)
 	}
 
-	// Pipeline path — wire shape when handler returns *AppError. We
-	// go through the public NewError factory installer: it matches
-	// the factory's output which is what the wire sees.
-	// Build the wrapped *statusError: we marshal ErrorResponse with
-	// just the APIError populated — which is exactly what
-	// statusError.MarshalJSON does when Errors[] is empty.
 	pipelineResp := response.ErrorResponse{
 		Error: &response.APIError{
 			Type:    string(e.Type),
-			Code:    e.CodeOrType(),
+			Code:    e.Code,
 			Message: e.Message,
 			Details: e.Details,
 			Param:   e.Param,
@@ -112,16 +96,13 @@ func TestErrorShape_StatusErrorMatchesAppError(t *testing.T) {
 }
 
 // TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors pins
-// that AppError.MarshalJSON (handler path) and WriteError (chi-
-// middleware / chi-handler path) emit byte-identical envelope bytes
-// when the AppError carries per-field Errors[] diagnostics (the
-// go-playground/validator path). Regression guard for the Phase-0
-// addition of AppError.Errors — the two marshal paths must stay
-// byte-identical on both empty-Errors and populated-Errors inputs.
+// that AppError.MarshalJSON (handler path) and WriteError emit
+// byte-identical envelope bytes when the AppError carries per-field
+// Errors[] diagnostics (the go-playground/validator path).
 func TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors(t *testing.T) {
 	e := &appErrors.AppError{
 		Type:    appErrors.TypeValidation,
-		Code:    string(appErrors.TypeValidation),
+		Code:    "field_required",
 		Message: "Validation failed",
 		Details: "one or more fields failed validation",
 		Param:   "body.name",
@@ -157,31 +138,26 @@ func TestErrorShape_HandlerAndWriteErrorByteIdentical_WithErrors(t *testing.T) {
 	}
 }
 
-// TestErrorShape_NoSuccessField explicitly guards against
-// reintroducing the `success` boolean on any error path. The
-// Stripe/OpenAI contract is strict: the envelope has exactly one
-// top-level key ("error"). A client parsing
-// `if (body.success === false)` must stop working — that's the
-// desired behaviour, because HTTP status is the success signal.
+// TestErrorShape_NoSuccessField guards against reintroducing the
+// `success` boolean on any error path. The Stripe/OpenAI contract is
+// strict: the envelope has exactly one top-level key ("error"). HTTP
+// status is the success signal.
 func TestErrorShape_NoSuccessField(t *testing.T) {
 	e := buildAppError()
 
 	bodies := map[string][]byte{}
 
-	// Path 1.
 	raw, _ := json.Marshal(e)
 	bodies["AppError.MarshalJSON"] = raw
 
-	// Path 3.
 	rec := httptest.NewRecorder()
 	response.WriteError(rec, e)
 	bodies["WriteError"] = bytes.TrimRight(rec.Body.Bytes(), "\n")
 
-	// Path 2 (sim).
 	raw, _ = json.Marshal(response.ErrorResponse{
 		Error: &response.APIError{
 			Type:    string(e.Type),
-			Code:    e.CodeOrType(),
+			Code:    e.Code,
 			Message: e.Message,
 			Details: e.Details,
 			Param:   e.Param,
@@ -207,3 +183,30 @@ func TestErrorShape_NoSuccessField(t *testing.T) {
 		}
 	}
 }
+
+// TestErrorShape_CodeOmittedWhenUnset pins the post-fix behaviour:
+// when a call site does NOT set Code via WithCode, the wire envelope
+// MUST omit the field (Stripe behaviour). Regression guard against
+// the old `code defaults to type` anti-pattern.
+func TestErrorShape_CodeOmittedWhenUnset(t *testing.T) {
+	e := appErrors.NewUnauthorizedError("Authentication token required")
+
+	rec := httptest.NewRecorder()
+	response.WriteError(rec, e)
+
+	var parsed struct {
+		Error map[string]any `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	if parsed.Error["type"] != "authentication_error" {
+		t.Errorf("type = %v, want authentication_error", parsed.Error["type"])
+	}
+	if _, hasCode := parsed.Error["code"]; hasCode {
+		t.Errorf("code key must be omitted when unset, but got %q",
+			parsed.Error["code"])
+	}
+}
+

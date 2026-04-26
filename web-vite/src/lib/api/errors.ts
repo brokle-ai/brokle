@@ -10,6 +10,9 @@
 // HTTP status is the primary dispatch signal; the `type` field inside
 // the body disambiguates in edge cases (e.g. 422 can be validation OR
 // invalid_request — check the body when status alone is ambiguous).
+// Request correlation IDs live in the X-Request-Id response header
+// (read in throwTypedError below), matching Stripe / OpenAI / GitHub /
+// Twilio / Cloudflare / Helicone convention.
 
 export interface ErrorFieldIssue {
   location?: string

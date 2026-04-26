@@ -20,7 +20,7 @@ import (
 
 // ----- login ---------------------------------------------------------
 
-func (h *handler) login(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var body loginBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -61,7 +61,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 
 // ----- signup --------------------------------------------------------
 
-func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var body signupBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -118,7 +118,7 @@ func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-current-user (/me) ---------------------------------------
 
-func (h *handler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	claims := httpctx.MustGetTokenClaims(r.Context())
 
@@ -142,7 +142,7 @@ func (h *handler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-profile ---------------------------------------------------
 
-func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	u, err := h.userSvc.GetUser(r.Context(), userID)
 	if err != nil {
@@ -156,7 +156,7 @@ func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
 
 // ----- update-profile -----------------------------------------------
 
-func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body updateAuthProfileBody
@@ -200,7 +200,7 @@ func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 
 // ----- sessions list -------------------------------------------------
 
-func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessions, err := h.sessionSvc.GetUserSessions(r.Context(), userID)
 	if err != nil {
@@ -214,7 +214,7 @@ func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
 
 // ----- session get ---------------------------------------------------
 
-func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "session_id")
 	if err != nil {
@@ -237,7 +237,7 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 // ----- session revoke -----------------------------------------------
 
-func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "session_id")
 	if err != nil {
@@ -268,7 +268,7 @@ func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
 
 // ----- sessions revoke-all ------------------------------------------
 
-func (h *handler) revokeAllSessions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RevokeAllSessions(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	if err := h.authSvc.RevokeAllSessions(r.Context(), userID); err != nil {
 		h.logger.WarnContext(r.Context(), "revoke-all-sessions: failed",
@@ -283,7 +283,7 @@ func (h *handler) revokeAllSessions(w http.ResponseWriter, r *http.Request) {
 
 // ----- logout --------------------------------------------------------
 
-func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := httpctx.MustGetTokenClaims(r.Context())
 
 	if err := h.authSvc.Logout(r.Context(), claims.JWTID, claims.UserID); err != nil {
@@ -300,7 +300,7 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 
 // ----- refresh-tokens -----------------------------------------------
 
-func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(cookieNameRefresh)
 	if err != nil || cookie.Value == "" {
 		h.logger.WarnContext(r.Context(), "refresh: missing refresh_token cookie")
@@ -339,7 +339,7 @@ func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
 
 // ----- forgot-password ----------------------------------------------
 
-func (h *handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var body forgotPasswordBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -365,7 +365,7 @@ func (h *handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 
 // ----- reset-password -----------------------------------------------
 
-func (h *handler) resetPassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var body resetPasswordBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -384,7 +384,7 @@ func (h *handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 
 // ----- change-password ----------------------------------------------
 
-func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body changePasswordBody

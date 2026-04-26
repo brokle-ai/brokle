@@ -123,7 +123,7 @@ export function TraceDetailHeader({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tracesKeys.lists() })
       queryClient.removeQueries({
-        queryKey: tracesKeys.detail(trace.trace_id),
+        queryKey: tracesKeys.detail(projectId, trace.trace_id),
       })
       toast.success('Trace deleted')
       void navigate({
@@ -151,7 +151,7 @@ export function TraceDetailHeader({
       updateTraceBookmark(projectId, trace.trace_id, bookmarked),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: tracesKeys.detail(trace.trace_id),
+        queryKey: tracesKeys.detail(projectId, trace.trace_id),
       })
       queryClient.invalidateQueries({ queryKey: tracesKeys.lists() })
     },

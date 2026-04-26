@@ -69,6 +69,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		JWT:                    core.Services.Auth.JWT,
 		Blacklist:              core.Services.Auth.BlacklistedTokens,
 		OrgMember:              core.Services.Auth.OrganizationMembers,
+		ProjectMember:          core.Services.Auth.ProjectMembers,
 		APIKey:                 core.Services.Auth.APIKey,
 		Project:                core.Services.ProjectService,
 		OrgMemberOrg:           core.Services.MemberService,
