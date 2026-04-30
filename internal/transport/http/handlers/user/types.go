@@ -43,9 +43,24 @@ type organizationWithProjects struct {
 	CompositeSlug string           `json:"composite_slug"`
 	Plan          string           `json:"plan"`
 	Role          string           `json:"role"`
+	// Scopes is the user's resolved org-tier permission set for this
+	// organization (Langfuse session-bootstrap pattern). The frontend's
+	// useHasOrganizationAccess hook reads this directly — no separate
+	// /scopes/check round trip. Always emitted (never omitempty); empty
+	// list is a meaningful "no org-tier permissions" signal.
+	Scopes        []string         `json:"scopes"`
 	CreatedAt     time.Time        `json:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at"`
-	Projects      []projectSummary `json:"projects"`
+	// Projects is the user's DISCOVERABLE subset of the organization's
+	// projects: a project is included iff the user holds either
+	// `org_projects:list` on the org (full-list authority) OR
+	// `projects:read` on the project (per-project floor scope —
+	// auto-injected by RoleService.autoInjectFloorScope when any
+	// project-tier permission is granted). Mirrors GitHub/GitLab
+	// filter-at-discovery semantics: projects the caller can't
+	// navigate to are NOT enumerated, so the frontend project
+	// selector renders exactly the navigable set.
+	Projects []projectSummary `json:"projects"`
 }
 
 type projectSummary struct {
@@ -55,6 +70,17 @@ type projectSummary struct {
 	Description    *string   `json:"description,omitempty"`
 	OrganizationID uuid.UUID `json:"organization_id"`
 	Status         string    `json:"status"`
+	// Role is the most-specific project role for display:
+	// project_members.role when the user has a per-resource grant,
+	// otherwise the inherited org RoleName. Always populated. Display
+	// hint only — effective scopes are additively resolved server-side
+	// and live in `scopes`.
+	Role           string    `json:"role"`
+	// Scopes is the user's additively-resolved project-tier permission
+	// set for this project (UNION of org-projection + any project_members
+	// grant). Empty list = no project-tier permissions; UI hides
+	// project-scoped controls. Always emitted.
+	Scopes         []string  `json:"scopes"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }

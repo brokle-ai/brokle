@@ -10,6 +10,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // organizationMemberRepository is the pgx+sqlc implementation of
@@ -32,14 +33,10 @@ func (r *organizationMemberRepository) Create(ctx context.Context, m *authDomain
 	if m.JoinedAt.IsZero() {
 		m.JoinedAt = now
 	}
-	if m.Status == "" {
-		m.Status = authDomain.MemberStatusActive
-	}
 	if err := r.tm.Queries(ctx).CreateMember(ctx, gen.CreateMemberParams{
 		UserID:         m.UserID,
 		OrganizationID: m.OrganizationID,
 		RoleID:         m.RoleID,
-		Status:         m.Status,
 		JoinedAt:       m.JoinedAt,
 		InvitedBy:      m.InvitedBy,
 		CreatedAt:      now,
@@ -57,7 +54,7 @@ func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Cont
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get member (user=%s org=%s): %w", userID, orgID, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("organization_member", appErrors.WithOp("repo.organization_member.get_by_user_and_org"))
 		}
 		return nil, fmt.Errorf("get member (user=%s org=%s): %w", userID, orgID, err)
 	}
@@ -69,7 +66,6 @@ func (r *organizationMemberRepository) Update(ctx context.Context, m *authDomain
 		UserID:         m.UserID,
 		OrganizationID: m.OrganizationID,
 		RoleID:         m.RoleID,
-		Status:         m.Status,
 		InvitedBy:      m.InvitedBy,
 	}); err != nil {
 		return fmt.Errorf("update organization member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
@@ -77,6 +73,12 @@ func (r *organizationMemberRepository) Update(ctx context.Context, m *authDomain
 	return nil
 }
 
+// Delete soft-deletes the organization_members row. The org-removal
+// flow ALSO needs to cascade-clean project_members overrides for
+// this user — that's the application service's responsibility (see
+// OrganizationMemberService.RemoveMember). This repo method does ONE
+// thing per Vernon's DDD: persistence per aggregate; atomicity owned
+// by the use case.
 func (r *organizationMemberRepository) Delete(ctx context.Context, userID, orgID uuid.UUID) error {
 	if err := r.tm.Queries(ctx).SoftDeleteMemberByUserAndOrg(ctx, gen.SoftDeleteMemberByUserAndOrgParams{
 		UserID:         userID,
@@ -165,27 +167,9 @@ func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx cont
 	return perms, nil
 }
 
-// ----- Status management --------------------------------------------
-
-func (r *organizationMemberRepository) ActivateMember(ctx context.Context, userID, orgID uuid.UUID) error {
-	return r.setMemberStatus(ctx, userID, orgID, authDomain.MemberStatusActive)
-}
-
-func (r *organizationMemberRepository) SuspendMember(ctx context.Context, userID, orgID uuid.UUID) error {
-	return r.setMemberStatus(ctx, userID, orgID, authDomain.MemberStatusSuspended)
-}
-
-func (r *organizationMemberRepository) setMemberStatus(ctx context.Context, userID, orgID uuid.UUID, status string) error {
-	if err := r.tm.Queries(ctx).UpdateMemberStatus(ctx, gen.UpdateMemberStatusParams{
-		UserID:         userID,
-		OrganizationID: orgID,
-		Status:         status,
-	}); err != nil {
-		return fmt.Errorf("set member status %s (user=%s org=%s): %w", status, userID, orgID, err)
-	}
-	return nil
-}
-
+// GetActiveMembers lists non-soft-deleted members. Suspension is no
+// longer modeled (deleted 2026-04-30) — "active" here means
+// "deleted_at IS NULL".
 func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, orgID uuid.UUID) ([]*authDomain.OrganizationMember, error) {
 	rows, err := r.tm.Queries(ctx).ListActiveMembersByOrganization(ctx, orgID)
 	if err != nil {
@@ -220,14 +204,10 @@ func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members [
 			if m.JoinedAt.IsZero() {
 				m.JoinedAt = now
 			}
-			if m.Status == "" {
-				m.Status = authDomain.MemberStatusActive
-			}
 			if err := q.CreateMember(ctx, gen.CreateMemberParams{
 				UserID:         m.UserID,
 				OrganizationID: m.OrganizationID,
 				RoleID:         m.RoleID,
-				Status:         m.Status,
 				JoinedAt:       m.JoinedAt,
 				InvitedBy:      m.InvitedBy,
 				CreatedAt:      now,
@@ -291,7 +271,6 @@ func authMemberFromRow(row *gen.OrganizationMember) *authDomain.OrganizationMemb
 		UserID:         row.UserID,
 		OrganizationID: row.OrganizationID,
 		RoleID:         row.RoleID,
-		Status:         row.Status,
 		JoinedAt:       row.JoinedAt,
 		InvitedBy:      row.InvitedBy,
 	}

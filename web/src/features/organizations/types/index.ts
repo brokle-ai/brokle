@@ -43,6 +43,21 @@ export interface ProjectSummary {
   status: ProjectStatus
   metrics: ProjectMetrics
   settings?: ProjectSettings
+  /**
+   * The user's most-specific project role for display:
+   * project_members.role when a per-resource grant exists, otherwise
+   * inherits from the parent organization's role. Display hint only —
+   * effective scopes are additively resolved server-side and live in
+   * `scopes`. Populated by /v1/users/me on every session bootstrap.
+   */
+  role: string
+  /**
+   * The user's additively-resolved project-tier permissions for this
+   * project (UNION of org-projection + any project_members grant).
+   * Read synchronously by useHasProjectAccess — no per-check API
+   * round trip.
+   */
+  scopes: string[]
   createdAt: string
   updatedAt: string
 }

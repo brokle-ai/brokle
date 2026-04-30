@@ -6,23 +6,30 @@ import (
 	"github.com/google/uuid"
 
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/common"
 	appErrors "brokle/pkg/errors"
 )
 
 // OrganizationMemberService assigns roles to organization members and checks access.
 type OrganizationMemberService struct {
-	orgMemberRepo authDomain.OrganizationMemberRepository
-	roleRepo      authDomain.RoleRepository
+	orgMemberRepo     authDomain.OrganizationMemberRepository
+	projectMemberRepo authDomain.ProjectMemberRepository
+	roleRepo          authDomain.RoleRepository
+	tx                common.Transactor
 }
 
 // NewOrganizationMemberService creates a new organization member service instance
 func NewOrganizationMemberService(
 	orgMemberRepo authDomain.OrganizationMemberRepository,
+	projectMemberRepo authDomain.ProjectMemberRepository,
 	roleRepo authDomain.RoleRepository,
+	tx common.Transactor,
 ) *OrganizationMemberService {
 	return &OrganizationMemberService{
-		orgMemberRepo: orgMemberRepo,
-		roleRepo:      roleRepo,
+		orgMemberRepo:     orgMemberRepo,
+		projectMemberRepo: projectMemberRepo,
+		roleRepo:          roleRepo,
+		tx:                tx,
 	}
 }
 
@@ -31,16 +38,16 @@ func (s *OrganizationMemberService) AddMember(ctx context.Context, userID, orgID
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("role not found")
+		return nil, appErrors.NotFound("role")
 	}
 
 	// Check if user is already a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to check membership", err)
+		return nil, appErrors.Internal("failed to check membership", err)
 	}
 	if exists {
-		return nil, appErrors.NewConflictError("user is already a member of this organization")
+		return nil, appErrors.Conflict("", "user is already a member of this organization")
 	}
 
 	// Create new membership
@@ -48,24 +55,40 @@ func (s *OrganizationMemberService) AddMember(ctx context.Context, userID, orgID
 
 	err = s.orgMemberRepo.Create(ctx, member)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to create membership", err)
+		return nil, appErrors.Internal("failed to create membership", err)
 	}
 
 	return member, nil
 }
 
-// RemoveMember removes a user from an organization
+// RemoveMember removes a user from an organization. The two writes
+// — cascade-delete every project_members row in this org's projects,
+// then soft-delete the organization_members row — must commit
+// together or roll back together. project_members has no FK cascade
+// to organization_members, so without service-level atomicity a
+// transient DB error between the two writes would leave the user
+// holding org membership but missing every project grant (or
+// vice-versa). WithinTransaction is reentrant (FLATTEN), so callers
+// already inside an outer tx reuse it.
 func (s *OrganizationMemberService) RemoveMember(ctx context.Context, userID, orgID uuid.UUID) error {
 	// Check if user is a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check membership", err)
+		return appErrors.Internal("failed to check membership", err)
 	}
 	if !exists {
-		return appErrors.NewNotFoundError("user is not a member of this organization")
+		return appErrors.NotFound("member", appErrors.WithMessage("user is not a member of this organization"))
 	}
 
-	return s.orgMemberRepo.Delete(ctx, userID, orgID)
+	return s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		if err := s.projectMemberRepo.DeleteAllInOrgForUser(ctx, userID, orgID); err != nil {
+			return appErrors.Internal("failed to cascade-delete project_members", err)
+		}
+		if err := s.orgMemberRepo.Delete(ctx, userID, orgID); err != nil {
+			return appErrors.Internal("failed to remove organization member", err)
+		}
+		return nil
+	})
 }
 
 // UpdateMemberRole updates a member's role in an organization
@@ -73,16 +96,16 @@ func (s *OrganizationMemberService) UpdateMemberRole(ctx context.Context, userID
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return appErrors.NewNotFoundError("role not found")
+		return appErrors.NotFound("role")
 	}
 
 	// Check if user is a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check membership", err)
+		return appErrors.Internal("failed to check membership", err)
 	}
 	if !exists {
-		return appErrors.NewNotFoundError("user is not a member of this organization")
+		return appErrors.NotFound("member", appErrors.WithMessage("user is not a member of this organization"))
 	}
 
 	return s.orgMemberRepo.UpdateMemberRole(ctx, userID, orgID, roleID)
@@ -129,16 +152,6 @@ func (s *OrganizationMemberService) GetUserPermissionsInOrganization(ctx context
 // ProjectMemberService.CheckUserPermissionsInScope instead.
 func (s *OrganizationMemberService) CheckUserPermissions(ctx context.Context, userID uuid.UUID, permissions []string) (map[string]bool, error) {
 	return s.orgMemberRepo.CheckUserPermissions(ctx, userID, permissions)
-}
-
-// ActivateMember activates a member in an organization
-func (s *OrganizationMemberService) ActivateMember(ctx context.Context, userID, orgID uuid.UUID) error {
-	return s.orgMemberRepo.ActivateMember(ctx, userID, orgID)
-}
-
-// SuspendMember suspends a member in an organization
-func (s *OrganizationMemberService) SuspendMember(ctx context.Context, userID, orgID uuid.UUID) error {
-	return s.orgMemberRepo.SuspendMember(ctx, userID, orgID)
 }
 
 // GetActiveMembers gets all active members of an organization

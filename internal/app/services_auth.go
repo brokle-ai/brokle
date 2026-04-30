@@ -34,11 +34,15 @@ func ProvideAuthServices(
 	roleService := authService.NewRoleService(
 		authRepos.Role,
 		authRepos.RolePermission,
+		authRepos.Permission,
+		logger,
 	)
 
 	orgMemberService := authService.NewOrganizationMemberService(
 		authRepos.OrganizationMember,
+		authRepos.ProjectMember,
 		authRepos.Role,
+		databases.TxManager,
 	)
 
 	projectMemberService := authService.NewProjectMemberService(
@@ -78,12 +82,6 @@ func ProvideAuthServices(
 		logger,
 	)
 
-	scopeService := authService.NewScopeService(
-		authRepos.OrganizationMember,
-		authRepos.Role,
-		authRepos.Permission,
-	)
-
 	frontendURL := "http://localhost:3000"
 	if url := os.Getenv("NEXT_PUBLIC_APP_URL"); url != "" {
 		frontendURL = url
@@ -104,7 +102,6 @@ func ProvideAuthServices(
 		OrganizationMembers: orgMemberService,
 		ProjectMembers:      projectMemberService,
 		BlacklistedTokens:   blacklistedTokenService,
-		Scope:               scopeService,
 		OAuthProvider:       oauthProvider,
 	}
 }

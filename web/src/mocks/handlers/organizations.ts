@@ -31,27 +31,4 @@ export const organizationHandlers = [
   http.get('*/v1/organizations/:orgId', ({ params }) => {
     return HttpResponse.json({ ...MOCK_ORG, id: params.orgId as string })
   }),
-
-  http.get('*/v1/organizations/:orgId/projects', () => {
-    return HttpResponse.json({
-      data: [
-        {
-          id: 'prj_test_0000000000000000000000',
-          organization_id: MOCK_ORG.id,
-          name: 'Test Project',
-          slug: 'test-project',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 1,
-        total_pages: 1,
-        has_next: false,
-        has_prev: false,
-      },
-    })
-  }),
 ]

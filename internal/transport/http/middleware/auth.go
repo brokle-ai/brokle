@@ -55,14 +55,14 @@ func RequireAuth(d AuthDeps) func(http.Handler) http.Handler {
 			token, err := tokenFromCookie(r)
 			if err != nil {
 				d.Logger.WarnContext(r.Context(), "authentication: missing access_token cookie", "error", err)
-				response.WriteError(w, appErrors.NewUnauthorizedError("Authentication token required"))
+				response.WriteError(w, appErrors.Unauthenticated("Authentication token required"))
 				return
 			}
 
 			claims, err := d.JWT.ValidateAccessToken(r.Context(), token)
 			if err != nil {
 				d.Logger.WarnContext(r.Context(), "authentication: invalid JWT", "error", err)
-				response.WriteError(w, appErrors.NewUnauthorizedError("Invalid authentication token"))
+				response.WriteError(w, appErrors.Unauthenticated("Invalid authentication token"))
 				return
 			}
 
@@ -70,12 +70,12 @@ func RequireAuth(d AuthDeps) func(http.Handler) http.Handler {
 			revoked, err := d.Blacklist.IsTokenBlacklisted(r.Context(), claims.JWTID)
 			if err != nil {
 				d.Logger.ErrorContext(r.Context(), "authentication: blacklist lookup failed", "error", err, "jti", claims.JWTID)
-				response.WriteError(w, appErrors.NewInternalError("Authentication verification failed", err))
+				response.WriteError(w, appErrors.Internal("Authentication verification failed", err))
 				return
 			}
 			if revoked {
 				d.Logger.WarnContext(r.Context(), "authentication: blacklisted JWT", "jti", claims.JWTID, "user_id", claims.UserID)
-				response.WriteError(w, appErrors.NewUnauthorizedError("Authentication token has been revoked"))
+				response.WriteError(w, appErrors.Unauthenticated("Authentication token has been revoked"))
 				return
 			}
 
@@ -83,12 +83,12 @@ func RequireAuth(d AuthDeps) func(http.Handler) http.Handler {
 			revokedByUser, err := d.Blacklist.IsUserBlacklistedAfterTimestamp(r.Context(), claims.UserID, claims.IssuedAt)
 			if err != nil {
 				d.Logger.ErrorContext(r.Context(), "authentication: user-wide blacklist lookup failed", "error", err, "user_id", claims.UserID)
-				response.WriteError(w, appErrors.NewInternalError("Authentication verification failed", err))
+				response.WriteError(w, appErrors.Internal("Authentication verification failed", err))
 				return
 			}
 			if revokedByUser {
 				d.Logger.WarnContext(r.Context(), "authentication: user sessions revoked", "user_id", claims.UserID, "iat", claims.IssuedAt)
-				response.WriteError(w, appErrors.NewUnauthorizedError("All user sessions have been revoked"))
+				response.WriteError(w, appErrors.Unauthenticated("All user sessions have been revoked"))
 				return
 			}
 
@@ -213,13 +213,15 @@ const (
 // RequireAllPermissions share one error-response shape and one set of
 // log fields.
 //
-// Scope resolution (Langfuse MAX semantics):
+// Scope resolution (additive semantics — project role grants UNION
+// with the org role's project-tier projection; both branches require
+// active org membership):
 //   - orgID is mandatory in ctx — every protected route is mounted
 //     either under RequireOrganizationAccess (which pins org) or
 //     RequireProjectAccess (which pins both project and the project's
 //     org). Missing orgID = handler is mounted on the wrong group.
 //   - projectID is optional — if present, the resolver unions the
-//     user's org-role permissions with their project-role override.
+//     user's org-role permissions with their project-role grant.
 func checkPermissions(ctx context.Context, w http.ResponseWriter, d AuthDeps, userID uuid.UUID, perms []string, mode permissionMode) bool {
 	orgID := httpctx.MustGetOrganizationID(ctx)
 	projectID, _ := httpctx.ProjectID(ctx) // uuid.Nil if absent — resolver skips the project layer
@@ -227,7 +229,7 @@ func checkPermissions(ctx context.Context, w http.ResponseWriter, d AuthDeps, us
 	results, err := d.ProjectMember.CheckUserPermissionsInScope(ctx, userID, orgID, projectID, perms)
 	if err != nil {
 		d.Logger.ErrorContext(ctx, "authorization: permission check failed", "error", err, "user_id", userID, "permissions", perms)
-		response.WriteError(w, appErrors.NewInternalError("Permission verification failed", err))
+		response.WriteError(w, appErrors.Internal("Permission verification failed", err))
 		return false
 	}
 
@@ -250,12 +252,12 @@ func checkPermissions(ctx context.Context, w http.ResponseWriter, d AuthDeps, us
 			return true
 		}
 		d.Logger.WarnContext(ctx, "authorization: missing permission", "user_id", userID, "permissions", perms, "missing", missing)
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions"))
+		response.WriteError(w, appErrors.PermissionDenied("", "Insufficient permissions"))
 		return false
 	}
 
 	d.Logger.WarnContext(ctx, "authorization: none of required permissions held", "user_id", userID, "permissions", perms)
-	response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions"))
+	response.WriteError(w, appErrors.PermissionDenied("", "Insufficient permissions"))
 	return false
 }
 
@@ -283,12 +285,12 @@ func RequireProjectAccess(d AuthDeps) func(http.Handler) http.Handler {
 				raw = r.URL.Query().Get("project_id")
 			}
 			if raw == "" {
-				response.WriteError(w, appErrors.NewValidationError("Missing project ID", "project_id is required"))
+				response.WriteError(w, appErrors.InvalidParam("project_id", "is required"))
 				return
 			}
 			projectID, err := uuid.Parse(raw)
 			if err != nil {
-				response.WriteError(w, appErrors.NewValidationError("Invalid project ID", "project_id must be a valid UUID"))
+				response.WriteError(w, appErrors.InvalidParam("project_id", "must be a valid UUID"))
 				return
 			}
 
@@ -313,7 +315,7 @@ func RequireProjectAccess(d AuthDeps) func(http.Handler) http.Handler {
 			}
 			if !isMember {
 				d.Logger.WarnContext(r.Context(), "Authorization: project access denied", "user_id", userID, "project_id", projectID)
-				response.WriteError(w, appErrors.NewForbiddenError("Access denied to project"))
+				response.WriteError(w, appErrors.PermissionDenied("", "Access denied to project"))
 				return
 			}
 
@@ -349,12 +351,12 @@ func RequireOrganizationAccess(d AuthDeps) func(http.Handler) http.Handler {
 
 			raw := chi.URLParam(r, "orgId")
 			if raw == "" {
-				response.WriteError(w, appErrors.NewValidationError("Missing organization ID", "orgId is required"))
+				response.WriteError(w, appErrors.InvalidParam("orgId", "is required"))
 				return
 			}
 			orgID, err := uuid.Parse(raw)
 			if err != nil {
-				response.WriteError(w, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid UUID"))
+				response.WriteError(w, appErrors.InvalidParam("orgId", "must be a valid UUID"))
 				return
 			}
 
@@ -366,7 +368,7 @@ func RequireOrganizationAccess(d AuthDeps) func(http.Handler) http.Handler {
 			}
 			if !isMember {
 				d.Logger.WarnContext(r.Context(), "Authorization: org access denied", "user_id", userID, "org_id", orgID)
-				response.WriteError(w, appErrors.NewForbiddenError("Access denied to organization"))
+				response.WriteError(w, appErrors.PermissionDenied("", "Access denied to organization"))
 				return
 			}
 

@@ -22,6 +22,7 @@ func ProvideOrganizationServices(
 	orgRepos *OrganizationRepositories,
 	billingRepos *BillingRepositories,
 	authServices *AuthServices,
+	databases *DatabaseContainer,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) (
@@ -33,15 +34,20 @@ func ProvideOrganizationServices(
 ) {
 	memberSvc := orgService.NewMemberService(
 		orgRepos.Member,
+		authRepos.ProjectMember,
 		orgRepos.Organization,
 		userRepos.User,
 		authServices.Role,
+		databases.TxManager,
 	)
 
 	projectSvc := orgService.NewProjectService(
 		orgRepos.Project,
 		orgRepos.Organization,
 		orgRepos.Member,
+		authServices.Role,
+		authServices.ProjectMembers,
+		databases.TxManager,
 	)
 
 	emailSender, err := createEmailSender(&cfg.External.Email, logger)

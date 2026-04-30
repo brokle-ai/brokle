@@ -199,9 +199,8 @@ type OrganizationMemberRepository interface {
 	CheckUserPermissions(ctx context.Context, userID uuid.UUID, permissions []string) (map[string]bool, error)
 	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID uuid.UUID) ([]string, error)
 
-	// Status management
-	ActivateMember(ctx context.Context, userID, orgID uuid.UUID) error
-	SuspendMember(ctx context.Context, userID, orgID uuid.UUID) error
+	// Active-member listing (filters out soft-deleted rows; suspension
+	// is no longer modeled — see auth.go OrganizationMember docstring).
 	GetActiveMembers(ctx context.Context, orgID uuid.UUID) ([]*OrganizationMember, error)
 
 	// Role management
@@ -224,16 +223,37 @@ type MemberRoleUpdate struct {
 }
 
 // ProjectMemberRepository defines the interface for project membership.
-// Project membership is a Langfuse-style role-elevation override on top of
-// the user's organization role — not a replacement. The MAX-semantics
-// resolver lives in ListUserEffectivePermissionsInScope and is consumed by
-// the scope-aware permission middleware.
+// Project membership is an ADDITIVE role grant on top of the user's
+// organization role — per-resource scopes UNION with the org role's
+// project-tier projection. The resolver lives in
+// ListUserEffectivePermissionsInScope and is consumed by the scope-
+// aware permission middleware. See docs/adr/0001-rbac-additive-
+// semantics.md for the migration history (round 11 OVERRIDE → round 24
+// additive).
 type ProjectMemberRepository interface {
 	// Core CRUD
-	Create(ctx context.Context, member *ProjectMember) error
+	//
+	// Create executes the atomic UPSERT-WHERE defined by the
+	// CreateProjectMember query and returns the affected-row count.
+	// 1 = inserted (fresh add) or updated in-place (orphan repair).
+	// 0 = row exists AND is visible (active org membership) — the
+	//     UPSERT WHERE-clause refused to overwrite; caller should
+	//     return Conflict.
+	// See the SQL query comment block + CLAUDE.md 2026-04-30
+	// (project-rbac) for the full rationale.
+	Create(ctx context.Context, member *ProjectMember) (int64, error)
 	GetByUserAndProject(ctx context.Context, userID, projectID uuid.UUID) (*ProjectMember, error)
 	UpdateRole(ctx context.Context, userID, projectID, roleID uuid.UUID) error
 	Delete(ctx context.Context, userID, projectID uuid.UUID) error
+
+	// DeleteAllInOrgForUser hard-deletes every project_members row this
+	// user holds within the given organization's projects. Called by
+	// the org-removal application service to cascade-clean per-resource
+	// grants atomically with the org_members soft-delete. The caller
+	// owns the transaction scope (use-case-level atomicity per
+	// Vernon's DDD); this method participates in whatever tx ctx
+	// already carries.
+	DeleteAllInOrgForUser(ctx context.Context, userID, orgID uuid.UUID) error
 
 	// Membership queries
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*ProjectMember, error)
@@ -241,7 +261,9 @@ type ProjectMemberRepository interface {
 	IsMember(ctx context.Context, userID, projectID uuid.UUID) (bool, error)
 	GetMemberCount(ctx context.Context, projectID uuid.UUID) (int, error)
 
-	// Effective-permission resolution (MAX semantics across org+project roles)
+	// Effective-permission resolution (additive semantics, round 24:
+	// org role's project-tier projection UNIONs with the project_members
+	// override grant; both branches require active org membership).
 	ListUserEffectivePermissionsInScope(ctx context.Context, userID, orgID, projectID uuid.UUID) ([]string, error)
 }
 

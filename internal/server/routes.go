@@ -235,24 +235,25 @@ func addRoutes(r chi.Router, d Deps) {
 		r.Put("/api/v1/billing/contracts/{contractId}/tiers", h.Billing.UpdateContractTiers)
 		r.Get("/api/v1/billing/contracts/{contractId}/history", h.Billing.GetContractHistory)
 
-		// RBAC — role/permission catalog + per-user role/permission
-		// lookups. Global catalog (not org-scoped).
+		// RBAC — role/permission catalog + per-user role assignment.
+		// Per-check scope/permission endpoints were removed in the
+		// Langfuse session-bootstrap refactor: the dashboard now reads
+		// its full effective-scope tree from /api/v1/users/me on mount
+		// (see internal/transport/http/handlers/user/handlers.go) and
+		// resolves UI gates synchronously. Server-side enforcement is
+		// unchanged — middleware.RequirePermission calls
+		// ProjectMemberService.CheckUserPermissionsInScope on every
+		// request.
 		r.Get("/api/v1/rbac/roles", h.RBAC.ListRoles)
 		r.Get("/api/v1/rbac/roles/statistics", h.RBAC.GetRoleStatistics)
 		r.Get("/api/v1/rbac/roles/{roleId}", h.RBAC.GetRole)
 		r.Get("/api/v1/rbac/users/{userId}/roles", h.RBAC.GetUserRoles)
-		r.Get("/api/v1/rbac/users/{userId}/permissions", h.RBAC.GetUserPermissions)
-		r.Post("/api/v1/rbac/users/{userId}/permissions/check", h.RBAC.CheckUserPermissions)
 		r.Post("/api/v1/rbac/users/{userId}/organizations/{orgId}/roles", h.RBAC.AssignOrganizationRole)
 		r.Delete("/api/v1/rbac/users/{userId}/organizations/{orgId}", h.RBAC.RemoveOrganizationMember)
-		r.Post("/api/v1/rbac/users/{userId}/scopes/check", h.RBAC.CheckUserScopes)
-		r.Get("/api/v1/rbac/users/{userId}/scopes", h.RBAC.GetUserScopes)
 		r.Get("/api/v1/rbac/permissions", h.RBAC.ListPermissions)
 		r.Get("/api/v1/rbac/permissions/resources", h.RBAC.GetAvailableResources)
 		r.Get("/api/v1/rbac/permissions/resources/{resource}/actions", h.RBAC.GetActionsForResource)
 		r.Get("/api/v1/rbac/permissions/{permissionId}", h.RBAC.GetPermission)
-		r.Get("/api/v1/rbac/scopes", h.RBAC.GetAvailableScopes)
-		r.Get("/api/v1/rbac/scopes/categories", h.RBAC.GetScopeCategories)
 
 		// -----------------------------------------------------------
 		// Org-scoped: /api/v1/organizations/{orgId}/...
@@ -266,12 +267,12 @@ func addRoutes(r chi.Router, d Deps) {
 			r.With(middleware.RequirePermission(authD, "organizations:read")).Get("/", h.Organization.GetOrganization)
 			r.With(middleware.RequirePermission(authD, "organizations:write")).Patch("/", h.Organization.UpdateOrganization)
 			r.With(middleware.RequirePermission(authD, "organizations:delete")).Delete("/", h.Organization.DeleteOrganization)
-			r.With(middleware.RequirePermission(authD, "members:read")).Get("/members", h.Organization.ListMembers)
-			r.With(middleware.RequirePermission(authD, "members:remove")).Delete("/members/{userId}", h.Organization.RemoveMember)
-			r.With(middleware.RequirePermission(authD, "members:invite")).Post("/invitations", h.Organization.CreateInvitation)
-			r.With(middleware.RequirePermission(authD, "members:read")).Get("/invitations", h.Organization.ListPendingInvitations)
-			r.With(middleware.RequirePermission(authD, "members:invite")).Post("/invitations/{invitationId}/resend", h.Organization.ResendInvitation)
-			r.With(middleware.RequirePermission(authD, "members:invite")).Delete("/invitations/{invitationId}", h.Organization.RevokeInvitation)
+			r.With(middleware.RequirePermission(authD, "org_members:read")).Get("/members", h.Organization.ListMembers)
+			r.With(middleware.RequirePermission(authD, "org_members:remove")).Delete("/members/{userId}", h.Organization.RemoveMember)
+			r.With(middleware.RequirePermission(authD, "org_members:invite")).Post("/invitations", h.Organization.CreateInvitation)
+			r.With(middleware.RequirePermission(authD, "org_members:read")).Get("/invitations", h.Organization.ListPendingInvitations)
+			r.With(middleware.RequirePermission(authD, "org_members:invite")).Post("/invitations/{invitationId}/resend", h.Organization.ResendInvitation)
+			r.With(middleware.RequirePermission(authD, "org_members:invite")).Delete("/invitations/{invitationId}", h.Organization.RevokeInvitation)
 			r.With(middleware.RequirePermission(authD, "settings:read")).Get("/settings", h.Organization.ListSettings)
 			r.With(middleware.RequirePermission(authD, "settings:write")).Post("/settings", h.Organization.CreateSetting)
 			r.With(middleware.RequirePermission(authD, "settings:read")).Get("/settings/{key}", h.Organization.GetSetting)
@@ -307,10 +308,13 @@ func addRoutes(r chi.Router, d Deps) {
 			r.With(middleware.RequirePermission(authD, "roles:write")).Patch("/roles/{roleId}", h.RBAC.UpdateCustomRole)
 			r.With(middleware.RequirePermission(authD, "roles:delete")).Delete("/roles/{roleId}", h.RBAC.DeleteCustomRole)
 
-			// Project list + create (mounted under org subgroup
-			// because both operations need only org context).
-			r.With(middleware.RequirePermission(authD, "projects:read")).Get("/projects", h.Project.List)
-			r.With(middleware.RequirePermission(authD, "projects:write")).Post("/projects", h.Project.Create)
+			// Project list + create — org-tier verbs (resolve against
+			// the user's org role only; no project_members grant
+			// applies because there's no specific project context).
+			// Per-tier verb minting (Auth0 pattern); see CLAUDE.md
+			// 2026-04-30 (project-rbac).
+			r.With(middleware.RequirePermission(authD, "org_projects:list")).Get("/projects", h.Project.List)
+			r.With(middleware.RequirePermission(authD, "org_projects:create")).Post("/projects", h.Project.Create)
 		})
 
 		// -----------------------------------------------------------
@@ -318,13 +322,29 @@ func addRoutes(r chi.Router, d Deps) {
 		// RequireProjectAccess loads the project, verifies the caller
 		// is a member of the project's organization, then pins both
 		// projectID and orgID into ctx. The pinned orgID is consumed
-		// by RequirePermission's scope-aware resolver (Langfuse MAX
-		// semantics across org+project roles).
+		// by RequirePermission's scope-aware resolver (additive
+		// semantics: project role grants UNION with the org role's
+		// project-tier projection; both branches require active org
+		// membership).
 		// -----------------------------------------------------------
 		r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
 			r.Use(middleware.RequireProjectAccess(authD))
 
-			// Project detail.
+			// `projects:read` is the project-scope FLOOR permission
+			// (GitHub `metadata: read` model). Every role with any
+			// project-scoped permission MUST also carry `projects:read`
+			// — invariant enforced at build time by the seeder test
+			// `TestRolesCarryProjectsReadFloorScope`. A role that
+			// intentionally withholds `projects:read` is structurally
+			// telling us it has NO project access at all and correctly
+			// 403s here. The frontend URL resolver
+			// (web/src/lib/context/url-context-manager.ts) relies on
+			// this guard: built-in roles all carry the floor, so
+			// dashboard navigation works; custom roles created via a
+			// future role-creation UI will be validated against the
+			// same floor-scope rule. See CLAUDE.md 2026-04-30
+			// (project-rbac) for the full reasoning + rejection of the
+			// endpoint-split alternative.
 			r.With(middleware.RequirePermission(authD, "projects:read")).Get("/", h.Project.Get)
 			r.With(middleware.RequirePermission(authD, "projects:write")).Put("/", h.Project.Update)
 			r.With(middleware.RequirePermission(authD, "projects:delete")).Delete("/", h.Project.Delete)
@@ -336,14 +356,56 @@ func addRoutes(r chi.Router, d Deps) {
 			r.With(middleware.RequirePermission(authD, "api-keys:create")).Post("/api-keys", h.APIKey.Create)
 			r.With(middleware.RequirePermission(authD, "api-keys:delete")).Delete("/api-keys/{keyId}", h.APIKey.Delete)
 
-			// Project-level role overrides (Langfuse two-tier RBAC).
-			// members:read to view, members:update to assign/change/remove.
-			// The user being assigned must already be an org member (the
-			// service enforces this).
-			r.With(middleware.RequirePermission(authD, "members:read")).Get("/members", h.ProjectMember.List)
-			r.With(middleware.RequirePermission(authD, "members:update")).Post("/members", h.ProjectMember.Add)
-			r.With(middleware.RequirePermission(authD, "members:update")).Patch("/members/{userId}", h.ProjectMember.UpdateRole)
-			r.With(middleware.RequirePermission(authD, "members:update")).Delete("/members/{userId}", h.ProjectMember.Remove)
+			// Project_members management surface — the routes that
+			// administer per-project role grants. Decorated with the
+			// org-tier `org_members:*` family because role-binding
+			// management is org-rooted GOVERNANCE, not project-scoped
+			// CONTENT.
+			//
+			// Two layered guards, each closing a distinct threat:
+			//
+			//  1. `org_members:*` (org-tier) — the operator must hold
+			//     the membership-management capability via their org
+			//     role. Resolves against the org role only.
+			//
+			//  2. `projects:read` (project-tier floor) — closes the
+			//     CROSS-TIER ESCALATION class. WITHOUT this floor, a
+			//     custom org-tier role with `org_members:update` but
+			//     no `projects:read` could reach POST /members, bind
+			//     itself to a project_members row with a built-in role
+			//     like `developer` (which carries `traces:read`,
+			//     `dashboards:read`, etc.), and bootstrap project
+			//     content access never explicitly granted. The route-
+			//     level floor ensures the CALLER holds project read,
+			//     so the membership-admin power can't be turned into
+			//     a self-grant of project access.
+			//
+			// validateProjectAssignableRole closes the role-BINDING
+			// lockout class at write time (every assigned role must
+			// carry `projects:read`). It does NOT close the caller-
+			// side escalation; that's what the route-level floor here
+			// does.
+			//
+			// URL-tenancy invariant preserved by RequireProjectAccess
+			// upstream: caller must be an org member of the project's
+			// organisation.
+			//
+			// The user being assigned must already be an org member
+			// (the service enforces this; project membership ELEVATES
+			// on the org role).
+			//
+			// See CLAUDE.md 2026-04-30 (project-rbac).
+			r.With(middleware.RequireAllPermissions(authD, "org_members:read", "projects:read")).Get("/members", h.ProjectMember.List)
+			r.With(middleware.RequireAllPermissions(authD, "org_members:update", "projects:read")).Post("/members", h.ProjectMember.Add)
+			r.With(middleware.RequireAllPermissions(authD, "org_members:update", "projects:read")).Patch("/members/{userId}", h.ProjectMember.UpdateRole)
+			// Project-grant removal is symmetric with add/update: it's a
+			// state change to a managed project_members row, not a
+			// person-removal. Under additive resolution, deleting the
+			// row drops the additive grant ONLY — the user's org-level
+			// membership is untouched. `org_members:remove` is reserved
+			// for actual org-member removal at
+			// DELETE /api/v1/organizations/{orgId}/members/{userId}.
+			r.With(middleware.RequireAllPermissions(authD, "org_members:update", "projects:read")).Delete("/members/{userId}", h.ProjectMember.Remove)
 
 			// Overview.
 			r.With(middleware.RequirePermission(authD, "analytics:read")).Get("/overview", h.Overview.GetOverview)

@@ -6,7 +6,6 @@ export * from '@/features/authentication/api/auth-api'
 // Re-export organizations API but exclude `updateProject` (the projects-api version is canonical)
 export {
   getOrganizationById,
-  getOrganizationProjects,
   getProjectById,
   getProjectMetrics,
   createOrganization,
@@ -18,9 +17,6 @@ export {
   updateUserRole,
 } from '@/features/organizations/api/organizations-api'
 export * from '@/features/projects/api/projects-api'
-
-// Remaining services (not yet migrated to features)
-export * from './services/rbac'
 
 // Core client and types
 export { BrokleAPIClient } from './core/client'

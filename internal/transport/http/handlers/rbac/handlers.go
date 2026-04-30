@@ -5,8 +5,16 @@
 //   - Org-scoped custom-role lifecycle (CRUD on roles owned by an
 //     organization; distinct from system roles)
 //   - User membership + role assignment
-//   - Permission discovery
-//   - Scope introspection
+//   - Permission catalogue discovery (roles editor)
+//
+// NOTE: per-check scope/permission endpoints (CheckUserScopes,
+// GetUserScopes, CheckUserPermissions, GetUserPermissions,
+// GetAvailableScopes) were removed in the Langfuse session-bootstrap
+// refactor. The dashboard now reads its full effective-scope tree from
+// /api/v1/users/me on mount and resolves UI permission gates
+// synchronously in the browser. Server-side enforcement still happens
+// on every request via middleware.RequirePermission, which calls
+// ProjectMemberService.CheckUserPermissionsInScope.
 package rbac
 
 import (
@@ -28,7 +36,6 @@ type Handler struct {
 	roleSvc      *authService.RoleService
 	permSvc      *authService.PermissionService
 	orgMemberSvc *authService.OrganizationMemberService
-	scopeSvc     *authService.ScopeService
 	logger       *slog.Logger
 }
 
@@ -37,14 +44,12 @@ func New(
 	roleSvc *authService.RoleService,
 	permSvc *authService.PermissionService,
 	orgMemberSvc *authService.OrganizationMemberService,
-	scopeSvc *authService.ScopeService,
 	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
 		roleSvc:      roleSvc,
 		permSvc:      permSvc,
 		orgMemberSvc: orgMemberSvc,
-		scopeSvc:     scopeSvc,
 		logger:       logger,
 	}
 }
@@ -54,10 +59,7 @@ func New(
 func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	scopeType := r.URL.Query().Get("scope_type")
 	if scopeType == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Scope type is required", "scope_type parameter cannot be empty",
-			appErrors.WithParam("scope_type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("scope_type", "is required"))
 		return
 	}
 	userID := httpctx.MustGetUserID(r.Context())
@@ -166,10 +168,7 @@ func (h *Handler) GetCustomRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if role.IsSystemRole() {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Cannot access system role through custom-role endpoint",
-			"use /api/v1/rbac/roles/{roleId} for system roles",
-		))
+		response.WriteError(w, appErrors.InvalidParam("roleId", "cannot access system role through custom-role endpoint", appErrors.WithDetails("use /api/v1/rbac/roles/{roleId} for system roles")))
 		return
 	}
 	response.Success(w, role)
@@ -250,22 +249,6 @@ func (h *Handler) GetUserRoles(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, getUserRolesResponse{Memberships: memberships, TotalCount: len(memberships)})
 }
 
-func (h *Handler) GetUserPermissions(w http.ResponseWriter, r *http.Request) {
-	userID, err := request.URLParamUUID(r, "userId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	perms, err := h.orgMemberSvc.GetUserEffectivePermissions(r.Context(), userID)
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "rbac: get user permissions failed",
-			"user_id", userID, "error", err)
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, getUserPermissionsResponse{Permissions: perms, TotalCount: len(perms)})
-}
-
 func (h *Handler) AssignOrganizationRole(w http.ResponseWriter, r *http.Request) {
 	userID, err := request.URLParamUUID(r, "userId")
 	if err != nil {
@@ -284,10 +267,7 @@ func (h *Handler) AssignOrganizationRole(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if body.RoleID == uuid.Nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid role ID", "role_id is required",
-			appErrors.WithParam("role_id"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("role_id", "is required"))
 		return
 	}
 	inviter := httpctx.MustGetUserID(r.Context())
@@ -328,37 +308,6 @@ func (h *Handler) RemoveOrganizationMember(w http.ResponseWriter, r *http.Reques
 	h.logger.InfoContext(r.Context(), "rbac: org member removed",
 		"actor_id", actor, "user_id", userID, "org_id", orgID)
 	response.NoContent(w)
-}
-
-func (h *Handler) CheckUserPermissions(w http.ResponseWriter, r *http.Request) {
-	userID, err := request.URLParamUUID(r, "userId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-
-	var body checkUserPermissionsBody
-	if err := request.DecodeJSON(r, &body); err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	if len(body.ResourceActions) == 0 {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Resource actions are required",
-			"resource_actions must contain at least one entry",
-			appErrors.WithParam("resource_actions"),
-		))
-		return
-	}
-
-	results, err := h.orgMemberSvc.CheckUserPermissions(r.Context(), userID, body.ResourceActions)
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "rbac: check user permissions failed",
-			"user_id", userID, "error", err)
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, checkUserPermissionsResponse{Results: results})
 }
 
 // ---- permission discovery --------------------------------------------
@@ -426,10 +375,7 @@ func (h *Handler) GetAvailableResources(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) GetActionsForResource(w http.ResponseWriter, r *http.Request) {
 	resource := chi.URLParam(r, "resource")
 	if resource == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Resource parameter is required", "resource parameter cannot be empty",
-			appErrors.WithParam("resource"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("resource", "is required"))
 		return
 	}
 	actions, err := h.permSvc.GetActionsForResource(r.Context(), resource)
@@ -444,133 +390,3 @@ func (h *Handler) GetActionsForResource(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// ---- scopes ----------------------------------------------------------
-
-func (h *Handler) CheckUserScopes(w http.ResponseWriter, r *http.Request) {
-	userID, err := request.URLParamUUID(r, "userId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-
-	var body checkUserScopesBody
-	if err := request.DecodeJSON(r, &body); err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	if len(body.Scopes) == 0 {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Scopes are required", "scopes must contain at least one entry",
-			appErrors.WithParam("scopes"),
-		))
-		return
-	}
-
-	var orgID *uuid.UUID
-	if body.OrganizationID != nil && *body.OrganizationID != "" {
-		parsed, err := uuid.Parse(*body.OrganizationID)
-		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid organization ID",
-				"organization_id must be a valid UUID",
-				appErrors.WithParam("organization_id"),
-			))
-			return
-		}
-		orgID = &parsed
-	}
-	var projectID *uuid.UUID
-	if body.ProjectID != nil && *body.ProjectID != "" {
-		parsed, err := uuid.Parse(*body.ProjectID)
-		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid project ID",
-				"project_id must be a valid UUID",
-				appErrors.WithParam("project_id"),
-			))
-			return
-		}
-		projectID = &parsed
-	}
-
-	results := make(map[string]bool, len(body.Scopes))
-	for _, scope := range body.Scopes {
-		has, err := h.scopeSvc.HasScope(r.Context(), userID, scope, orgID, projectID)
-		if err != nil {
-			h.logger.WarnContext(r.Context(), "rbac: has-scope failed",
-				"user_id", userID, "scope", scope, "error", err)
-			results[scope] = false
-			continue
-		}
-		results[scope] = has
-	}
-	response.Success(w, checkUserScopesResponse{Results: results})
-}
-
-func (h *Handler) GetUserScopes(w http.ResponseWriter, r *http.Request) {
-	userID, err := request.URLParamUUID(r, "userId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-
-	orgIDPtr, err := request.QueryOptionalUUID(r, "organization_id")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	projectIDPtr, err := request.QueryOptionalUUID(r, "project_id")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-
-	resolution, err := h.scopeSvc.GetUserScopes(r.Context(), userID, orgIDPtr, projectIDPtr)
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "rbac: get user scopes failed",
-			"user_id", userID, "error", err)
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, resolution)
-}
-
-func (h *Handler) GetScopeCategories(w http.ResponseWriter, r *http.Request) {
-	categories, err := h.scopeSvc.GetScopesByCategory(r.Context())
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "rbac: get scope categories failed",
-			"error", err)
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, getScopeCategoriesResponse{
-		Categories: categories, TotalCount: len(categories),
-	})
-}
-
-func (h *Handler) GetAvailableScopes(w http.ResponseWriter, r *http.Request) {
-	var level authDomain.ScopeLevel
-	if raw := r.URL.Query().Get("level"); raw != "" {
-		level = authDomain.ScopeLevel(raw)
-		if level != authDomain.ScopeLevelOrganization &&
-			level != authDomain.ScopeLevelProject &&
-			level != authDomain.ScopeLevelGlobal {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid scope level",
-				"level must be 'organization', 'project', or 'global'",
-				appErrors.WithParam("level"),
-			))
-			return
-		}
-	}
-	scopes, err := h.scopeSvc.GetAvailableScopes(r.Context(), level)
-	if err != nil {
-		h.logger.WarnContext(r.Context(), "rbac: get available scopes failed",
-			"level", level, "error", err)
-		response.WriteError(w, err)
-		return
-	}
-	response.Success(w, getAvailableScopesResponse{
-		Level: string(level), Scopes: scopes, TotalCount: len(scopes),
-	})
-}

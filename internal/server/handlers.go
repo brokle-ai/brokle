@@ -80,7 +80,7 @@ func NewHandlers(d Deps) Handlers {
 			d.OAuthProvider, d.APIKey, d.Config, d.Logger,
 		),
 		AuthSDK:      auth.NewSDK(d.APIKey, d.Logger),
-		User:         user.New(d.User, d.Profile, d.Organization, d.Logger),
+		User:         user.New(d.User, d.Profile, d.Organization, d.ProjectMember, d.Logger),
 		Organization: organization.New(d.Organization, d.OrgMemberOrg, d.Invitation, d.OrgSettings, d.Logger),
 		Project:      project.New(d.Project, d.Logger),
 		APIKey:        apikey.New(d.APIKey, d.Logger),
@@ -90,7 +90,7 @@ func NewHandlers(d Deps) Handlers {
 		Annotation:   annotation.New(d.AnnotationQueue, d.AnnotationItem, d.AnnotationAssignment, d.Logger),
 		Billing:      billing.New(d.BillingUsage, d.BillingBudget, d.BillingContract, d.BillingPricing, d.Logger),
 		Credentials:  credentials.New(d.Credential, d.CredentialModelCatalog, d.Logger),
-		RBAC:         rbac.New(d.Role, d.Permission, d.OrgMember, d.Scope, d.Logger),
+		RBAC:         rbac.New(d.Role, d.Permission, d.OrgMember, d.Logger),
 		Prompt:       prompt.New(d.Prompt, d.PromptCompiler, d.Logger),
 		Playground:   playground.New(d.Playground, d.Project, d.Logger),
 		Evaluation: evaluation.New(

@@ -277,7 +277,6 @@ type AuthServices struct {
 	OrganizationMembers *authService.OrganizationMemberService
 	ProjectMembers      *authService.ProjectMemberService
 	BlacklistedTokens   *authService.BlacklistedTokenService
-	Scope               *authService.ScopeService
 	OAuthProvider       *authService.OAuthProviderService
 }
 

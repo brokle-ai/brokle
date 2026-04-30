@@ -10,11 +10,10 @@ roles:
       - "organizations:write"
       - "organizations:delete"
       - "organizations:admin"
-      - "members:read"
-      - "members:invite"
-      - "members:update"
-      - "members:remove"
-      - "members:suspend"
+      - "org_members:read"
+      - "org_members:invite"
+      - "org_members:update"
+      - "org_members:remove"
       - "billing:read"
       - "billing:manage"
       - "billing:export"
@@ -30,6 +29,9 @@ roles:
       - "roles:delete"
       - "roles:assign"
       - "permissions:read"
+      - "org_projects:list"
+      - "org_projects:create"
+      - "org_projects:admin"
       - "projects:read"
       - "projects:write"
       - "projects:delete"
@@ -93,19 +95,24 @@ roles:
       - "filter-presets:write"
       - "filter-presets:delete"
 
-  # Admin: All except delete org/projects (84 permissions)
+  # Admin: full project lifecycle (incl. projects:delete) + everything
+  # except organization-level deletion. Owner stays distinct at the ORG
+  # level (organizations:delete) — NOT by withholding project deletion.
+  # ProjectService.CreateProject writes a project_members admin grant
+  # for every creator, so this template must carry the full project
+  # lifecycle (read/write/admin/delete) to keep the GitHub/GitLab
+  # "creator owns what they create" property end-to-end.
   - name: "admin"
-    description: "Administrative access to organization resources (no delete org/projects)"
+    description: "Administrative access to organization resources (full project lifecycle)"
     scope_type: "organization"
     permissions:
       - "organizations:read"
       - "organizations:write"
       - "organizations:admin"
-      - "members:read"
-      - "members:invite"
-      - "members:update"
-      - "members:remove"
-      - "members:suspend"
+      - "org_members:read"
+      - "org_members:invite"
+      - "org_members:update"
+      - "org_members:remove"
       - "billing:read"
       - "billing:manage"
       - "billing:export"
@@ -121,9 +128,12 @@ roles:
       - "roles:delete"
       - "roles:assign"
       - "permissions:read"
+      - "org_projects:list"
+      - "org_projects:create"
       - "projects:read"
       - "projects:write"
       - "projects:admin"
+      - "projects:delete"
       - "api-keys:read"
       - "api-keys:create"
       - "api-keys:update"
@@ -189,7 +199,10 @@ roles:
     scope_type: "organization"
     permissions:
       - "organizations:read"
+      - "org_members:read"
       - "settings:read"
+      - "org_projects:list"
+      - "org_projects:create"
       - "projects:read"
       - "projects:write"
       - "api-keys:read"
@@ -248,7 +261,9 @@ roles:
     scope_type: "organization"
     permissions:
       - "organizations:read"
+      - "org_members:read"
       - "settings:read"
+      - "org_projects:list"
       - "projects:read"
       - "api-keys:read"
       - "credentials:read"

@@ -99,7 +99,6 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 
 		Role:       core.Services.Auth.Role,
 		Permission: core.Services.Auth.Permission,
-		Scope:      core.Services.Auth.Scope,
 
 		Invitation:  core.Services.InvitationService,
 		OrgSettings: core.Services.SettingsService,

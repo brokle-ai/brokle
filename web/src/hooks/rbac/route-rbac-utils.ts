@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { type Scope } from './use-has-access'
+import { type Scope } from '@/generated/permissions'
 import { type Route } from '@/lib/navigation/types'
 
 export function hasRouteAccess(

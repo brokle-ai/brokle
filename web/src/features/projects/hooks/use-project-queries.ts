@@ -7,12 +7,11 @@ import { toast } from 'sonner'
 import type { Project } from '@/features/organizations/types'
 import type { UpdateProjectRequest, Project as APIProject } from '../api/projects-api'
 
-// Query keys for projects
-export const projectQueryKeys = {
-  all: ['projects'] as const,
-  lists: () => [...projectQueryKeys.all, 'list'] as const,
-  detail: (id: string) => [...projectQueryKeys.all, 'detail', id] as const,
-}
+// Workspace cache (`['workspace']`) is the single source of truth for
+// the user's project tree (Langfuse session-bootstrap pattern). Every
+// project-affecting mutation invalidates it; consumers re-render off
+// the refreshed bootstrap. No per-list / per-detail query keys exist
+// because no `useQuery` reads them.
 
 // Create project mutation
 export function useCreateProjectMutation() {
@@ -22,19 +21,9 @@ export function useCreateProjectMutation() {
     mutationFn: async (data: { organizationId: string; name: string }) => {
       return createProject(data.organizationId, { name: data.name })
     },
-    onSuccess: async (newProject: Project, variables) => {
-      // Invalidate organization-specific projects (matches useOrganizationProjects key)
-      queryClient.invalidateQueries({
-        queryKey: ['organizations', variables.organizationId, 'projects'],
-      })
-
-      // Invalidate general projects list
-      queryClient.invalidateQueries({ queryKey: projectQueryKeys.lists() })
-
-      // Invalidate workspace context to include new project
+    onSuccess: async (newProject: Project) => {
       queryClient.invalidateQueries({ queryKey: ['workspace'] })
 
-      // Show success toast
       toast.success('Project Created!', {
         description: `${newProject.name} is ready to use.`,
       })
@@ -64,16 +53,8 @@ export function useUpdateProjectMutation() {
       return updateProject(projectId, data)
     },
     onSuccess: (updatedProject: APIProject) => {
-      // Invalidate workspace context (includes current project)
       queryClient.invalidateQueries({ queryKey: ['workspace'] })
 
-      // Invalidate projects list
-      queryClient.invalidateQueries({ queryKey: projectQueryKeys.lists() })
-
-      // Invalidate specific project detail
-      queryClient.invalidateQueries({ queryKey: projectQueryKeys.detail(updatedProject.id) })
-
-      // Show success toast
       toast.success('Project Updated!', {
         description: `${updatedProject.name} has been updated successfully.`,
       })

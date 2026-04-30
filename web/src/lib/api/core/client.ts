@@ -344,9 +344,49 @@ export class BrokleAPIClient {
   // `{success, data, meta}` envelope. HTTP status alone is the
   // success signal; 4xx/5xx bodies are intercepted upstream by the
   // axios error interceptor and never reach this method.
+  //
+  // Drift guard: if the response body matches the canonical paginated
+  // envelope shape (`{data: [...], pagination: {page, limit, total,
+  // ...}}`), throw a developer-targeted error. List endpoints MUST be
+  // called via `getPaginated` so pagination metadata flows through and
+  // is snake_case → camelCase normalised. Calling `client.get<T>()` on
+  // a paginated endpoint silently typed `T` as e.g. `Project[]` and
+  // crashed downstream consumers at `.map`/`.filter`. The guard
+  // surfaces the misuse at the API boundary with a clear remediation
+  // hint, instead of letting the envelope leak through to the
+  // consumer's render path.
+  //
+  // The two-axis test (`data` is an Array AND `pagination` carries the
+  // `{page, limit, total}` numeric triple — see
+  // `looksLikePaginatedEnvelope`) makes false positives near-
+  // impossible. Custom shapes that happen to use `data` for something
+  // else, or `pagination` without the numeric triple, are unaffected:
+  //   - `ListComments` → `{comments, total}`           — no `data` field
+  //   - `GetOrganizationMembers` → `{members, total}`  — no `data` field
+  //   - `GetTraceSpans` → bare `[]Span`                 — top-level array
+  //   - `GetTraceScores` → bare `[]Score`               — top-level array
+  //
+  // Audit (last verified): every `client.get` call site in the
+  // codebase reaches a backend handler that returns either a single
+  // resource, a custom-shape envelope (no `data`), or a top-level
+  // array. The only handlers that emit `{Data, Pagination}` are list
+  // endpoints (ListTraces / ListSpans / ListScores / ListSessions /
+  // ListOrganizations / ListDashboards / ListAPIKeys / ListPermissions)
+  // and they are exclusively consumed via `getPaginated`. The guard
+  // therefore never trips on a healthy build; it exists to catch
+  // future drift the moment a developer reaches for the wrong
+  // helper.
   private extractData<T>(response: AxiosResponse<T>): T {
     if (response.status === 204) {
       return undefined as T
+    }
+    if (looksLikePaginatedEnvelope(response.data)) {
+      const url = response.config?.url ?? '<unknown URL>'
+      throw new Error(
+        `[BrokleAPIClient] Endpoint ${url} returned a paginated envelope ` +
+          `({data, pagination}) but was called via a non-paginated method. ` +
+          `Use client.getPaginated<T>(...) instead of client.get/post/put/patch<T>(...).`,
+      )
     }
     return response.data
   }
@@ -572,4 +612,33 @@ export class BrokleAPIClient {
     console.log('Has CSRF Token:', !!this.getCookie('csrf_token'))
     console.groupEnd()
   }
+}
+
+// looksLikePaginatedEnvelope identifies the canonical Brokle list
+// response shape: `{data: T[], pagination: {page, limit, total, ...}}`
+// (see pkg/response.Pagination on the backend). Used by extractData
+// to refuse paginated bodies on non-paginated client methods —
+// surfaces wrong-helper bugs at the API boundary instead of the
+// consumer's render path.
+//
+// Triple check (data is array + pagination is object + pagination has
+// the canonical numeric `page`/`limit`/`total` fields) makes false
+// positives near-impossible: a domain entity that legitimately had
+// `data` and `pagination` fields would not also carry those exact
+// numeric pagination keys.
+export function looksLikePaginatedEnvelope(
+  body: unknown,
+): body is { data: unknown[]; pagination: Record<string, unknown> } {
+  if (typeof body !== 'object' || body === null) return false
+  const obj = body as Record<string, unknown>
+  if (!('data' in obj) || !('pagination' in obj)) return false
+  if (!Array.isArray(obj.data)) return false
+  const pag = obj.pagination
+  if (typeof pag !== 'object' || pag === null) return false
+  const p = pag as Record<string, unknown>
+  return (
+    typeof p.page === 'number' &&
+    typeof p.limit === 'number' &&
+    typeof p.total === 'number'
+  )
 }

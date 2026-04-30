@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-	"errors"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -10,37 +10,151 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
+// floorScopePermName is the project-scope FLOOR permission. Every role
+// granting any project-scoped permission MUST also grant this one, or
+// users assigned the role will 403 on dashboard navigation
+// (`GET /api/v1/projects/{projectId}` is gated by `projects:read`).
+//
+// Auto-injection in CreateCustomRole / UpdateCustomRole enforces the
+// invariant at write time — matches GitHub's `metadata: read` floor-
+// scope auto-include mechanic. See CLAUDE.md 2026-04-30 (project-rbac).
+const floorScopePermName = "projects:read"
+
 // RoleService manages role templates used by organizations to assign member permissions.
 type RoleService struct {
-	roleRepo     authDomain.RoleRepository
-	rolePermRepo authDomain.RolePermissionRepository
+	roleRepo       authDomain.RoleRepository
+	rolePermRepo   authDomain.RolePermissionRepository
+	permissionRepo authDomain.PermissionRepository
+	logger         *slog.Logger
 }
 
 // NewRoleService creates a new clean role service instance
 func NewRoleService(
 	roleRepo authDomain.RoleRepository,
 	rolePermRepo authDomain.RolePermissionRepository,
+	permissionRepo authDomain.PermissionRepository,
+	logger *slog.Logger,
 ) *RoleService {
 	return &RoleService{
-		roleRepo:     roleRepo,
-		rolePermRepo: rolePermRepo,
+		roleRepo:       roleRepo,
+		rolePermRepo:   rolePermRepo,
+		permissionRepo: permissionRepo,
+		logger:         logger,
 	}
+}
+
+// orgProjectsTriggerNames are the org-tier project-management
+// permissions that imply per-resource project access. Any role
+// granting one of these MUST also carry the project-tier
+// `projects:read` floor — otherwise the user can list/admin all
+// projects in the org but 403s on `GET /api/v1/projects/{projectId}`
+// (route gate is `projects:read` per routes.go).
+//
+// Why these specific verbs:
+//
+//   - `org_projects:list`  → "see all projects in the org" implies
+//     "can read each project's details" (industry convention: list
+//     implies read — GitHub, GitLab, Linear, Vercel, PostHog).
+//   - `org_projects:admin` → "administer all projects in the org"
+//     trivially implies "read each project."
+//
+// Why NOT `org_projects:create`: a create-only role gets per-project
+// `projects:read` via the creator-override row written by
+// ProjectService.CreateProject (round 22). Auto-injecting at role-
+// creation time would broaden the user's read access to EVERY project
+// in the org via inheritance — over-broad for "create-only" semantics.
+// The override row correctly limits visibility to projects the user
+// actually created.
+var orgProjectsTriggerNames = map[string]struct{}{
+	"org_projects:list":  {},
+	"org_projects:admin": {},
+}
+
+// autoInjectFloorScope ensures the floor-scope invariant: any role
+// granting a permission that implies per-resource project access
+// MUST also carry `projects:read`. Two trigger families:
+//
+//  1. Any project-tier permission (scope_level = project, name !=
+//     `projects:read`).
+//  2. Any org-tier permission in `orgProjectsTriggerNames` —
+//     `org_projects:list` and `org_projects:admin`. These let a user
+//     list/admin every project in the org via the org role; without
+//     the per-project floor they 403 on click-through (route gate is
+//     `projects:read`).
+//
+// If any trigger fires AND `projects:read` is not already in the
+// list, the floor permission's ID is appended. Idempotent on already-
+// floor-included roles. Matches GitHub's `metadata: read` floor-
+// scope auto-include mechanic.
+func (s *RoleService) autoInjectFloorScope(ctx context.Context, permIDs []uuid.UUID) ([]uuid.UUID, error) {
+	if len(permIDs) == 0 {
+		return permIDs, nil
+	}
+
+	needsFloor := false
+	hasFloor := false
+	var floorID uuid.UUID
+
+	for _, id := range permIDs {
+		p, err := s.permissionRepo.GetByID(ctx, id)
+		if err != nil {
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.InvalidParam("permission_ids",
+					"unknown permission id "+id.String())
+			}
+			return nil, appErrors.Internal("load permission for floor-scope check", err,
+				appErrors.WithOp("svc.role.auto_inject_floor_scope"))
+		}
+		if p.Name == floorScopePermName {
+			hasFloor = true
+			floorID = p.ID
+			continue
+		}
+		if p.ScopeLevel == authDomain.ScopeLevelProject {
+			needsFloor = true
+			continue
+		}
+		if _, ok := orgProjectsTriggerNames[p.Name]; ok {
+			needsFloor = true
+		}
+	}
+
+	if !needsFloor || hasFloor {
+		return permIDs, nil
+	}
+
+	// Need to inject — resolve floor permission ID if we didn't see it.
+	if floorID == uuid.Nil {
+		floor, err := s.permissionRepo.GetByName(ctx, floorScopePermName)
+		if err != nil {
+			return nil, appErrors.Internal("load floor permission for auto-inject", err,
+				appErrors.WithOp("svc.role.auto_inject_floor_scope"))
+		}
+		floorID = floor.ID
+	}
+
+	if s.logger != nil {
+		s.logger.InfoContext(ctx, "auto-injected projects:read floor scope",
+			"floor_permission_id", floorID,
+			"original_count", len(permIDs))
+	}
+	return append(permIDs, floorID), nil
 }
 
 // CreateRole creates a new template role
 func (s *RoleService) CreateRole(ctx context.Context, req *authDomain.CreateRoleRequest) (*authDomain.Role, error) {
 	// Validate request
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name", "Role name is required")
+		return nil, appErrors.InvalidParam("name", "Role name is required")
 	}
 	if req.ScopeType == "" {
-		return nil, appErrors.NewValidationError("scope_type", "Scope type is required")
+		return nil, appErrors.InvalidParam("scope_type", "Scope type is required")
 	}
 
 	// Check if role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameAndScope(ctx, req.Name, req.ScopeType)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("role with name " + req.Name + " and scope " + req.ScopeType + " already exists")
+		return nil, appErrors.Conflict("role", "role with name " + req.Name + " and scope " + req.ScopeType + " already exists")
 	}
 
 	// Create new role
@@ -48,10 +162,10 @@ func (s *RoleService) CreateRole(ctx context.Context, req *authDomain.CreateRole
 
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrRoleAlreadyExists) {
-			return nil, appErrors.NewConflictError("role with name " + role.Name + " and scope " + role.ScopeType + " already exists")
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("role", "role with name " + role.Name + " and scope " + role.ScopeType + " already exists")
 		}
-		return nil, appErrors.NewInternalError("failed to create role", err)
+		return nil, appErrors.Internal("failed to create role", err)
 	}
 
 	return role, nil
@@ -72,7 +186,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, roleID uuid.UUID, req *aut
 	// Get existing role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("role not found")
+		return nil, appErrors.NotFound("role")
 	}
 
 	// Update fields
@@ -83,7 +197,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, roleID uuid.UUID, req *aut
 	// Save changes
 	err = s.roleRepo.Update(ctx, role)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to update role", err)
+		return nil, appErrors.Internal("failed to update role", err)
 	}
 
 	return role, nil
@@ -94,7 +208,7 @@ func (s *RoleService) DeleteRole(ctx context.Context, roleID uuid.UUID) error {
 	// Get role to check if it exists
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return appErrors.NewNotFoundError("role not found")
+		return appErrors.NotFound("role")
 	}
 
 	// Built-in role names that cannot be deleted
@@ -106,7 +220,7 @@ func (s *RoleService) DeleteRole(ctx context.Context, roleID uuid.UUID) error {
 	}
 
 	if builtinRoles[role.Name] {
-		return appErrors.NewForbiddenError("cannot delete built-in role: " + role.Name)
+		return appErrors.PermissionDenied("", "cannot delete built-in role: " + role.Name)
 	}
 
 	return s.roleRepo.Delete(ctx, roleID)
@@ -132,7 +246,7 @@ func (s *RoleService) AssignRolePermissions(ctx context.Context, roleID uuid.UUI
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return appErrors.NewNotFoundError("role not found")
+		return appErrors.NotFound("role")
 	}
 
 	return s.roleRepo.AssignRolePermissions(ctx, roleID, permissionIDs, grantedBy)
@@ -143,7 +257,7 @@ func (s *RoleService) RevokeRolePermissions(ctx context.Context, roleID uuid.UUI
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return appErrors.NewNotFoundError("role not found")
+		return appErrors.NotFound("role")
 	}
 
 	return s.roleRepo.RevokeRolePermissions(ctx, roleID, permissionIDs)
@@ -165,16 +279,16 @@ func (s *RoleService) GetSystemRoles(ctx context.Context) ([]*authDomain.Role, e
 func (s *RoleService) CreateCustomRole(ctx context.Context, scopeType string, scopeID uuid.UUID, req *authDomain.CreateRoleRequest) (*authDomain.Role, error) {
 	// Validate request
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name", "Role name is required")
+		return nil, appErrors.InvalidParam("name", "Role name is required")
 	}
 	if scopeType == "" {
-		return nil, appErrors.NewValidationError("scope_type", "Scope type is required")
+		return nil, appErrors.InvalidParam("scope_type", "Scope type is required")
 	}
 
 	// Check if custom role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameScopeAndID(ctx, req.Name, scopeType, &scopeID)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("custom role with name " + req.Name + " already exists in this scope")
+		return nil, appErrors.Conflict("role", "custom role with name " + req.Name + " already exists in this scope")
 	}
 
 	// Create new custom role
@@ -182,17 +296,23 @@ func (s *RoleService) CreateCustomRole(ctx context.Context, scopeType string, sc
 
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrRoleAlreadyExists) {
-			return nil, appErrors.NewConflictError("custom role with name " + req.Name + " already exists in this scope")
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("role", "custom role with name " + req.Name + " already exists in this scope")
 		}
-		return nil, appErrors.NewInternalError("failed to create custom role", err)
+		return nil, appErrors.Internal("failed to create custom role", err)
 	}
 
-	// Assign permissions if provided
+	// Assign permissions if provided. Auto-inject the floor-scope
+	// permission (`projects:read`) if any project-scoped perm is in the
+	// list and the floor is missing — see autoInjectFloorScope docstring.
 	if len(req.PermissionIDs) > 0 {
-		err = s.roleRepo.AssignRolePermissions(ctx, role.ID, req.PermissionIDs, nil)
+		permIDs, err := s.autoInjectFloorScope(ctx, req.PermissionIDs)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to assign permissions to custom role", err)
+			return nil, err
+		}
+		err = s.roleRepo.AssignRolePermissions(ctx, role.ID, permIDs, nil)
+		if err != nil {
+			return nil, appErrors.Internal("failed to assign permissions to custom role", err)
 		}
 	}
 
@@ -207,11 +327,11 @@ func (s *RoleService) UpdateCustomRole(ctx context.Context, roleID uuid.UUID, re
 	// Get existing role and verify it's a custom role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("custom role not found")
+		return nil, appErrors.NotFound("role")
 	}
 
 	if role.IsSystemRole() {
-		return nil, appErrors.NewForbiddenError("cannot update system role")
+		return nil, appErrors.PermissionDenied("", "cannot update system role")
 	}
 
 	// Update fields
@@ -222,14 +342,19 @@ func (s *RoleService) UpdateCustomRole(ctx context.Context, roleID uuid.UUID, re
 	// Save changes
 	err = s.roleRepo.Update(ctx, role)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to update custom role", err)
+		return nil, appErrors.Internal("failed to update custom role", err)
 	}
 
-	// Update permissions if provided
+	// Update permissions if provided. Same auto-injection as Create
+	// so updates can't drop a role into a floor-scope-violating state.
 	if req.PermissionIDs != nil {
-		err = s.roleRepo.UpdateRolePermissions(ctx, role.ID, req.PermissionIDs, nil)
+		permIDs, err := s.autoInjectFloorScope(ctx, req.PermissionIDs)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to update role permissions", err)
+			return nil, err
+		}
+		err = s.roleRepo.UpdateRolePermissions(ctx, role.ID, permIDs, nil)
+		if err != nil {
+			return nil, appErrors.Internal("failed to update role permissions", err)
 		}
 	}
 
@@ -240,11 +365,11 @@ func (s *RoleService) DeleteCustomRole(ctx context.Context, roleID uuid.UUID) er
 	// Get role to check if it exists and is a custom role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return appErrors.NewNotFoundError("custom role not found")
+		return appErrors.NotFound("role")
 	}
 
 	if role.IsSystemRole() {
-		return appErrors.NewForbiddenError("cannot delete system role")
+		return appErrors.PermissionDenied("", "cannot delete system role")
 	}
 
 	// TODO: Add check if role is in use by organization members

@@ -17,6 +17,7 @@ import (
 
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	authService "brokle/internal/core/services/auth"
 	organizationService "brokle/internal/core/services/organization"
 	userService "brokle/internal/core/services/user"
 	"brokle/internal/transport/http/httpctx"
@@ -27,10 +28,11 @@ import (
 )
 
 type Handler struct {
-	userSvc    *userService.UserService
-	profileSvc *userService.ProfileService
-	orgSvc     *organizationService.OrganizationService
-	logger     *slog.Logger
+	userSvc      *userService.UserService
+	profileSvc   *userService.ProfileService
+	orgSvc       *organizationService.OrganizationService
+	projMemberSvc *authService.ProjectMemberService
+	logger       *slog.Logger
 }
 
 // New constructs a Handler with all required services.
@@ -38,9 +40,16 @@ func New(
 	userSvc *userService.UserService,
 	profileSvc *userService.ProfileService,
 	orgSvc *organizationService.OrganizationService,
+	projMemberSvc *authService.ProjectMemberService,
 	logger *slog.Logger,
 ) *Handler {
-	return &Handler{userSvc: userSvc, profileSvc: profileSvc, orgSvc: orgSvc, logger: logger}
+	return &Handler{
+		userSvc:       userSvc,
+		profileSvc:    profileSvc,
+		orgSvc:        orgSvc,
+		projMemberSvc: projMemberSvc,
+		logger:        logger,
+	}
 }
 
 // ----- get-user-profile ------------------------------------------------
@@ -85,6 +94,20 @@ func (h *Handler) buildProfile(ctx context.Context) (getProfileResponse, error) 
 		orgsWithProjects = []*orgDomain.OrganizationWithProjectsAndRole{}
 	}
 
+	// Resolve effective scopes for every (org, project) the user
+	// belongs to. The frontend caches this via React Query and reads
+	// it synchronously for every UI permission gate (Langfuse session-
+	// bootstrap pattern). On aggregator failure we degrade gracefully:
+	// emit empty scope sets so the UI hides guarded controls — same
+	// safe-default the previous /scopes/check error path produced.
+	topology := buildScopeTopology(orgsWithProjects)
+	scopes, scopeErr := h.projMemberSvc.ListUserEffectiveScopes(ctx, userID, topology)
+	if scopeErr != nil {
+		h.logger.WarnContext(ctx, "user: effective-scope resolution failed, emitting empty scopes",
+			"user_id", userID, "error", scopeErr)
+		scopes = map[uuid.UUID]*authService.EffectiveOrgScopes{}
+	}
+
 	resp := getProfileResponse{
 		ID:                    u.ID,
 		Email:                 u.Email,
@@ -96,7 +119,7 @@ func (h *Handler) buildProfile(ctx context.Context) (getProfileResponse, error) 
 		CreatedAt:             u.CreatedAt,
 		LastLoginAt:           u.LastLoginAt,
 		DefaultOrganizationID: u.DefaultOrganizationID,
-		Organizations:         mapOrgsWithProjects(orgsWithProjects),
+		Organizations:         mapOrgsWithProjects(orgsWithProjects, scopes),
 	}
 
 	if profile != nil {
@@ -119,11 +142,57 @@ func (h *Handler) buildProfile(ctx context.Context) (getProfileResponse, error) 
 	return resp, nil
 }
 
-func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []organizationWithProjects {
+// buildScopeTopology projects the org-tree shape into the (org → []project)
+// map the scope aggregator consumes. Keeps the bootstrap path single-pass
+// over the source tree.
+func buildScopeTopology(src []*orgDomain.OrganizationWithProjectsAndRole) map[uuid.UUID][]uuid.UUID {
+	out := make(map[uuid.UUID][]uuid.UUID, len(src))
+	for _, o := range src {
+		projectIDs := make([]uuid.UUID, 0, len(o.Projects))
+		for _, p := range o.Projects {
+			projectIDs = append(projectIDs, p.ID)
+		}
+		out[o.Organization.ID] = projectIDs
+	}
+	return out
+}
+
+// mapOrgsWithProjects builds the response DTO by joining the org tree
+// with the resolved scope tree. Projects with a project_members override
+// surface the override RoleName as a display hint; otherwise they inherit
+// the org RoleName so the frontend has a meaningful display value without
+// a second lookup. Effective `Scopes` are additively resolved server-side
+// (UNION of org-projection + override grant — see ADR-0001). Always emits
+// non-nil Scopes slices (empty list = "no permissions", distinct from
+// absent — required by the frontend hooks' `.includes` path which would
+// crash on undefined).
+//
+// Discovery filter: a project is included only when the user can
+// discover it — the org-tier `org_projects:list` authority OR the per-
+// project `projects:read` floor scope. Mirrors GitHub/GitLab discovery
+// semantics (filter-at-source). The frontend project selector renders
+// exactly this list, so projects the caller can't navigate to are not
+// enumerated. See EffectiveOrgScopes.CanDiscoverProject.
+func mapOrgsWithProjects(
+	src []*orgDomain.OrganizationWithProjectsAndRole,
+	scopes map[uuid.UUID]*authService.EffectiveOrgScopes,
+) []organizationWithProjects {
 	out := make([]organizationWithProjects, 0, len(src))
 	for _, o := range src {
+		orgScopeEntry := scopes[o.Organization.ID]
 		projects := make([]projectSummary, 0, len(o.Projects))
 		for _, p := range o.Projects {
+			if !orgScopeEntry.CanDiscoverProject(p.ID) {
+				continue
+			}
+			projectScopes := []string{}
+			projectRole := o.RoleName
+			if entry, ok := orgScopeEntry.Projects[p.ID]; ok {
+				projectScopes = nullSafeScopes(entry.Scopes)
+				if entry.RoleName != "" {
+					projectRole = entry.RoleName
+				}
+			}
 			projects = append(projects, projectSummary{
 				ID:             p.ID,
 				Name:           p.Name,
@@ -131,9 +200,15 @@ func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []org
 				Description:    p.Description,
 				OrganizationID: p.OrganizationID,
 				Status:         p.Status,
+				Role:           projectRole,
+				Scopes:         projectScopes,
 				CreatedAt:      p.CreatedAt,
 				UpdatedAt:      p.UpdatedAt,
 			})
+		}
+		orgScopes := []string{}
+		if orgScopeEntry != nil {
+			orgScopes = nullSafeScopes(orgScopeEntry.Scopes)
 		}
 		out = append(out, organizationWithProjects{
 			ID:            o.Organization.ID,
@@ -141,12 +216,23 @@ func mapOrgsWithProjects(src []*orgDomain.OrganizationWithProjectsAndRole) []org
 			CompositeSlug: utils.GenerateCompositeSlug(o.Organization.Name, o.Organization.ID),
 			Plan:          o.Organization.Plan,
 			Role:          o.RoleName,
+			Scopes:        orgScopes,
 			CreatedAt:     o.Organization.CreatedAt,
 			UpdatedAt:     o.Organization.UpdatedAt,
 			Projects:      projects,
 		})
 	}
 	return out
+}
+
+// nullSafeScopes guarantees a non-nil JSON array on the wire. The
+// resolver may return a nil slice for "no permissions" but the
+// frontend's `.includes(scope)` path crashes on JSON null.
+func nullSafeScopes(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
 
 // ----- update-user-profile ---------------------------------------------
@@ -204,11 +290,7 @@ func (h *Handler) SetDefaultOrganization(w http.ResponseWriter, r *http.Request)
 
 	orgID, err := uuid.Parse(body.OrganizationID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid organization ID",
-			"organization_id must be a valid UUID",
-			appErrors.WithParam("organization_id"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("organization_id", "must be a valid UUID"))
 		return
 	}
 
@@ -222,7 +304,7 @@ func (h *Handler) SetDefaultOrganization(w http.ResponseWriter, r *http.Request)
 	if !isMember {
 		h.logger.WarnContext(r.Context(), "user: set-default denied (not a member)",
 			"user_id", userID, "org_id", orgID)
-		response.WriteError(w, appErrors.NewForbiddenError("You are not a member of this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "You are not a member of this organization"))
 		return
 	}
 

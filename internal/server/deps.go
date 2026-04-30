@@ -127,7 +127,6 @@ type Deps struct {
 	// (JWT / Blacklist / OrgMember) already above.
 	Role       *authService.RoleService
 	Permission *authService.PermissionService
-	Scope      *authService.ScopeService
 
 	// Organization: invitations + settings. The OrganizationService +
 	// MemberService (OrgMemberOrg) are already declared above.

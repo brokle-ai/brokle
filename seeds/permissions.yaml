@@ -5,221 +5,363 @@ permissions:
   # Organization Management
   - name: "organizations:read"
     description: "View organization details and settings"
+    scope: organization
   - name: "organizations:write"
     description: "Create and update organizations"
+    scope: organization
   - name: "organizations:delete"
     description: "Delete organizations"
+    scope: organization
   - name: "organizations:admin"
     description: "Advanced organization administration"
+    scope: organization
 
-  # Members Management
-  - name: "members:read"
-    description: "View organization members"
-  - name: "members:invite"
-    description: "Invite new members to organization"
-  - name: "members:update"
-    description: "Update member roles and permissions"
-  - name: "members:remove"
-    description: "Remove members from organization"
-  - name: "members:suspend"
-    description: "Suspend member access"
+  # Members Management — per-tier verb minting (Auth0 pattern).
+  #
+  # Membership is split into two distinct verb families that resolve at
+  # different tiers:
+  #
+  #   - `org_members:*` (this section, scope: organization) decorates
+  #     /api/v1/organizations/{orgId}/members* and /invitations* — the
+  #     org-membership surface. Resolves against the user's org role
+  #     only.
+  #
+  #   - `members:*` (further down, scope: project) decorates
+  #     /api/v1/projects/{projectId}/members* — the project_members
+  #     override surface. Project-tier so OVERRIDE semantics apply
+  #     (project role REPLACES org role for project-scoped resolution).
+  #
+  # The earlier "shared-verb-family with sharedVerbResources exemption"
+  # approach (round 8 / round 19) overloaded one tag onto two orthogonal
+  # axes (resolver semantics + frontend context requirement) and broke
+  # OVERRIDE on /api/v1/projects/{projectId}/members*. Per-tier minting
+  # eliminates the trap structurally — Auth0 / GitHub OAuth / GCP IAM
+  # pattern. See CLAUDE.md 2026-04-30 (project-rbac).
+  - name: "org_members:read"
+    description: "View organization members and pending invitations"
+    scope: organization
+  - name: "org_members:invite"
+    description: "Invite new members to the organization"
+    scope: organization
+  - name: "org_members:update"
+    description: "Update organization member roles"
+    scope: organization
+  - name: "org_members:remove"
+    description: "Remove members from the organization"
+    scope: organization
 
   # Billing Management
   - name: "billing:read"
     description: "View billing information and invoices"
+    scope: organization
   - name: "billing:manage"
     description: "Manage billing, subscriptions, and payment methods"
+    scope: organization
   - name: "billing:export"
     description: "Export billing data and invoices"
+    scope: organization
   - name: "billing:admin"
     description: "Full billing administration"
+    scope: organization
 
   # Settings Management
   - name: "settings:read"
     description: "View organization settings"
+    scope: organization
   - name: "settings:write"
     description: "Update organization settings"
+    scope: organization
   - name: "settings:export"
     description: "Export organization settings"
+    scope: organization
   - name: "settings:import"
     description: "Import organization settings"
+    scope: organization
   - name: "settings:security"
     description: "Manage security settings (SSO, 2FA, IP whitelist)"
+    scope: organization
   - name: "settings:admin"
     description: "Advanced settings administration"
+    scope: organization
 
   # Roles & Permissions
   - name: "roles:read"
     description: "View roles and their permissions"
+    scope: organization
   - name: "roles:write"
     description: "Create and update custom roles"
+    scope: organization
   - name: "roles:delete"
     description: "Delete custom roles"
+    scope: organization
   - name: "roles:assign"
     description: "Assign roles to members"
+    scope: organization
   - name: "permissions:read"
     description: "View available permissions"
+    scope: organization
 
-  # Projects Management
+  # Projects Management — per-tier verb minting (Auth0 pattern).
+  #
+  # Same structural shape as `members:*` / `org_members:*`:
+  #
+  #   - `org_projects:*` (this block, scope: organization) decorates
+  #     /api/v1/organizations/{orgId}/projects (LIST + CREATE) — the
+  #     org-rooted project-management surface. Resolves against the
+  #     user's org role only.
+  #
+  #   - `projects:*` (next block, scope: project) decorates
+  #     /api/v1/projects/{projectId}/... (single GET, PUT, DELETE,
+  #     archive, unarchive) — the project-resource surface. Project-
+  #     tier so the project_members OVERRIDE applies (a restrictive
+  #     project viewer override drops `projects:write|delete` from an
+  #     org admin; an elevated project admin override grants them to
+  #     an org viewer).
+  #
+  # `projects:read` is also the project-scope FLOOR — auto-injected by
+  # role_service.autoInjectFloorScope when any project-tier permission
+  # is granted (GitHub `metadata: read` model). See CLAUDE.md
+  # 2026-04-30 (project-rbac).
+  - name: "org_projects:list"
+    description: "View the organization's project list"
+    scope: organization
+  - name: "org_projects:create"
+    description: "Create new projects in the organization"
+    scope: organization
+  - name: "org_projects:admin"
+    description: "Advanced organization-level project administration"
+    scope: organization
+
   - name: "projects:read"
-    description: "View projects and their details"
+    description: "View project details (single-resource GET; floor scope)"
+    scope: project
   - name: "projects:write"
-    description: "Create and update projects"
+    description: "Update project (PUT, archive, unarchive)"
+    scope: project
   - name: "projects:delete"
-    description: "Delete projects"
+    description: "Delete project"
+    scope: project
   - name: "projects:admin"
     description: "Advanced project administration"
+    scope: project
+
+  # Project_members management is an ORG-rooted governance action and
+  # decorates /api/v1/projects/{projectId}/members* with the existing
+  # `org_members:*` family (above). Tagging the verbs project-tier
+  # subjects them to the OVERRIDE-aware resolver, which produces a
+  # lockout: a restrictive project_members override would strip the
+  # caller's ability to UNDO it. Governance verbs stay org-tier so the
+  # OVERRIDE only applies to project-scoped CONTENT verbs (traces:*,
+  # dashboards:*, etc.). See CLAUDE.md 2026-04-30 (project-rbac).
 
   # API Keys Management
   - name: "api-keys:read"
     description: "View API keys (excluding full values)"
+    scope: project
   - name: "api-keys:create"
     description: "Create new API keys"
+    scope: project
   - name: "api-keys:update"
     description: "Update API key settings"
+    scope: project
   - name: "api-keys:delete"
     description: "Delete API keys"
+    scope: project
 
   # AI Credentials Management
   - name: "credentials:read"
     description: "View AI provider credentials (keys masked)"
+    scope: organization
   - name: "credentials:write"
     description: "Create, update, and delete AI provider credentials"
+    scope: organization
 
   # Integrations Management
   - name: "integrations:read"
     description: "View configured integrations"
+    scope: organization
   - name: "integrations:configure"
     description: "Configure integrations (webhooks, alerts)"
+    scope: organization
   - name: "integrations:delete"
     description: "Delete integrations"
+    scope: organization
 
   # Audit Logs
   - name: "audit-logs:read"
     description: "View audit logs and security events"
+    scope: organization
   - name: "audit-logs:export"
     description: "Export audit log data"
+    scope: organization
 
   # Webhooks
   - name: "webhooks:read"
     description: "View webhook configurations"
+    scope: organization
   - name: "webhooks:create"
     description: "Create webhook endpoints"
+    scope: organization
   - name: "webhooks:update"
     description: "Update webhook configurations"
+    scope: organization
   - name: "webhooks:delete"
     description: "Delete webhooks"
+    scope: organization
 
   # Notifications
   - name: "notifications:read"
     description: "View notification settings"
+    scope: organization
   - name: "notifications:configure"
     description: "Configure notification preferences"
+    scope: organization
 
   # Traces Management
   - name: "traces:read"
     description: "View traces and spans"
+    scope: project
   - name: "traces:create"
     description: "Create and ingest traces"
+    scope: project
   - name: "traces:delete"
     description: "Delete traces and spans"
+    scope: project
   - name: "traces:export"
     description: "Export trace data"
+    scope: project
   - name: "traces:share"
     description: "Share traces publicly"
+    scope: project
 
   # Analytics & Dashboards
   - name: "analytics:read"
     description: "View analytics and metrics"
+    scope: project
   - name: "analytics:export"
     description: "Export analytics data"
+    scope: organization
   - name: "analytics:dashboards"
     description: "Create and manage custom dashboards"
+    scope: organization
   - name: "analytics:admin"
     description: "Advanced analytics administration"
+    scope: organization
 
   # Models Management
   - name: "models:read"
     description: "View AI model configurations"
+    scope: organization
   - name: "models:configure"
     description: "Configure AI models and routing"
+    scope: organization
   - name: "models:admin"
     description: "Advanced model administration"
+    scope: organization
 
   # Providers Management
   - name: "providers:read"
     description: "View AI provider configurations"
+    scope: organization
   - name: "providers:configure"
     description: "Configure AI providers and credentials"
+    scope: organization
 
   # Cost Management
   - name: "costs:read"
     description: "View cost analytics and usage"
+    scope: organization
   - name: "costs:export"
     description: "Export cost and usage data"
+    scope: organization
 
   # Prompts Management
   - name: "prompts:read"
     description: "View prompt templates"
+    scope: project
   - name: "prompts:create"
     description: "Create new prompt templates"
+    scope: project
   - name: "prompts:update"
     description: "Update prompt templates"
+    scope: project
   - name: "prompts:delete"
     description: "Delete prompt templates"
+    scope: project
 
   # Scores Management (observability scores attached to traces/spans)
   - name: "scores:read"
     description: "View scores"
+    scope: project
   - name: "scores:write"
     description: "Create and update scores"
+    scope: project
   - name: "scores:delete"
     description: "Delete scores"
+    scope: project
 
   # Dashboards Management (custom project dashboards)
   - name: "dashboards:read"
     description: "View dashboards and widgets"
+    scope: project
   - name: "dashboards:write"
     description: "Create and update dashboards and widgets"
+    scope: project
   - name: "dashboards:delete"
     description: "Delete dashboards"
+    scope: project
   - name: "dashboards:execute"
     description: "Execute dashboard and widget queries"
+    scope: project
 
   # Annotation Queues (HITL review)
   - name: "annotation-queues:read"
     description: "View annotation queues, items, and assignments"
+    scope: project
   - name: "annotation-queues:write"
     description: "Create, update annotation queues, items, and assignments"
+    scope: project
   - name: "annotation-queues:delete"
     description: "Delete annotation queues, items, and assignments"
+    scope: project
 
   # Evaluations (datasets, experiments, evaluators, score-configs)
   - name: "evaluations:read"
     description: "View datasets, experiments, evaluators, and score configs"
+    scope: project
   - name: "evaluations:write"
     description: "Create and update datasets, experiments, evaluators, and score configs"
+    scope: project
   - name: "evaluations:delete"
     description: "Delete datasets, experiments, evaluators, and score configs"
+    scope: project
 
   # Playground
   - name: "playground:read"
     description: "View playground sessions"
+    scope: project
   - name: "playground:execute"
     description: "Execute prompts in the playground"
+    scope: project
 
   # Comments (trace-attached discussion threads)
   - name: "comments:read"
     description: "View comments on traces"
+    scope: project
   - name: "comments:write"
     description: "Create and update comments and reactions"
+    scope: project
   - name: "comments:delete"
     description: "Delete comments"
+    scope: project
 
   # Filter Presets (saved trace/span filter sets)
   - name: "filter-presets:read"
     description: "View saved filter presets"
+    scope: project
   - name: "filter-presets:write"
     description: "Create and update filter presets"
+    scope: project
   - name: "filter-presets:delete"
     description: "Delete filter presets"
+    scope: project

@@ -1,10 +1,17 @@
-// Package projectmember exposes project-level role overrides.
+// Package projectmember exposes project-level role grants.
 //
 // A project membership is OPTIONAL — by default users access projects
-// through their organization role (resolved via Langfuse MAX semantics
-// in CheckUserPermissionsInScope). A project_members row is created
-// only when an org admin wants to elevate a specific user's role inside
-// one project. Removing the row reverts the user to their org-level role.
+// through their organization role's project-tier projection (additive
+// resolver in CheckUserPermissionsInScope: project_members.role's
+// scopes UNION with the org role's projection). A project_members row
+// is created when an org admin wants to ELEVATE a specific user's
+// access inside one project (e.g., org viewer → project admin).
+// Removing the row drops the additive grant; the user keeps their
+// org-projection.
+//
+// Restriction (e.g., demote an org admin to project viewer) is not
+// expressible via this resolver alone — see ADR-0001 §D1 for the
+// deferred deny mechanism.
 //
 // Mount context: nested under /api/v1/projects/{projectId} with
 // RequireProjectAccess upstream — handlers read projectID via
@@ -49,7 +56,6 @@ type projectMemberResponse struct {
 	UserID    uuid.UUID `json:"user_id"`
 	ProjectID uuid.UUID `json:"project_id"`
 	RoleID    uuid.UUID `json:"role_id"`
-	Status    string    `json:"status"`
 	JoinedAt  string    `json:"joined_at"`
 }
 
@@ -73,7 +79,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			UserID:    m.UserID,
 			ProjectID: m.ProjectID,
 			RoleID:    m.RoleID,
-			Status:    m.Status,
 			JoinedAt:  m.JoinedAt.UTC().Format("2006-01-02T15:04:05Z"),
 		})
 	}
@@ -100,7 +105,6 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		UserID:    member.UserID,
 		ProjectID: member.ProjectID,
 		RoleID:    member.RoleID,
-		Status:    member.Status,
 		JoinedAt:  member.JoinedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }
@@ -108,6 +112,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 // UpdateRole changes the project-level role of an existing project member.
 func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 
 	userID, err := request.URLParamUUID(r, "userId")
 	if err != nil {
@@ -121,7 +126,7 @@ func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateMemberRole(r.Context(), userID, projectID, body.RoleID); err != nil {
+	if err := h.svc.UpdateMemberRole(r.Context(), userID, projectID, orgID, body.RoleID); err != nil {
 		response.WriteError(w, err)
 		return
 	}
@@ -135,13 +140,13 @@ func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		UserID:    member.UserID,
 		ProjectID: member.ProjectID,
 		RoleID:    member.RoleID,
-		Status:    member.Status,
 		JoinedAt:  member.JoinedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }
 
-// Remove deletes the project-level role override; the user reverts to
-// their org-level access. Returns 204 on success (DELETE convention).
+// Remove deletes the project-level role grant; the user keeps their
+// org-role projection unchanged. Returns 204 on success (DELETE
+// convention).
 func (h *Handler) Remove(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 
