@@ -63,7 +63,7 @@ func (h *Handler) GetLatestExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exec == nil {
-		response.WriteError(w, appErrors.NewNotFoundError("no executions found for this evaluator"))
+		response.WriteError(w, appErrors.NotFound("execution", appErrors.WithMessage("no executions found for this evaluator")))
 		return
 	}
 	response.Success(w, exec.ToResponse())

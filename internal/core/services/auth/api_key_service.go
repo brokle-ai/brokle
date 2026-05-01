@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -55,7 +54,7 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, userID uuid.UUID, req 
 	// Generate industry-standard pure random API key (bk_{40_char_random})
 	fullKey, err := authDomain.GenerateAPIKey()
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to generate API key", err)
+		return nil, appErrors.Internal("failed to generate API key", err)
 	}
 
 	// Hash the full key for secure storage using SHA-256 (industry standard for API keys)
@@ -85,14 +84,14 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, userID uuid.UUID, req 
 		// only reachable via a PRNG bug or pre-existing duplicate data). Name
 		// uniqueness is NOT enforced, so telling callers "rename and retry" is
 		// misleading and actionable on the wrong field.
-		if errors.Is(err, authDomain.ErrAPIKeyAlreadyExists) {
+		if appErrors.IsAlreadyExists(err) {
 			s.logger.Error("api key hash collision on create — regeneration required",
 				"user_id", userID,
 				"project_id", req.ProjectID,
 			)
-			return nil, appErrors.NewConflictError("failed to allocate a unique api key; please retry")
+			return nil, appErrors.Conflict("", "failed to allocate a unique api key; please retry")
 		}
-		return nil, appErrors.NewInternalError("failed to save API key", err)
+		return nil, appErrors.Internal("failed to save API key", err)
 	}
 
 	// Return response with the full key (only shown once)
@@ -111,10 +110,10 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, userID uuid.UUID, req 
 func (s *APIKeyService) GetAPIKey(ctx context.Context, keyID uuid.UUID) (*authDomain.APIKey, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return nil, appErrors.NewNotFoundError("api key", appErrors.WithParam(keyID.String()))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("api key")
 		}
-		return nil, appErrors.NewInternalError("failed to get api key", err)
+		return nil, appErrors.Internal("failed to get api key", err)
 	}
 	return apiKey, nil
 }
@@ -146,20 +145,20 @@ func (s *APIKeyService) DeleteAPIKey(ctx context.Context, keyID uuid.UUID, proje
 	// Verify API key exists (filters out already-deleted keys)
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return appErrors.NewNotFoundError("api key", appErrors.WithParam(keyID.String()))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("api key")
 		}
-		return appErrors.NewInternalError("failed to get api key", err)
+		return appErrors.Internal("failed to get api key", err)
 	}
 
 	// Verify API key belongs to specified project (security check)
 	if apiKey.ProjectID != projectID {
-		return appErrors.NewNotFoundError("API key not found in this project")
+		return appErrors.NotFound("api key", appErrors.WithMessage("API key not found in this project"))
 	}
 
 	// Perform soft delete
 	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
-		return appErrors.NewInternalError("failed to delete API key", err)
+		return appErrors.Internal("failed to delete API key", err)
 	}
 
 	return nil
@@ -170,7 +169,7 @@ func (s *APIKeyService) DeleteAPIKey(ctx context.Context, keyID uuid.UUID, proje
 func (s *APIKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*authDomain.ValidateAPIKeyResponse, error) {
 	// Validate API key format (bk_{40_chars})
 	if err := authDomain.ValidateAPIKeyFormat(fullKey); err != nil {
-		return nil, appErrors.NewUnauthorizedError("invalid API key format")
+		return nil, appErrors.Unauthenticated("invalid API key format")
 	}
 
 	// Hash the incoming key using SHA-256 for O(1) lookup
@@ -183,17 +182,17 @@ func (s *APIKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 	apiKey, err := s.apiKeyRepo.GetByKeyHash(ctx, keyHash)
 	if err != nil {
 		// Distinguish between not-found (401) and infrastructure errors (500)
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
+		if appErrors.IsNotFound(err) {
 			// Don't expose whether key exists or not (security best practice)
-			return nil, appErrors.NewUnauthorizedError("invalid API key")
+			return nil, appErrors.Unauthenticated("invalid API key")
 		}
 		// Infrastructure error (DB connection, migration issue, etc.) - return 500
-		return nil, appErrors.NewInternalError("failed to validate API key", err)
+		return nil, appErrors.Internal("failed to validate API key", err)
 	}
 
 	// Check expiration (deleted keys filtered by GORM soft delete)
 	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
-		return nil, appErrors.NewUnauthorizedError("API key has expired")
+		return nil, appErrors.Unauthenticated("API key has expired")
 	}
 
 	// Create auth context
@@ -224,7 +223,7 @@ func (s *APIKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 	project, err := s.projectRepo.GetByID(ctx, apiKey.ProjectID)
 	if err != nil {
 		// Project lookup failure is critical - shouldn't happen for valid API keys
-		return nil, appErrors.NewInternalError("failed to look up project for API key", err)
+		return nil, appErrors.Internal("failed to look up project for API key", err)
 	}
 
 	// Return validation response with project_id and organization_id from database
@@ -248,10 +247,10 @@ func (s *APIKeyService) CheckRateLimit(ctx context.Context, keyID uuid.UUID) (bo
 func (s *APIKeyService) GetAPIKeyContext(ctx context.Context, keyID uuid.UUID) (*authDomain.AuthContext, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return nil, appErrors.NewNotFoundError("api key", appErrors.WithParam(keyID.String()))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("api key")
 		}
-		return nil, appErrors.NewInternalError("failed to get api key", err)
+		return nil, appErrors.Internal("failed to get api key", err)
 	}
 
 	return &authDomain.AuthContext{
@@ -266,10 +265,10 @@ func (s *APIKeyService) GetAPIKeyContext(ctx context.Context, keyID uuid.UUID) (
 func (s *APIKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID uuid.UUID, resource string) (bool, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return false, appErrors.NewNotFoundError("api key", appErrors.WithParam(keyID.String()))
+		if appErrors.IsNotFound(err) {
+			return false, appErrors.NotFound("api key")
 		}
-		return false, appErrors.NewInternalError("failed to get api key", err)
+		return false, appErrors.Internal("failed to get api key", err)
 	}
 
 	// All API keys have full access to their project (deleted keys filtered by GORM)

@@ -177,19 +177,27 @@ func NoContent(w http.ResponseWriter) {
 
 // buildAPIError renders an arbitrary error into the wire APIError plus
 // the HTTP status to write.
+//
+// Two branches by error origin:
+//
+//  1. *Error (the canonical pkg/errors type; repos, services, handlers,
+//     middleware all emit this) — Reason → wire `type` and HTTP status
+//     via the pure HTTPType()/HTTPStatus() functions. Resource → public
+//     message when no override is set.
+//  2. Anything else — opaque 500 fallback.
 func buildAPIError(err error) (*APIError, int) {
-	if appErr := appErrors.AsAppError(err); appErr != nil {
+	if e := appErrors.As(err); e != nil {
 		return &APIError{
-			Type:    string(appErr.Type),
-			Code:    appErr.Code,
-			Message: appErr.Message,
-			Details: appErr.Details,
-			Param:   appErr.Param,
-			Errors:  appErr.Errors,
-		}, appErr.HTTPStatus()
+			Type:    e.Reason.HTTPType(),
+			Code:    e.Code,
+			Message: e.PublicMessage(),
+			Details: e.Details,
+			Param:   e.Param,
+			Errors:  e.Errors,
+		}, e.HTTPStatus()
 	}
 	return &APIError{
-		Type:    string(appErrors.TypeAPIError),
+		Type:    appErrors.ReasonInternal.HTTPType(),
 		Message: "Internal server error",
 	}, http.StatusInternalServerError
 }

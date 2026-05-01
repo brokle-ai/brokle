@@ -11,6 +11,7 @@ import (
 	evalDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type experimentRepository struct {
@@ -51,9 +52,9 @@ func (r *experimentRepository) GetByID(ctx context.Context, id, projectID uuid.U
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrExperimentNotFound
+			return nil, appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get experiment", err, appErrors.WithOp("repo.experiment.get_by_id"))
 	}
 	return experimentFromRow(&row)
 }
@@ -132,10 +133,10 @@ func (r *experimentRepository) Update(ctx context.Context, e *evalDomain.Experim
 		FailedItems:    int32(e.FailedItems),
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("update experiment", err, appErrors.WithOp("repo.experiment.update"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExperimentNotFound
+		return appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.update"))
 	}
 	return nil
 }
@@ -146,10 +147,10 @@ func (r *experimentRepository) Delete(ctx context.Context, id, projectID uuid.UU
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete experiment", err, appErrors.WithOp("repo.experiment.delete"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExperimentNotFound
+		return appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.delete"))
 	}
 	return nil
 }
@@ -161,10 +162,10 @@ func (r *experimentRepository) SetTotalItems(ctx context.Context, id, projectID 
 		TotalItems: int32(total),
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("set experiment total items", err, appErrors.WithOp("repo.experiment.set_total_items"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExperimentNotFound
+		return appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.set_total_items"))
 	}
 	return nil
 }
@@ -177,10 +178,10 @@ func (r *experimentRepository) IncrementCounters(ctx context.Context, id, projec
 		FailedItems:    int32(failed),
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("increment experiment counters", err, appErrors.WithOp("repo.experiment.increment_counters"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExperimentNotFound
+		return appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.increment_counters"))
 	}
 	return nil
 }
@@ -197,9 +198,9 @@ func (r *experimentRepository) IncrementCountersAndUpdateStatus(ctx context.Cont
 		})
 		if err != nil {
 			if db.IsNoRows(err) {
-				return evalDomain.ErrExperimentNotFound
+				return appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.lock_for_update"))
 			}
-			return err
+			return appErrors.Internal("lock experiment", err, appErrors.WithOp("repo.experiment.lock_for_update"))
 		}
 		row.CompletedItems += int32(completed)
 		row.FailedItems += int32(failed)
@@ -245,9 +246,9 @@ func (r *experimentRepository) GetProgress(ctx context.Context, id, projectID uu
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrExperimentNotFound
+			return nil, appErrors.NotFound("experiment", appErrors.WithOp("repo.experiment.get_progress"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get experiment progress", err, appErrors.WithOp("repo.experiment.get_progress"))
 	}
 	return &evalDomain.Experiment{
 		ID:             row.ID,

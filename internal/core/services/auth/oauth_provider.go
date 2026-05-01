@@ -66,7 +66,7 @@ func (s *OAuthProviderService) GenerateState(ctx context.Context, invitationToke
 	// Generate random state token
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", appErrors.NewInternalError("failed to generate state token", err)
+		return "", appErrors.Internal("failed to generate state token", err)
 	}
 	state := hex.EncodeToString(bytes)
 
@@ -80,13 +80,13 @@ func (s *OAuthProviderService) GenerateState(ctx context.Context, invitationToke
 
 	data, err := json.Marshal(stateData)
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to marshal state data", err)
+		return "", appErrors.Internal("failed to marshal state data", err)
 	}
 
 	key := "oauth:state:" + state
 	err = s.redis.Set(ctx, key, data, 5*time.Minute).Err()
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to store state token", err)
+		return "", appErrors.Internal("failed to store state token", err)
 	}
 
 	return state, nil
@@ -98,7 +98,7 @@ func (s *OAuthProviderService) ValidateState(ctx context.Context, state string) 
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
-		return nil, appErrors.NewUnauthorizedError("invalid or expired state token")
+		return nil, appErrors.Unauthenticated("invalid or expired state token")
 	}
 
 	// Delete state token (one-time use)
@@ -106,7 +106,7 @@ func (s *OAuthProviderService) ValidateState(ctx context.Context, state string) 
 
 	var stateData map[string]any
 	if err := json.Unmarshal([]byte(data), &stateData); err != nil {
-		return nil, appErrors.NewInternalError("failed to unmarshal state data", err)
+		return nil, appErrors.Internal("failed to unmarshal state data", err)
 	}
 
 	// Extract invitation token if present
@@ -126,7 +126,7 @@ func (s *OAuthProviderService) GetAuthorizationURL(provider, state string) (stri
 	case "github":
 		return s.githubConfig.AuthCodeURL(state, oauth2.AccessTypeOnline), nil
 	default:
-		return "", appErrors.NewValidationError("unsupported OAuth provider", provider)
+		return "", appErrors.InvalidParam("unsupported", "OAuth provider"+provider)
 	}
 }
 
@@ -141,11 +141,11 @@ func (s *OAuthProviderService) ExchangeCode(ctx context.Context, provider, code 
 	case "github":
 		token, err = s.githubConfig.Exchange(ctx, code)
 	default:
-		return nil, appErrors.NewValidationError("unsupported OAuth provider", provider)
+		return nil, appErrors.InvalidParam("unsupported", "OAuth provider"+provider)
 	}
 
 	if err != nil {
-		return nil, appErrors.NewUnauthorizedError("failed to exchange authorization code")
+		return nil, appErrors.Unauthenticated("failed to exchange authorization code")
 	}
 
 	return token, nil
@@ -159,7 +159,7 @@ func (s *OAuthProviderService) GetUserProfile(ctx context.Context, provider stri
 	case "github":
 		return s.getGitHubUserProfile(ctx, token)
 	default:
-		return nil, appErrors.NewValidationError("unsupported OAuth provider", provider)
+		return nil, appErrors.InvalidParam("unsupported", "OAuth provider"+provider)
 	}
 }
 
@@ -169,13 +169,13 @@ func (s *OAuthProviderService) getGoogleUserProfile(ctx context.Context, token *
 
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to fetch Google user profile", err)
+		return nil, appErrors.Internal("failed to fetch Google user profile", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to read Google response", err)
+		return nil, appErrors.Internal("failed to read Google response", err)
 	}
 
 	var googleUser struct {
@@ -188,12 +188,12 @@ func (s *OAuthProviderService) getGoogleUserProfile(ctx context.Context, token *
 	}
 
 	if err := json.Unmarshal(body, &googleUser); err != nil {
-		return nil, appErrors.NewInternalError("failed to parse Google user data", err)
+		return nil, appErrors.Internal("failed to parse Google user data", err)
 	}
 
 	// Only accept verified emails
 	if !googleUser.VerifiedEmail {
-		return nil, appErrors.NewUnauthorizedError("email not verified with Google")
+		return nil, appErrors.Unauthenticated("email not verified with Google")
 	}
 
 	return &OAuthUserProfile{
@@ -212,13 +212,13 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 	// Fetch user profile
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to fetch GitHub user profile", err)
+		return nil, appErrors.Internal("failed to fetch GitHub user profile", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to read GitHub response", err)
+		return nil, appErrors.Internal("failed to read GitHub response", err)
 	}
 
 	var githubUser struct {
@@ -229,20 +229,20 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 	}
 
 	if err := json.Unmarshal(body, &githubUser); err != nil {
-		return nil, appErrors.NewInternalError("failed to parse GitHub user data", err)
+		return nil, appErrors.Internal("failed to parse GitHub user data", err)
 	}
 
 	// If email is not public, fetch from emails endpoint
 	if githubUser.Email == "" {
 		emailResp, err := client.Get("https://api.github.com/user/emails")
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to fetch GitHub emails", err)
+			return nil, appErrors.Internal("failed to fetch GitHub emails", err)
 		}
 		defer emailResp.Body.Close()
 
 		emailBody, err := io.ReadAll(emailResp.Body)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to read GitHub emails", err)
+			return nil, appErrors.Internal("failed to read GitHub emails", err)
 		}
 
 		var emails []struct {
@@ -252,7 +252,7 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 		}
 
 		if err := json.Unmarshal(emailBody, &emails); err != nil {
-			return nil, appErrors.NewInternalError("failed to parse GitHub emails", err)
+			return nil, appErrors.Internal("failed to parse GitHub emails", err)
 		}
 
 		// Find primary verified email
@@ -264,7 +264,7 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 		}
 
 		if githubUser.Email == "" {
-			return nil, appErrors.NewUnauthorizedError("no verified email found in GitHub account")
+			return nil, appErrors.Unauthenticated("no verified email found in GitHub account")
 		}
 	}
 

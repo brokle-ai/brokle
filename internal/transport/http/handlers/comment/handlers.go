@@ -35,10 +35,7 @@ func New(svc *commentService.CommentService, logger *slog.Logger) *Handler {
 func parseScope(r *http.Request) (traceID string, projectID uuid.UUID, err error) {
 	traceID = chi.URLParam(r, "id")
 	if traceID == "" {
-		return "", uuid.Nil, appErrors.NewValidationError(
-			"Missing trace ID", "id is required",
-			appErrors.WithParam("id"),
-		)
+		return "", uuid.Nil, appErrors.InvalidParam("id", "is required")
 	}
 	projectID = httpctx.MustGetProjectID(r.Context())
 	return traceID, projectID, nil

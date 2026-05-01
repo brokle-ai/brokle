@@ -43,14 +43,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.logger.ErrorContext(r.Context(),
 			"login: user fetch failed after successful credentials",
 			"email", body.Email, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		response.WriteError(w, appErrors.Internal("Failed to complete authentication", err))
 		return
 	}
 
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "login: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 
@@ -69,9 +69,8 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body.InvitationToken == nil && body.OrganizationName == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Signup requires either organization_name or invitation_token",
-			"Provide organization_name for a fresh signup, or invitation_token to join an existing organization",
+		response.WriteError(w, appErrors.BadRequest(
+			"signup requires either organization_name or invitation_token: provide organization_name for a fresh signup, or invitation_token to join an existing organization",
 		))
 		return
 	}
@@ -106,7 +105,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "signup: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 
@@ -229,7 +228,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	if sess.UserID != userID {
 		h.logger.WarnContext(r.Context(), "get-session: cross-user access attempt",
 			"actor", userID, "session_id", sessionID, "owner", sess.UserID)
-		response.WriteError(w, appErrors.NewNotFoundError("Session"))
+		response.WriteError(w, appErrors.NotFound("session"))
 		return
 	}
 	response.Success(w, sess)
@@ -252,7 +251,7 @@ func (h *Handler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	if sess.UserID != userID {
 		h.logger.WarnContext(r.Context(), "revoke-session: cross-user access attempt",
 			"actor", userID, "session_id", sessionID, "owner", sess.UserID)
-		response.WriteError(w, appErrors.NewNotFoundError("Session"))
+		response.WriteError(w, appErrors.NotFound("session"))
 		return
 	}
 	if err := h.sessionSvc.RevokeSession(r.Context(), sessionID); err != nil {
@@ -305,7 +304,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil || cookie.Value == "" {
 		h.logger.WarnContext(r.Context(), "refresh: missing refresh_token cookie")
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewUnauthorizedError("Refresh token not found"))
+		response.WriteError(w, appErrors.Unauthenticated("Refresh token not found"))
 		return
 	}
 
@@ -315,7 +314,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "refresh: token validation failed", "error", err)
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewUnauthorizedError("Refresh token invalid or expired"))
+		response.WriteError(w, appErrors.Unauthenticated("Refresh token invalid or expired"))
 		return
 	}
 
@@ -323,7 +322,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "refresh: CSRF token generation failed", "error", err)
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewInternalError("Token refresh setup failed", err))
+		response.WriteError(w, appErrors.Internal("Token refresh setup failed", err))
 		return
 	}
 
@@ -378,7 +377,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	h.logger.WarnContext(r.Context(),
 		"reset-password endpoint hit — service-layer completion not yet implemented",
 		"token_prefix", body.Token[:prefixLen])
-	response.WriteError(w, appErrors.NewNotImplementedError(
+	response.WriteError(w, appErrors.NotImplemented("", 
 		"Password reset completion is not yet implemented in the service layer"))
 }
 

@@ -23,9 +23,8 @@ func (h *SDKHandler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if apiKey == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"API key required",
-			"provide X-API-Key header or Authorization: Bearer <key>",
+		response.WriteError(w, appErrors.Unauthenticated(
+			"API key required: provide X-API-Key header or Authorization: Bearer <key>",
 		))
 		return
 	}

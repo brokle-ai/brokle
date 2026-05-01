@@ -24,7 +24,6 @@ type organizationResponse struct {
 type memberResponse struct {
 	UserID    uuid.UUID  `json:"user_id"`
 	RoleID    uuid.UUID  `json:"role_id"`
-	Status    string     `json:"status"`
 	InvitedBy *uuid.UUID `json:"invited_by,omitempty"`
 	JoinedAt  time.Time  `json:"joined_at"`
 	CreatedAt time.Time  `json:"created_at"`

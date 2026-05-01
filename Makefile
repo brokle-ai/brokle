@@ -171,6 +171,10 @@ seed: ## Seed system data (permissions, roles, pricing)
 	@echo "🌱 Seeding system data..."
 	go run cmd/migrate/main.go seed
 
+reseed: ## Re-sync system roles + permissions after seeds/*.yaml edits (idempotent + transactional, safe to run on a populated DB)
+	@echo "🔄 Re-syncing system roles + permissions from seeds/*.yaml..."
+	go run cmd/migrate/main.go seed
+
 create-migration: ## Create new migration (usage: make create-migration DB=postgres NAME=add_users_table)
 	@if [ -z "$(DB)" ] || [ -z "$(NAME)" ]; then \
 		echo "Usage: make create-migration DB=postgres|clickhouse NAME=migration_name"; \
@@ -224,13 +228,17 @@ fmt-frontend: ## Format frontend code
 
 ##@ Documentation
 
-generate: generate-sqlc ## Generate sqlc types (server is chi-only; no OpenAPI spec is emitted)
+generate: generate-sqlc gen-frontend-permissions ## Run all codegen (sqlc bindings + frontend permission catalog)
 	@echo "✅ Code generation complete"
 
 generate-sqlc: ensure-sqlc ## Generate type-safe Go bindings from SQL queries
 	@echo "🧬 Generating sqlc bindings..."
 	@sqlc generate
 	@echo "✅ sqlc generation complete"
+
+gen-frontend-permissions: ## Generate frontend Scope/SCOPE_LEVELS from seeds/permissions.yaml
+	@echo "🧬 Generating frontend permission catalog..."
+	@go run ./cmd/gen-frontend-permissions
 
 ##@ Utilities
 

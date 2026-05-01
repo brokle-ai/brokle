@@ -37,7 +37,7 @@ func (h *Handler) listExperimentsCore(
 	if datasetIDStr != "" {
 		datasetID, err := uuid.Parse(datasetIDStr)
 		if err != nil {
-			return nil, 0, page, limit, appErrors.NewValidationError("dataset_id", "must be a valid UUID")
+			return nil, 0, page, limit, appErrors.InvalidParam("dataset_id", "must be a valid UUID")
 		}
 		filter = &evaluationDomain.ExperimentFilter{}
 		filter.DatasetID = &datasetID
@@ -56,8 +56,7 @@ func (h *Handler) listExperimentsCore(
 			}
 			filter.Status = &status
 		default:
-			return nil, 0, page, limit, appErrors.NewValidationError("status",
-				"must be pending, running, completed, failed, partial, or cancelled")
+			return nil, 0, page, limit, appErrors.InvalidParam("status", "must be pending, running, completed, failed, partial, or cancelled")
 		}
 	}
 	if search != "" {
@@ -75,7 +74,7 @@ func (h *Handler) listExperimentsCore(
 			}
 			id, err := uuid.Parse(idStr)
 			if err != nil {
-				return nil, 0, page, limit, appErrors.NewValidationError("ids", "invalid UUID: "+idStr)
+				return nil, 0, page, limit, appErrors.InvalidParam("ids", "invalid UUID: "+idStr)
 			}
 			ids = append(ids, id)
 		}
@@ -103,7 +102,7 @@ func (h *Handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUI
 	for i, idStr := range body.ExperimentIDs {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return nil, appErrors.NewValidationError("experiment_ids", "invalid UUID at index "+strconv.Itoa(i))
+			return nil, appErrors.InvalidParam("experiment_ids", "invalid UUID at index "+strconv.Itoa(i))
 		}
 		experimentIDs[i] = id
 	}
@@ -112,7 +111,7 @@ func (h *Handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUI
 	if body.BaselineID != nil {
 		id, err := uuid.Parse(*body.BaselineID)
 		if err != nil {
-			return nil, appErrors.NewValidationError("baseline_id", "must be a valid UUID")
+			return nil, appErrors.InvalidParam("baseline_id", "must be a valid UUID")
 		}
 		baselineID = &id
 	}

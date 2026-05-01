@@ -3,7 +3,6 @@ package registration
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -94,11 +93,11 @@ func NewRegistrationService(
 func (s *RegistrationService) RegisterWithOrganization(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
 	// Validation
 	if req.OrganizationName == nil || *req.OrganizationName == "" {
-		return nil, appErrors.NewValidationError("organization name is required", "")
+		return nil, appErrors.InvalidParam("organization_name", "is required")
 	}
 
 	if !req.IsOAuthUser && req.Password == "" {
-		return nil, appErrors.NewValidationError("password is required for email signups", "")
+		return nil, appErrors.InvalidParam("password", "is required for email signups")
 	}
 
 	// Hash password BEFORE transaction (don't re-hash inside)
@@ -135,17 +134,17 @@ func (s *RegistrationService) RegisterWithOrganization(ctx context.Context, req 
 		}
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
-			// Repo wraps UNIQUE (email) collisions into userDomain.ErrAlreadyExists.
-			if errors.Is(err, userDomain.ErrAlreadyExists) {
-				return appErrors.NewConflictError("email already registered")
+			// Repo wraps UNIQUE (email) collisions into appErrors.IsAlreadyExists.
+			if appErrors.IsAlreadyExists(err) {
+				return appErrors.Conflict("", "email already registered")
 			}
-			return appErrors.NewInternalError("failed to create user", err)
+			return appErrors.Internal("failed to create user", err)
 		}
 
 		// Create user profile
 		profile := userDomain.NewUserProfile(newUser.ID)
 		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
-			return appErrors.NewInternalError("failed to create user profile", err)
+			return appErrors.Internal("failed to create user profile", err)
 		}
 
 		// 2. Create organization
@@ -155,35 +154,35 @@ func (s *RegistrationService) RegisterWithOrganization(ctx context.Context, req 
 		org.SubscriptionStatus = "active"
 
 		if err := s.orgRepo.Create(ctx, org); err != nil {
-			return appErrors.NewInternalError("failed to create organization", err)
+			return appErrors.Internal("failed to create organization", err)
 		}
 
 		// 2.5. Provision billing for organization
 		if err := s.usage.ProvisionOrganizationBilling(ctx, org.ID); err != nil {
-			return appErrors.NewInternalError("failed to provision billing", err)
+			return appErrors.Internal("failed to provision billing", err)
 		}
 
 		// 3. Add user as organization owner
 		ownerRole, err := s.roles.GetRoleByNameAndScope(ctx, "owner", "organization")
 		if err != nil || ownerRole == nil {
-			return appErrors.NewInternalError("owner role not found - database seed may be missing", err)
+			return appErrors.Internal("owner role not found - database seed may be missing", err)
 		}
 
 		member := orgDomain.NewMember(org.ID, newUser.ID, ownerRole.ID)
 		if err := s.memberRepo.Create(ctx, member); err != nil {
-			return appErrors.NewInternalError("failed to add user as organization owner", err)
+			return appErrors.Internal("failed to add user as organization owner", err)
 		}
 
 		// 4. Create default project
 		project = orgDomain.NewProject(org.ID, "Default Project", "Your default project")
 		if err := s.projectRepo.Create(ctx, project); err != nil {
-			return appErrors.NewInternalError("failed to create default project", err)
+			return appErrors.Internal("failed to create default project", err)
 		}
 
 		// 5. Set user's default organization
 		newUser.DefaultOrganizationID = &org.ID
 		if err := s.userRepo.Update(ctx, newUser); err != nil {
-			return appErrors.NewInternalError("failed to set default organization", err)
+			return appErrors.Internal("failed to set default organization", err)
 		}
 
 		return nil
@@ -227,36 +226,36 @@ func (s *RegistrationService) RegisterWithOrganization(ctx context.Context, req 
 func (s *RegistrationService) RegisterWithInvitation(ctx context.Context, req *RegisterRequest) (*RegistrationResponse, error) {
 	// Validation
 	if req.InvitationToken == nil || *req.InvitationToken == "" {
-		return nil, appErrors.NewValidationError("invitation token is required", "")
+		return nil, appErrors.InvalidParam("invitation_token", "is required")
 	}
 
 	if !req.IsOAuthUser && req.Password == "" {
-		return nil, appErrors.NewValidationError("password is required for email signups", "")
+		return nil, appErrors.InvalidParam("password", "is required for email signups")
 	}
 
 	// Get invitation
 	invitation, err := s.invitationRepo.GetByToken(ctx, *req.InvitationToken)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("invalid invitation token")
+		return nil, appErrors.NotFound("invitation", appErrors.WithMessage("invalid invitation token"))
 	}
 
 	// Check if expired
 	if invitation.Status != orgDomain.InvitationStatusPending || time.Now().After(invitation.ExpiresAt) {
-		return nil, appErrors.NewValidationError("invitation has expired or is no longer valid", "")
+		return nil, appErrors.InvalidParam("invitation_token", "invitation has expired or is no longer valid")
 	}
 
 	// Verify email matches invitation
 	if invitation.Email != req.Email {
-		return nil, appErrors.NewValidationError("email does not match invitation", "")
+		return nil, appErrors.InvalidParam("email", "does not match invitation")
 	}
 
 	// Check if user already exists
 	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
-	if err != nil && !errors.Is(err, userDomain.ErrNotFound) {
-		return nil, appErrors.NewInternalError("user lookup failed", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, appErrors.Internal("user lookup failed", err)
 	}
 	if existingUser != nil {
-		return nil, appErrors.NewConflictError("email already exists")
+		return nil, appErrors.Conflict("", "email already exists")
 	}
 
 	// Hash password BEFORE transaction (don't re-hash inside)
@@ -295,17 +294,17 @@ func (s *RegistrationService) RegisterWithInvitation(ctx context.Context, req *R
 		newUser.DefaultOrganizationID = &invitation.OrganizationID
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
-			// Repo wraps UNIQUE (email) collisions into userDomain.ErrAlreadyExists.
-			if errors.Is(err, userDomain.ErrAlreadyExists) {
-				return appErrors.NewConflictError("email already registered")
+			// Repo wraps UNIQUE (email) collisions into appErrors.IsAlreadyExists.
+			if appErrors.IsAlreadyExists(err) {
+				return appErrors.Conflict("", "email already registered")
 			}
-			return appErrors.NewInternalError("failed to create user", err)
+			return appErrors.Internal("failed to create user", err)
 		}
 
 		// Create user profile (same as fresh signup)
 		profile := userDomain.NewUserProfile(newUser.ID)
 		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
-			return appErrors.NewInternalError("failed to create user profile", err)
+			return appErrors.Internal("failed to create user profile", err)
 		}
 
 		// 2. Update invitation status to accepted
@@ -313,19 +312,19 @@ func (s *RegistrationService) RegisterWithInvitation(ctx context.Context, req *R
 		acceptedAt := time.Now()
 		invitation.AcceptedAt = &acceptedAt
 		if err := s.invitationRepo.Update(ctx, invitation); err != nil {
-			return appErrors.NewInternalError("failed to update invitation", err)
+			return appErrors.Internal("failed to update invitation", err)
 		}
 
 		// 3. Add user as organization member
 		member := orgDomain.NewMember(invitation.OrganizationID, newUser.ID, invitation.RoleID)
 		if err := s.memberRepo.Create(ctx, member); err != nil {
-			return appErrors.NewInternalError("failed to add user to organization", err)
+			return appErrors.Internal("failed to add user to organization", err)
 		}
 
 		// 4. Get organization details
 		org, err = s.orgRepo.GetByID(ctx, invitation.OrganizationID)
 		if err != nil {
-			return appErrors.NewInternalError("failed to get organization", err)
+			return appErrors.Internal("failed to get organization", err)
 		}
 
 		return nil
@@ -398,7 +397,7 @@ func (s *RegistrationService) hashPassword(password string, isOAuthUser bool) (s
 	// Password users: hash the password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to hash password", err)
+		return "", appErrors.Internal("failed to hash password", err)
 	}
 	return string(hashed), nil
 }

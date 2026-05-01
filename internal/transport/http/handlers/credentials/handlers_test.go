@@ -97,10 +97,7 @@ func newTestRouter(t *testing.T, svc handler.CredentialService) (*chi.Mux, uuid.
 				raw := chi.URLParam(req, "orgId")
 				orgID, err := uuid.Parse(raw)
 				if err != nil {
-					response.WriteError(w, appErrors.NewValidationError(
-						"Invalid orgId", "orgId must be a valid UUID",
-						appErrors.WithParam("orgId"),
-					))
+					response.WriteError(w, appErrors.InvalidParam("orgId", "must be a valid UUID"))
 					return
 				}
 				ctx := httpctx.WithOrganizationID(req.Context(), orgID)
@@ -172,7 +169,7 @@ func TestListCredentials_InvalidOrgID_EmitsErrorEnvelope(t *testing.T) {
 	require.NotNil(t, env.Error, "ErrorResponse.error must be populated on error paths")
 	assert.Equal(t, "validation_error", env.Error.Type)
 	assert.Equal(t, "orgId", env.Error.Param)
-	assert.Contains(t, env.Error.Message, "Invalid orgId")
+	assert.Contains(t, env.Error.Message, "must be a valid UUID")
 }
 
 // Request-body validation: missing required fields + out-of-range

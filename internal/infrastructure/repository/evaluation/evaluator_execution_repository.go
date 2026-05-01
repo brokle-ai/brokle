@@ -9,6 +9,7 @@ import (
 	evalDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 )
 
@@ -71,10 +72,10 @@ func (r *evaluatorExecutionRepository) Update(ctx context.Context, e *evalDomain
 		Metadata:     meta,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("update execution", err, appErrors.WithOp("repo.execution.update"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExecutionNotFound
+		return appErrors.NotFound("execution", appErrors.WithOp("repo.execution.update"))
 	}
 	return nil
 }
@@ -86,9 +87,9 @@ func (r *evaluatorExecutionRepository) GetByID(ctx context.Context, id, projectI
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrExecutionNotFound
+			return nil, appErrors.NotFound("execution", appErrors.WithOp("repo.execution.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get execution", err, appErrors.WithOp("repo.execution.get_by_id"))
 	}
 	return executionFromRow(&row)
 }
@@ -170,10 +171,10 @@ func (r *evaluatorExecutionRepository) IncrementCounters(ctx context.Context, id
 		ErrorsCount:  int32(errorsCount),
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("increment execution counters", err, appErrors.WithOp("repo.execution.increment_counters"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExecutionNotFound
+		return appErrors.NotFound("execution", appErrors.WithOp("repo.execution.increment_counters"))
 	}
 	return nil
 }
@@ -185,10 +186,10 @@ func (r *evaluatorExecutionRepository) UpdateSpansMatched(ctx context.Context, i
 		SpansMatched: int32(spansMatched),
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("update execution spans matched", err, appErrors.WithOp("repo.execution.update_spans_matched"))
 	}
 	if n == 0 {
-		return evalDomain.ErrExecutionNotFound
+		return appErrors.NotFound("execution", appErrors.WithOp("repo.execution.update_spans_matched"))
 	}
 	return nil
 }
@@ -205,9 +206,9 @@ func (r *evaluatorExecutionRepository) IncrementCountersAndComplete(ctx context.
 		})
 		if err != nil {
 			if db.IsNoRows(err) {
-				return evalDomain.ErrExecutionNotFound
+				return appErrors.NotFound("execution", appErrors.WithOp("repo.execution.lock_for_update"))
 			}
-			return err
+			return appErrors.Internal("lock execution", err, appErrors.WithOp("repo.execution.lock_for_update"))
 		}
 		row.SpansScored += int32(spansScored)
 		row.ErrorsCount += int32(errorsCount)

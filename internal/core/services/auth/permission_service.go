@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -34,13 +33,13 @@ func (s *PermissionService) CreatePermission(ctx context.Context, req *authDomai
 	// Validate permission doesn't already exist
 	existing, err := s.permissionRepo.GetByResourceAction(ctx, req.Resource, req.Action)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("permission " + req.Resource + ":" + req.Action + " already exists")
+		return nil, appErrors.Conflict("", "permission " + req.Resource + ":" + req.Action + " already exists")
 	}
 
 	// Create permission
 	permission := authDomain.NewPermission(req.Resource, req.Action, req.Description)
 	if err := s.permissionRepo.Create(ctx, permission); err != nil {
-		return nil, appErrors.NewInternalError("failed to create permission", err)
+		return nil, appErrors.Internal("failed to create permission", err)
 	}
 
 	return permission, nil
@@ -66,7 +65,7 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, permissionID u
 	// Get existing permission
 	permission, err := s.permissionRepo.GetByID(ctx, permissionID)
 	if err != nil {
-		return appErrors.NewNotFoundError("permission not found")
+		return appErrors.NotFound("permission")
 	}
 
 	// Update fields
@@ -90,7 +89,7 @@ func (s *PermissionService) DeletePermission(ctx context.Context, permissionID u
 func (s *PermissionService) ListPermissions(ctx context.Context, limit, offset int) ([]*authDomain.Permission, int64, error) {
 	permissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list permissions", err)
+		return nil, 0, appErrors.Internal("failed to list permissions", err)
 	}
 
 	total := int64(len(permissions))
@@ -123,7 +122,7 @@ func (s *PermissionService) GetPermissionsByNames(ctx context.Context, names []s
 	for _, name := range names {
 		perm, err := s.permissionRepo.GetByName(ctx, name)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("permission " + name + " not found")
+			return nil, appErrors.NotFound("permission", appErrors.WithMessage("permission " + name + " not found"))
 		}
 		permissions = append(permissions, perm)
 	}
@@ -136,12 +135,12 @@ func (s *PermissionService) GetPermissionsByResourceActions(ctx context.Context,
 	for _, resourceAction := range resourceActions {
 		resource, action, err := s.ParseResourceAction(resourceAction)
 		if err != nil {
-			return nil, appErrors.NewValidationError("resource_action", "Invalid resource:action format: "+resourceAction)
+			return nil, appErrors.InvalidParam("resource_action", "Invalid resource:action format: "+resourceAction)
 		}
 
 		perm, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("permission " + resourceAction + " not found")
+			return nil, appErrors.NotFound("permission", appErrors.WithMessage("permission " + resourceAction + " not found"))
 		}
 		permissions = append(permissions, perm)
 	}
@@ -155,7 +154,7 @@ func (s *PermissionService) SearchPermissions(ctx context.Context, query string,
 	// Basic search implementation - in production this would be done at DB level
 	allPermissions, err := s.permissionRepo.GetAllPermissions(ctx)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to search permissions", err)
+		return nil, 0, appErrors.Internal("failed to search permissions", err)
 	}
 
 	// Filter permissions by query
@@ -199,7 +198,7 @@ func (s *PermissionService) GetActionsForResource(ctx context.Context, resource 
 // ValidatePermissionName validates legacy permission name
 func (s *PermissionService) ValidatePermissionName(ctx context.Context, name string) error {
 	if !strings.Contains(name, ".") {
-		return appErrors.NewValidationError("name", "Invalid permission name format: "+name+" (must contain dot)")
+		return appErrors.InvalidParam("name", "Invalid permission name format: "+name+" (must contain dot)")
 	}
 	return nil
 }
@@ -207,7 +206,7 @@ func (s *PermissionService) ValidatePermissionName(ctx context.Context, name str
 // ValidateResourceAction validates resource:action format
 func (s *PermissionService) ValidateResourceAction(ctx context.Context, resource, action string) error {
 	if resource == "" || action == "" {
-		return appErrors.NewValidationError("resource_action", "Resource and action cannot be empty")
+		return appErrors.InvalidParam("resource_action", "Resource and action cannot be empty")
 	}
 	return nil
 }
@@ -216,7 +215,7 @@ func (s *PermissionService) ValidateResourceAction(ctx context.Context, resource
 func (s *PermissionService) PermissionExists(ctx context.Context, resource, action string) (bool, error) {
 	_, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrNotFound) {
+		if appErrors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, err
@@ -248,7 +247,7 @@ func (s *PermissionService) BulkPermissionExists(ctx context.Context, resourceAc
 func (s *PermissionService) ParseResourceAction(resourceAction string) (resource, action string, err error) {
 	parts := strings.Split(resourceAction, ":")
 	if len(parts) != 2 {
-		return "", "", appErrors.NewValidationError("resource_action", "Invalid resource:action format: "+resourceAction)
+		return "", "", appErrors.InvalidParam("resource_action", "Invalid resource:action format: "+resourceAction)
 	}
 	return parts[0], parts[1], nil
 }

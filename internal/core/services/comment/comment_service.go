@@ -45,7 +45,7 @@ func (s *CommentService) CreateComment(ctx context.Context, projectID uuid.UUID,
 	c := comment.NewComment(comment.EntityTypeTrace, traceID, projectID, userID, req.Content)
 
 	if err := s.commentRepo.Create(ctx, c); err != nil {
-		return nil, appErrors.NewInternalError("failed to create comment", err)
+		return nil, appErrors.Internal("failed to create comment", err)
 	}
 
 	cwu, err := s.commentRepo.GetByIDWithUser(ctx, c.ID)
@@ -75,18 +75,15 @@ func (s *CommentService) UpdateComment(ctx context.Context, projectID uuid.UUID,
 
 	c, err := s.commentRepo.GetByID(ctx, commentID)
 	if err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
-		}
-		return nil, appErrors.NewInternalError("failed to get comment", err)
+		return nil, err
 	}
 
 	if c.EntityID != traceID || c.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
+		return nil, appErrors.NotFound("comment", appErrors.WithMessage(fmt.Sprintf("comment %s not found", commentID)))
 	}
 
 	if c.CreatedBy == nil || *c.CreatedBy != userID {
-		return nil, appErrors.NewForbiddenError("you can only edit your own comments")
+		return nil, appErrors.PermissionDenied("", "you can only edit your own comments")
 	}
 
 	c.Content = req.Content
@@ -94,10 +91,7 @@ func (s *CommentService) UpdateComment(ctx context.Context, projectID uuid.UUID,
 	c.UpdatedAt = time.Now()
 
 	if err := s.commentRepo.Update(ctx, c); err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
-		}
-		return nil, appErrors.NewInternalError("failed to update comment", err)
+		return nil, err
 	}
 
 	cwu, err := s.commentRepo.GetByIDWithUser(ctx, c.ID)
@@ -126,27 +120,21 @@ func (s *CommentService) DeleteComment(ctx context.Context, projectID uuid.UUID,
 
 	c, err := s.commentRepo.GetByID(ctx, commentID)
 	if err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
-		}
-		return appErrors.NewInternalError("failed to get comment", err)
+		return err
 	}
 
 	if c.EntityID != traceID || c.ProjectID != projectID {
-		return appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
+		return appErrors.NotFound("comment", appErrors.WithMessage(fmt.Sprintf("comment %s not found", commentID)))
 	}
 
 	if c.CreatedBy == nil || *c.CreatedBy != userID {
-		return appErrors.NewForbiddenError("you can only delete your own comments")
+		return appErrors.PermissionDenied("", "you can only delete your own comments")
 	}
 
 	// Tombstone pattern: soft-deleted parents with active replies remain visible as "[deleted]"
 
 	if err := s.commentRepo.Delete(ctx, commentID); err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
-		}
-		return appErrors.NewInternalError("failed to delete comment", err)
+		return err
 	}
 
 	s.logger.Info("comment deleted",
@@ -162,7 +150,7 @@ func (s *CommentService) DeleteComment(ctx context.Context, projectID uuid.UUID,
 func (s *CommentService) ListComments(ctx context.Context, projectID uuid.UUID, traceID string, currentUserID *uuid.UUID) (*comment.ListCommentsResponse, error) {
 	topLevelComments, err := s.commentRepo.ListByEntity(ctx, comment.EntityTypeTrace, traceID, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list comments", err)
+		return nil, appErrors.Internal("failed to list comments", err)
 	}
 
 	if len(topLevelComments) == 0 {
@@ -179,12 +167,12 @@ func (s *CommentService) ListComments(ctx context.Context, projectID uuid.UUID, 
 
 	repliesMap, err := s.commentRepo.ListReplies(ctx, topLevelIDs)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list replies", err)
+		return nil, appErrors.Internal("failed to list replies", err)
 	}
 
 	replyCounts, err := s.commentRepo.CountReplies(ctx, topLevelIDs)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to count replies", err)
+		return nil, appErrors.Internal("failed to count replies", err)
 	}
 
 	allCommentIDs := make([]uuid.UUID, 0, len(topLevelComments))
@@ -197,7 +185,7 @@ func (s *CommentService) ListComments(ctx context.Context, projectID uuid.UUID, 
 
 	reactionsMap, err := s.reactionRepo.GetByComments(ctx, allCommentIDs, currentUserID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get reactions", err)
+		return nil, appErrors.Internal("failed to get reactions", err)
 	}
 
 	responses := make([]*comment.CommentResponse, len(topLevelComments))
@@ -244,7 +232,7 @@ func (s *CommentService) ListComments(ctx context.Context, projectID uuid.UUID, 
 func (s *CommentService) GetCommentCount(ctx context.Context, projectID uuid.UUID, traceID string) (*comment.CommentCountResponse, error) {
 	count, err := s.commentRepo.CountByEntity(ctx, comment.EntityTypeTrace, traceID, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to count comments", err)
+		return nil, appErrors.Internal("failed to count comments", err)
 	}
 
 	return &comment.CommentCountResponse{
@@ -259,31 +247,28 @@ func (s *CommentService) ToggleReaction(ctx context.Context, projectID uuid.UUID
 
 	c, err := s.commentRepo.GetByID(ctx, commentID)
 	if err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
-		}
-		return nil, appErrors.NewInternalError("failed to get comment", err)
+		return nil, err
 	}
 
 	if c.EntityID != traceID || c.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", commentID))
+		return nil, appErrors.NotFound("comment", appErrors.WithMessage(fmt.Sprintf("comment %s not found", commentID)))
 	}
 
 	hasReacted, err := s.reactionRepo.UserHasReacted(ctx, commentID, userID, req.Emoji)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to check reaction", err)
+		return nil, appErrors.Internal("failed to check reaction", err)
 	}
 
 	// Check max emoji limit when adding a new emoji type
 	if !hasReacted {
 		uniqueCount, err := s.reactionRepo.CountUniqueEmojis(ctx, commentID)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to count emojis", err)
+			return nil, appErrors.Internal("failed to count emojis", err)
 		}
 
 		summaries, err := s.reactionRepo.GetByComment(ctx, commentID, nil)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to get reactions", err)
+			return nil, appErrors.Internal("failed to get reactions", err)
 		}
 
 		emojiExists := false
@@ -295,13 +280,13 @@ func (s *CommentService) ToggleReaction(ctx context.Context, projectID uuid.UUID
 		}
 
 		if !emojiExists && uniqueCount >= comment.MaxEmojisPerComment {
-			return nil, appErrors.NewValidationError("emoji", fmt.Sprintf("maximum %d emoji types per comment", comment.MaxEmojisPerComment))
+			return nil, appErrors.InvalidParam("emoji", fmt.Sprintf("maximum %d emoji types per comment", comment.MaxEmojisPerComment))
 		}
 	}
 
 	added, err := s.reactionRepo.Toggle(ctx, commentID, userID, req.Emoji)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to toggle reaction", err)
+		return nil, appErrors.Internal("failed to toggle reaction", err)
 	}
 
 	action := "removed"
@@ -319,7 +304,7 @@ func (s *CommentService) ToggleReaction(ctx context.Context, projectID uuid.UUID
 
 	summaries, err := s.reactionRepo.GetByComment(ctx, commentID, &userID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get reactions", err)
+		return nil, appErrors.Internal("failed to get reactions", err)
 	}
 
 	return summaries, nil
@@ -332,24 +317,21 @@ func (s *CommentService) CreateReply(ctx context.Context, projectID uuid.UUID, t
 
 	parent, err := s.commentRepo.GetByID(ctx, parentID)
 	if err != nil {
-		if errors.Is(err, comment.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", parentID))
-		}
-		return nil, appErrors.NewInternalError("failed to get parent comment", err)
+		return nil, err
 	}
 
 	if parent.EntityID != traceID || parent.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("comment %s", parentID))
+		return nil, appErrors.NotFound("comment", appErrors.WithMessage(fmt.Sprintf("comment %s not found", parentID)))
 	}
 
 	if parent.IsReply() {
-		return nil, appErrors.NewValidationError("parent_id", "cannot reply to a reply")
+		return nil, appErrors.InvalidParam("parent_id", "cannot reply to a reply")
 	}
 
 	c := comment.NewReplyComment(comment.EntityTypeTrace, traceID, projectID, parentID, userID, req.Content)
 
 	if err := s.commentRepo.Create(ctx, c); err != nil {
-		return nil, appErrors.NewInternalError("failed to create reply", err)
+		return nil, appErrors.Internal("failed to create reply", err)
 	}
 
 	cwu, err := s.commentRepo.GetByIDWithUser(ctx, c.ID)
@@ -376,9 +358,9 @@ func (s *CommentService) validateTraceOwnership(ctx context.Context, traceID str
 	_, err := s.traceRepo.GetRootSpanByProject(ctx, traceID, projectID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", traceID))
+			return appErrors.NotFound("trace", appErrors.WithMessage(fmt.Sprintf("trace %s not found", traceID)))
 		}
-		return appErrors.NewInternalError("failed to validate trace ownership", err)
+		return appErrors.Internal("failed to validate trace ownership", err)
 	}
 	return nil
 }

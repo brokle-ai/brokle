@@ -85,22 +85,22 @@ func (s *EvaluatorService) Create(ctx context.Context, projectID uuid.UUID, user
 	}
 
 	if validationErrors := rule.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	exists, err := s.repo.ExistsByName(ctx, projectID, req.Name)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to check name uniqueness", err)
+		return nil, appErrors.Internal("failed to check name uniqueness", err)
 	}
 	if exists {
-		return nil, appErrors.NewConflictError(fmt.Sprintf("evaluator '%s' already exists in this project", req.Name))
+		return nil, appErrors.Conflict("", fmt.Sprintf("evaluator '%s' already exists in this project", req.Name))
 	}
 
 	if err := s.repo.Create(ctx, rule); err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorExists) {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("evaluator '%s' already exists in this project", req.Name))
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("", fmt.Sprintf("evaluator '%s' already exists in this project", req.Name))
 		}
-		return nil, appErrors.NewInternalError("failed to create evaluation rule", err)
+		return nil, appErrors.Internal("failed to create evaluation rule", err)
 	}
 
 	s.logger.Info("evaluator created",
@@ -117,19 +117,19 @@ func (s *EvaluatorService) Create(ctx context.Context, projectID uuid.UUID, user
 func (s *EvaluatorService) Update(ctx context.Context, id uuid.UUID, projectID uuid.UUID, req *evaluation.UpdateEvaluatorRequest) (*evaluation.Evaluator, error) {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to get evaluation rule", err)
+		return nil, appErrors.Internal("failed to get evaluation rule", err)
 	}
 
 	if req.Name != nil && *req.Name != rule.Name {
 		exists, err := s.repo.ExistsByName(ctx, projectID, *req.Name)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check name uniqueness", err)
+			return nil, appErrors.Internal("failed to check name uniqueness", err)
 		}
 		if exists {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("evaluator '%s' already exists in this project", *req.Name))
+			return nil, appErrors.Conflict("", fmt.Sprintf("evaluator '%s' already exists in this project", *req.Name))
 		}
 		rule.Name = *req.Name
 	}
@@ -168,17 +168,17 @@ func (s *EvaluatorService) Update(ctx context.Context, id uuid.UUID, projectID u
 	rule.UpdatedAt = time.Now()
 
 	if validationErrors := rule.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.repo.Update(ctx, rule); err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		if errors.Is(err, evaluation.ErrEvaluatorExists) {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("evaluator '%s' already exists in this project", rule.Name))
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("", fmt.Sprintf("evaluator '%s' already exists in this project", rule.Name))
 		}
-		return nil, appErrors.NewInternalError("failed to update evaluation rule", err)
+		return nil, appErrors.Internal("failed to update evaluation rule", err)
 	}
 
 	s.logger.Info("evaluator updated",
@@ -192,17 +192,17 @@ func (s *EvaluatorService) Update(ctx context.Context, id uuid.UUID, projectID u
 func (s *EvaluatorService) Delete(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return appErrors.NewInternalError("failed to get evaluation rule", err)
+		return appErrors.Internal("failed to get evaluation rule", err)
 	}
 
 	if err := s.repo.Delete(ctx, id, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return appErrors.NewInternalError("failed to delete evaluation rule", err)
+		return appErrors.Internal("failed to delete evaluation rule", err)
 	}
 
 	s.logger.Info("evaluator deleted",
@@ -217,10 +217,10 @@ func (s *EvaluatorService) Delete(ctx context.Context, id uuid.UUID, projectID u
 func (s *EvaluatorService) GetByID(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*evaluation.Evaluator, error) {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to get evaluation rule", err)
+		return nil, appErrors.Internal("failed to get evaluation rule", err)
 	}
 	return rule, nil
 }
@@ -228,7 +228,7 @@ func (s *EvaluatorService) GetByID(ctx context.Context, id uuid.UUID, projectID 
 func (s *EvaluatorService) List(ctx context.Context, projectID uuid.UUID, filter *evaluation.EvaluatorFilter, params pagination.Params) ([]*evaluation.Evaluator, int64, error) {
 	rules, total, err := s.repo.GetByProjectID(ctx, projectID, filter, params)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list evaluation rules", err)
+		return nil, 0, appErrors.Internal("failed to list evaluation rules", err)
 	}
 	return rules, total, nil
 }
@@ -236,10 +236,10 @@ func (s *EvaluatorService) List(ctx context.Context, projectID uuid.UUID, filter
 func (s *EvaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return appErrors.NewInternalError("failed to get evaluation rule", err)
+		return appErrors.Internal("failed to get evaluation rule", err)
 	}
 
 	if rule.Status == evaluation.EvaluatorStatusActive {
@@ -250,7 +250,7 @@ func (s *EvaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID
 	rule.UpdatedAt = time.Now()
 
 	if err := s.repo.Update(ctx, rule); err != nil {
-		return appErrors.NewInternalError("failed to activate evaluation rule", err)
+		return appErrors.Internal("failed to activate evaluation rule", err)
 	}
 
 	s.logger.Info("evaluator activated",
@@ -265,10 +265,10 @@ func (s *EvaluatorService) Activate(ctx context.Context, id uuid.UUID, projectID
 func (s *EvaluatorService) Deactivate(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	rule, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("evaluator %s", id))
 		}
-		return appErrors.NewInternalError("failed to get evaluation rule", err)
+		return appErrors.Internal("failed to get evaluation rule", err)
 	}
 
 	if rule.Status == evaluation.EvaluatorStatusInactive {
@@ -279,7 +279,7 @@ func (s *EvaluatorService) Deactivate(ctx context.Context, id uuid.UUID, project
 	rule.UpdatedAt = time.Now()
 
 	if err := s.repo.Update(ctx, rule); err != nil {
-		return appErrors.NewInternalError("failed to deactivate evaluation rule", err)
+		return appErrors.Internal("failed to deactivate evaluation rule", err)
 	}
 
 	s.logger.Info("evaluator deactivated",
@@ -294,7 +294,7 @@ func (s *EvaluatorService) Deactivate(ctx context.Context, id uuid.UUID, project
 func (s *EvaluatorService) GetActiveByProjectID(ctx context.Context, projectID uuid.UUID) ([]*evaluation.Evaluator, error) {
 	rules, err := s.repo.GetActiveByProjectID(ctx, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get active evaluation rules", err)
+		return nil, appErrors.Internal("failed to get active evaluation rules", err)
 	}
 	return rules, nil
 }
@@ -303,15 +303,15 @@ func (s *EvaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	// Validate evaluator exists (can trigger inactive evaluators for testing)
 	evaluator, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", evaluatorID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", evaluatorID))
 		}
-		return nil, appErrors.NewInternalError("failed to get evaluator", err)
+		return nil, appErrors.Internal("failed to get evaluator", err)
 	}
 
 	execution, err := s.executions.StartExecution(ctx, evaluatorID, projectID, evaluation.TriggerTypeManual)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to create execution record", err)
+		return nil, appErrors.Internal("failed to create execution record", err)
 	}
 
 	triggerMsg := ManualTriggerMessage{
@@ -345,7 +345,7 @@ func (s *EvaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	if err != nil {
 		// Fail the execution since we can't publish
 		_ = s.executions.FailExecution(ctx, execution.ID, projectID, "failed to serialize trigger message")
-		return nil, appErrors.NewInternalError("failed to serialize trigger message", err)
+		return nil, appErrors.Internal("failed to serialize trigger message", err)
 	}
 
 	_, err = s.redis.Client.XAdd(ctx, &redis.XAddArgs{
@@ -357,7 +357,7 @@ func (s *EvaluatorService) TriggerEvaluator(ctx context.Context, evaluatorID uui
 	if err != nil {
 		// Fail the execution since we can't publish
 		_ = s.executions.FailExecution(ctx, execution.ID, projectID, "failed to queue trigger job")
-		return nil, appErrors.NewInternalError("failed to queue manual trigger job", err)
+		return nil, appErrors.Internal("failed to queue manual trigger job", err)
 	}
 
 	s.logger.Info("manual evaluation triggered",
@@ -378,10 +378,10 @@ func (s *EvaluatorService) TestEvaluator(ctx context.Context, evaluatorID uuid.U
 	// Validate evaluator exists
 	evaluator, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", evaluatorID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", evaluatorID))
 		}
-		return nil, appErrors.NewInternalError("failed to get evaluator", err)
+		return nil, appErrors.Internal("failed to get evaluator", err)
 	}
 
 	// Priority 0: Sample input provided - create synthetic span for dry-run testing
@@ -743,10 +743,10 @@ func (s *EvaluatorService) GetAnalytics(ctx context.Context, evaluatorID uuid.UU
 	// Validate evaluator exists
 	_, err := s.repo.GetByID(ctx, evaluatorID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrEvaluatorNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluator %s", evaluatorID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("evaluator %s", evaluatorID))
 		}
-		return nil, appErrors.NewInternalError("failed to get evaluator", err)
+		return nil, appErrors.Internal("failed to get evaluator", err)
 	}
 
 	// Set default period
@@ -838,10 +838,7 @@ func (s *EvaluatorService) testWithSampleInput(
 ) (*evaluation.TestEvaluatorResponse, error) {
 	// Validate sample input has at least input or output
 	if sample.Input == "" && sample.Output == "" {
-		return nil, appErrors.NewValidationError(
-			"sample_input",
-			"sample_input must contain at least 'input' or 'output'",
-		)
+		return nil, appErrors.InvalidParam("sample_input", "sample_input must contain at least 'input' or 'output'")
 	}
 
 	// Create synthetic span

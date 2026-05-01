@@ -106,7 +106,6 @@ func toMemberResponse(m *organization.Member) memberResponse {
 	return memberResponse{
 		UserID:    m.UserID,
 		RoleID:    m.RoleID,
-		Status:    m.Status,
 		InvitedBy: m.InvitedBy,
 		JoinedAt:  m.JoinedAt,
 		CreatedAt: m.CreatedAt,
@@ -248,7 +247,7 @@ func (h *Handler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to access this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to access this organization"))
 		return
 	}
 
@@ -276,7 +275,7 @@ func (h *Handler) UpdateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to update this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to update this organization"))
 		return
 	}
 
@@ -318,7 +317,7 @@ func (h *Handler) DeleteOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to delete this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to delete this organization"))
 		return
 	}
 	if err := h.orgSvc.DeleteOrganization(r.Context(), orgID); err != nil {
@@ -344,7 +343,7 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to view organization members"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to view organization members"))
 		return
 	}
 
@@ -354,12 +353,8 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := r.URL.Query().Get("status")
 	out := make([]memberResponse, 0, len(members))
 	for _, m := range members {
-		if status != "" && m.Status != status {
-			continue
-		}
 		out = append(out, toMemberResponse(m))
 	}
 	response.Success(w, listMembersBody{Members: out, Total: len(out)})
@@ -386,7 +381,7 @@ func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to remove members from this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to remove members from this organization"))
 		return
 	}
 	if err := h.memberSvc.RemoveMember(r.Context(), orgID, targetUserID, callerID); err != nil {
@@ -440,7 +435,7 @@ func (h *Handler) ListPendingInvitations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !isMember {
-		response.WriteError(w, appErrors.NewForbiddenError("You are not authorized to view this organization's invitations"))
+		response.WriteError(w, appErrors.PermissionDenied("invitation", "You are not authorized to view this organization's invitations"))
 		return
 	}
 
@@ -560,8 +555,7 @@ func (h *Handler) ValidateInvitationToken(w http.ResponseWriter, r *http.Request
 	isExpired := time.Now().After(invitation.ExpiresAt) ||
 		invitation.Status != organization.InvitationStatusPending
 	if isExpired {
-		response.WriteError(w, appErrors.NewConflictError(
-			"Invitation has expired or is no longer valid",
+		response.WriteError(w, appErrors.Conflict("invitation", "Invitation has expired or is no longer valid",
 			appErrors.WithCode("invitation_expired"),
 		))
 		return

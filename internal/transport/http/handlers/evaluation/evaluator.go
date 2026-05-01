@@ -36,12 +36,12 @@ func (h *Handler) ListEvaluators(w http.ResponseWriter, r *http.Request) {
 	allowedSortFields := []string{"name", "status", "sampling_rate", "created_at", "updated_at"}
 	sortBy, err := pagination.ValidateSortField(q.Get("sort_by"), allowedSortFields)
 	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError("sort_by", err.Error()))
+		response.WriteError(w, appErrors.InvalidParam("sort_by", err.Error()))
 		return
 	}
 	sortDir := q.Get("sort_dir")
 	if sortDir != "" && sortDir != "asc" && sortDir != "desc" {
-		response.WriteError(w, appErrors.NewValidationError("sort_dir", "must be 'asc' or 'desc'"))
+		response.WriteError(w, appErrors.InvalidParam("sort_dir", "must be 'asc' or 'desc'"))
 		return
 	}
 

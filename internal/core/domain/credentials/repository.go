@@ -9,11 +9,11 @@ import (
 // ProviderCredentialRepository defines the repository interface for provider credentials.
 type ProviderCredentialRepository interface {
 	// Create creates a new provider credential.
-	// Returns ErrCredentialExists if a credential with the same name already exists for this organization.
+	// Returns an appErrors.AlreadyExists("credential") if a credential with the same name already exists for this organization.
 	Create(ctx context.Context, credential *ProviderCredential) error
 
 	// GetByID retrieves a credential by its ID within a specific organization.
-	// Returns ErrCredentialNotFound if not found or belongs to different organization.
+	// Returns an appErrors.NotFound("credential") if not found or belongs to different organization.
 	GetByID(ctx context.Context, id uuid.UUID, orgID uuid.UUID) (*ProviderCredential, error)
 
 	// GetByOrgAndName retrieves the credential for a specific organization and name.
@@ -29,11 +29,11 @@ type ProviderCredentialRepository interface {
 	ListByOrganization(ctx context.Context, orgID uuid.UUID) ([]*ProviderCredential, error)
 
 	// Update updates an existing credential within a specific organization.
-	// The ID field must be set. Returns ErrCredentialNotFound if not found or belongs to different organization.
+	// The ID field must be set. Returns an appErrors.NotFound("credential") if not found or belongs to different organization.
 	Update(ctx context.Context, credential *ProviderCredential, orgID uuid.UUID) error
 
 	// Delete removes a credential by ID within a specific organization.
-	// Returns ErrCredentialNotFound if the credential doesn't exist or belongs to different organization.
+	// Returns an appErrors.NotFound("credential") if the credential doesn't exist or belongs to different organization.
 	Delete(ctx context.Context, id uuid.UUID, orgID uuid.UUID) error
 
 	// ExistsByOrgAndName checks if a credential exists for an organization/name combination.

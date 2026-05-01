@@ -2,14 +2,13 @@ package annotation
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
-	appErrors "brokle/pkg/errors"
 )
 
 type assignmentRepository struct {
@@ -29,9 +28,9 @@ func (r *assignmentRepository) Create(ctx context.Context, a *annotationDomain.Q
 		AssignedBy: a.AssignedBy,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return annotationDomain.ErrAssignmentExists
+			return appErrors.AlreadyExists("annotation_assignment", appErrors.WithOp("repo.annotation.assignment.create"), appErrors.WithCause(err))
 		}
-		return fmt.Errorf("create assignment: %w", err)
+		return appErrors.Internal("create annotation assignment", err, appErrors.WithOp("repo.annotation.assignment.create"))
 	}
 	return nil
 }
@@ -42,10 +41,10 @@ func (r *assignmentRepository) Delete(ctx context.Context, queueID, userID uuid.
 		UserID:  userID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete annotation assignment", err, appErrors.WithOp("repo.annotation.assignment.delete"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrAssignmentNotFound
+		return appErrors.NotFound("annotation_assignment", appErrors.WithOp("repo.annotation.assignment.delete"))
 	}
 	return nil
 }
@@ -57,9 +56,9 @@ func (r *assignmentRepository) GetByQueueAndUser(ctx context.Context, queueID, u
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, annotationDomain.ErrAssignmentNotFound
+			return nil, appErrors.NotFound("annotation_assignment", appErrors.WithOp("repo.annotation.assignment.get_by_queue_and_user"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get annotation assignment", err, appErrors.WithOp("repo.annotation.assignment.get_by_queue_and_user"))
 	}
 	return assignmentFromRow(&row), nil
 }
@@ -100,7 +99,7 @@ func (r *assignmentRepository) IsAssigned(ctx context.Context, queueID, userID u
 func (r *assignmentRepository) HasRole(ctx context.Context, queueID, userID uuid.UUID, minRole annotationDomain.AssignmentRole) (bool, error) {
 	a, err := r.GetByQueueAndUser(ctx, queueID, userID)
 	if err != nil {
-		if err == annotationDomain.ErrAssignmentNotFound {
+		if appErrors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, err

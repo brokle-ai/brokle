@@ -1,6 +1,7 @@
 package dialects
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/cbroglie/mustache"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 )
 
 var (
@@ -60,17 +62,17 @@ func (c *mustacheCompiler) ExtractVariables(content string) ([]string, error) {
 
 func (c *mustacheCompiler) Compile(content string, variables map[string]any) (string, error) {
 	if len(content) > promptDomain.MaxTemplateSize {
-		return "", promptDomain.NewTemplateTooLargeError(len(content), promptDomain.MaxTemplateSize)
+		return "", appErrors.BadRequest(fmt.Sprintf("template too large: size %d exceeds limit %d", len(content), promptDomain.MaxTemplateSize))
 	}
 
 	tmpl, err := mustache.ParseString(content)
 	if err != nil {
-		return "", promptDomain.NewDialectCompilationError("mustache", err.Error())
+		return "", appErrors.BadRequest(fmt.Sprintf("template compilation failed [mustache]: %s", err.Error()))
 	}
 
 	result, err := tmpl.Render(variables)
 	if err != nil {
-		return "", promptDomain.NewDialectCompilationError("mustache", err.Error())
+		return "", appErrors.BadRequest(fmt.Sprintf("template compilation failed [mustache]: %s", err.Error()))
 	}
 
 	return result, nil

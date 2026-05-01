@@ -2,6 +2,7 @@ package dialects
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 )
 
 var (
@@ -95,19 +97,19 @@ func isBuiltinVariable(name string) bool {
 // passed to the context don't contain sensitive data or dangerous callbacks.
 func (c *jinja2Compiler) Compile(content string, variables map[string]any) (string, error) {
 	if len(content) > promptDomain.MaxTemplateSize {
-		return "", promptDomain.NewTemplateTooLargeError(len(content), promptDomain.MaxTemplateSize)
+		return "", appErrors.BadRequest(fmt.Sprintf("template too large: size %d exceeds limit %d", len(content), promptDomain.MaxTemplateSize))
 	}
 
 	tmpl, err := gonja.FromString(content)
 	if err != nil {
-		return "", promptDomain.NewDialectCompilationError("jinja2", err.Error())
+		return "", appErrors.BadRequest(fmt.Sprintf("template compilation failed [jinja2]: %s", err.Error()))
 	}
 
 	ctx := exec.NewContext(variables)
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, ctx); err != nil {
-		return "", promptDomain.NewDialectCompilationError("jinja2", err.Error())
+		return "", appErrors.BadRequest(fmt.Sprintf("template compilation failed [jinja2]: %s", err.Error()))
 	}
 
 	return buf.String(), nil

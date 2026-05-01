@@ -21,11 +21,12 @@ export function useProjectDashboards(options: UseProjectDashboardsOptions = {}) 
     refetch,
   } = useDashboardsQuery(projectId, options.filter)
 
-  const dashboards = useMemo(() => {
-    return response?.dashboards ?? []
-  }, [response?.dashboards])
-
-  const totalCount = response?.total ?? 0
+  // useDashboardsQuery returns the full {data, pagination} envelope.
+  // Surface dashboards (the page items) and totalCount (the server's
+  // authoritative total) — derived from page length would be wrong as
+  // soon as the caller passes limit/offset.
+  const dashboards = useMemo(() => response?.data ?? [], [response?.data])
+  const totalCount = response?.pagination?.total ?? 0
 
   return {
     data: dashboards as Dashboard[],

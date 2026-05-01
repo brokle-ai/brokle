@@ -3,7 +3,6 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -56,14 +55,14 @@ func NewExperimentItemService(
 func (s *ExperimentItemService) CreateBatch(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateExperimentItemsBatchRequest) (int, error) {
 	experiment, err := s.experimentRepo.GetByID(ctx, experimentID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return 0, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))
+		if appErrors.IsNotFound(err) {
+			return 0, appErrors.NotFound(fmt.Sprintf("experiment %s", experimentID))
 		}
-		return 0, appErrors.NewInternalError("failed to verify experiment", err)
+		return 0, appErrors.Internal("failed to verify experiment", err)
 	}
 
 	if len(req.Items) == 0 {
-		return 0, appErrors.NewValidationError("items", "items array cannot be empty")
+		return 0, appErrors.InvalidParam("items", "items array cannot be empty")
 	}
 
 	items := make([]*evaluation.ExperimentItem, 0, len(req.Items))
@@ -85,38 +84,26 @@ func (s *ExperimentItemService) CreateBatch(ctx context.Context, experimentID uu
 
 		if itemReq.DatasetItemID != nil {
 			if experiment.DatasetID == nil {
-				return 0, appErrors.NewValidationError(
-					fmt.Sprintf("items[%d].dataset_item_id", i),
-					"cannot reference dataset items when experiment has no dataset",
-				)
+				return 0, appErrors.InvalidParam(fmt.Sprintf("items[%d].dataset_item_id", i), "cannot reference dataset items when experiment has no dataset")
 			}
 
 			datasetItemID, err := uuid.Parse(*itemReq.DatasetItemID)
 			if err != nil {
-				return 0, appErrors.NewValidationError(
-					fmt.Sprintf("items[%d].dataset_item_id", i),
-					"must be a valid UUID",
-				)
+				return 0, appErrors.InvalidParam(fmt.Sprintf("items[%d].dataset_item_id", i), "must be a valid UUID")
 			}
 
 			if _, err := s.datasetItemRepo.GetByID(ctx, datasetItemID, *experiment.DatasetID); err != nil {
-				if errors.Is(err, evaluation.ErrDatasetItemNotFound) {
-					return 0, appErrors.NewValidationError(
-						fmt.Sprintf("items[%d].dataset_item_id", i),
-						fmt.Sprintf("dataset item %s not found in experiment's dataset", datasetItemID),
-					)
+				if appErrors.IsNotFound(err) {
+					return 0, appErrors.InvalidParam(fmt.Sprintf("items[%d].dataset_item_id", i), fmt.Sprintf("dataset item %s not found in experiment's dataset", datasetItemID))
 				}
-				return 0, appErrors.NewInternalError("failed to verify dataset item", err)
+				return 0, appErrors.Internal("failed to verify dataset item", err)
 			}
 
 			item.DatasetItemID = &datasetItemID
 		}
 
 		if validationErrors := item.Validate(); len(validationErrors) > 0 {
-			return 0, appErrors.NewValidationError(
-				fmt.Sprintf("items[%d].%s", i, validationErrors[0].Field),
-				validationErrors[0].Message,
-			)
+			return 0, appErrors.InvalidParam(fmt.Sprintf("items[%d].%s", i, validationErrors[0].Field), validationErrors[0].Message)
 		}
 		items = append(items, item)
 
@@ -130,7 +117,7 @@ func (s *ExperimentItemService) CreateBatch(ctx context.Context, experimentID uu
 	}
 
 	if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-		return 0, appErrors.NewInternalError("failed to create experiment items", err)
+		return 0, appErrors.Internal("failed to create experiment items", err)
 	}
 
 	// Create scores for all items
@@ -212,15 +199,15 @@ func (s *ExperimentItemService) createExperimentScores(
 
 func (s *ExperimentItemService) List(ctx context.Context, experimentID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.ExperimentItem, int64, error) {
 	if _, err := s.experimentRepo.GetByID(ctx, experimentID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))
+		if appErrors.IsNotFound(err) {
+			return nil, 0, appErrors.NotFound(fmt.Sprintf("experiment %s", experimentID))
 		}
-		return nil, 0, appErrors.NewInternalError("failed to verify experiment", err)
+		return nil, 0, appErrors.Internal("failed to verify experiment", err)
 	}
 
 	items, total, err := s.itemRepo.List(ctx, experimentID, limit, offset)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list experiment items", err)
+		return nil, 0, appErrors.Internal("failed to list experiment items", err)
 	}
 	return items, total, nil
 }

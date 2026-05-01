@@ -38,7 +38,7 @@ func (r *roleRepository) Create(ctx context.Context, role *authDomain.Role) erro
 		UpdatedAt:   role.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create role %s: %w", role.Name, authDomain.ErrRoleAlreadyExists)
+			return appErrors.AlreadyExists("role", appErrors.WithOp("repo.role.create"), appErrors.WithCause(err))
 		}
 		return fmt.Errorf("create role %s: %w", role.Name, err)
 	}
@@ -49,7 +49,7 @@ func (r *roleRepository) GetByID(ctx context.Context, id uuid.UUID) (*authDomain
 	row, err := r.tm.Queries(ctx).GetRoleByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get role by ID %s: %w", id, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("role", appErrors.WithOp("repo.role.get_by_id"))
 		}
 		return nil, fmt.Errorf("get role by ID %s: %w", id, err)
 	}
@@ -63,7 +63,7 @@ func (r *roleRepository) GetByNameAndScope(ctx context.Context, name, scopeType 
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get role by name %s / scope %s: %w", name, scopeType, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("role", appErrors.WithOp("repo.role.get_by_name_and_scope"))
 		}
 		return nil, fmt.Errorf("get role by name %s / scope %s: %w", name, scopeType, err)
 	}
@@ -81,7 +81,7 @@ func (r *roleRepository) GetByNameScopeAndID(ctx context.Context, name, scopeTyp
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get role %s/%s/%s: %w", name, scopeType, *scopeID, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("role", appErrors.WithOp("repo.role.get_by_name_scope_and_id"))
 		}
 		return nil, fmt.Errorf("get role %s/%s/%s: %w", name, scopeType, *scopeID, err)
 	}

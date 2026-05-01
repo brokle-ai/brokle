@@ -88,11 +88,7 @@ func (h *SDKHandler) ValidateFilter(w http.ResponseWriter, r *http.Request) {
 func parseRFC3339(v, field string) (*time.Time, error) {
 	ts, err := time.Parse(time.RFC3339, v)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			"Invalid "+field,
-			field+" must be an RFC3339 timestamp",
-			appErrors.WithParam(field),
-		)
+		return nil, appErrors.InvalidParam(field, "must be an RFC3339 timestamp")
 	}
 	return &ts, nil
 }

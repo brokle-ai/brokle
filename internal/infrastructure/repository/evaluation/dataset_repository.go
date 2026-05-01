@@ -37,9 +37,9 @@ func (r *datasetRepository) Create(ctx context.Context, d *evalDomain.Dataset) e
 		CurrentVersionID: d.CurrentVersionID,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrDatasetExists
+			return appErrors.AlreadyExists("dataset", appErrors.WithOp("repo.dataset.create"))
 		}
-		return err
+		return appErrors.Internal("create dataset", err, appErrors.WithOp("repo.dataset.create"))
 	}
 	return nil
 }
@@ -51,9 +51,9 @@ func (r *datasetRepository) GetByID(ctx context.Context, id, projectID uuid.UUID
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrDatasetNotFound
+			return nil, appErrors.NotFound("dataset", appErrors.WithOp("repo.dataset.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get dataset", err, appErrors.WithOp("repo.dataset.get_by_id"))
 	}
 	return datasetFromRow(&row)
 }
@@ -128,12 +128,12 @@ func (r *datasetRepository) Update(ctx context.Context, d *evalDomain.Dataset, p
 	})
 	if err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrDatasetExists
+			return appErrors.AlreadyExists("dataset", appErrors.WithOp("repo.dataset.update"))
 		}
-		return err
+		return appErrors.Internal("update dataset", err, appErrors.WithOp("repo.dataset.update"))
 	}
 	if n == 0 {
-		return evalDomain.ErrDatasetNotFound
+		return appErrors.NotFound("dataset", appErrors.WithOp("repo.dataset.update"))
 	}
 	return nil
 }
@@ -144,10 +144,10 @@ func (r *datasetRepository) Delete(ctx context.Context, id, projectID uuid.UUID)
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete dataset", err, appErrors.WithOp("repo.dataset.delete"))
 	}
 	if n == 0 {
-		return evalDomain.ErrDatasetNotFound
+		return appErrors.NotFound("dataset", appErrors.WithOp("repo.dataset.delete"))
 	}
 	return nil
 }

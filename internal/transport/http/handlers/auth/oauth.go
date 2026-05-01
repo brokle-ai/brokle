@@ -221,9 +221,8 @@ func (h *Handler) CompleteOAuthSignup(w http.ResponseWriter, r *http.Request) {
 		h.logger.ErrorContext(r.Context(),
 			"complete-oauth-signup: OAuth session missing required fields",
 			"session_id", body.SessionID)
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid OAuth session",
-			"session missing one or more required profile fields",
+		response.WriteError(w, appErrors.Conflict("oauth_session",
+			"session is missing one or more required profile fields",
 		))
 		return
 	}
@@ -256,7 +255,7 @@ func (h *Handler) CompleteOAuthSignup(w http.ResponseWriter, r *http.Request) {
 		h.logger.ErrorContext(r.Context(),
 			"complete-oauth-signup: user fetch failed after registration",
 			"email", session.Email, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		response.WriteError(w, appErrors.Internal("Failed to complete authentication", err))
 		return
 	}
 
@@ -264,7 +263,7 @@ func (h *Handler) CompleteOAuthSignup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.ErrorContext(r.Context(),
 			"complete-oauth-signup: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 
@@ -303,9 +302,8 @@ func (h *Handler) ExchangeLoginSession(w http.ResponseWriter, r *http.Request) {
 		sessionData.ExpiresIn <= 0 || sessionData.UserID == uuid.Nil {
 		h.logger.ErrorContext(r.Context(),
 			"exchange-login-session: session missing fields", "session_id", sessionID)
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid session data",
-			"login session missing required fields",
+		response.WriteError(w, appErrors.Conflict("login_session",
+			"session is missing required fields",
 		))
 		return
 	}
@@ -315,7 +313,7 @@ func (h *Handler) ExchangeLoginSession(w http.ResponseWriter, r *http.Request) {
 		h.logger.ErrorContext(r.Context(),
 			"exchange-login-session: user fetch failed",
 			"user_id", sessionData.UserID, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		response.WriteError(w, appErrors.Internal("Failed to complete authentication", err))
 		return
 	}
 
@@ -323,7 +321,7 @@ func (h *Handler) ExchangeLoginSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.ErrorContext(r.Context(),
 			"exchange-login-session: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 

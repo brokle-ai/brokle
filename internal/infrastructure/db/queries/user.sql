@@ -19,12 +19,22 @@ INSERT INTO users (
 );
 
 -- name: GetUserByID :one
-SELECT * FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE id = $1 AND deleted_at IS NULL
 LIMIT 1;
 
 -- name: GetUserByEmail :one
-SELECT * FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE email = $1 AND deleted_at IS NULL
 LIMIT 1;
 
@@ -94,7 +104,12 @@ SET is_active  = $2,
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListUsersByIDs :many
-SELECT * FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL;
 
 -- name: CountActiveUsers :one
@@ -118,7 +133,12 @@ WHERE deleted_at IS NULL
   AND created_at >= $1;
 
 -- name: ListUsersByOrganization :many
-SELECT u.* FROM users u
+SELECT u.id, u.email, u.first_name, u.last_name, u.password,
+       u.is_active, u.is_email_verified, u.email_verified_at,
+       u.timezone, u.language, u.last_login_at, u.login_count,
+       u.default_organization_id, u.created_at, u.updated_at, u.deleted_at,
+       u.role, u.referral_source, u.auth_method, u.oauth_provider, u.oauth_provider_id
+FROM users u
 JOIN organization_members om
   ON om.user_id = u.id
  AND om.deleted_at IS NULL
@@ -146,7 +166,14 @@ INSERT INTO user_profiles (
 );
 
 -- name: GetUserProfile :one
-SELECT * FROM user_profiles
+SELECT user_id, bio, location, website,
+       twitter_url, linkedin_url, github_url,
+       timezone, language, theme,
+       created_at, updated_at, avatar_url, phone,
+       email_notifications, push_notifications, marketing_emails,
+       weekly_reports, monthly_reports, security_alerts, billing_alerts,
+       usage_threshold_percent
+FROM user_profiles
 WHERE user_id = $1
 LIMIT 1;
 

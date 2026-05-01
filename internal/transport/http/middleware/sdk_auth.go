@@ -41,7 +41,7 @@ func RequireSDKAuth(d SDKAuthDeps) func(http.Handler) http.Handler {
 			apiKey := apiKeyFromRequest(r)
 			if apiKey == "" {
 				d.Logger.WarnContext(r.Context(), "sdk auth: missing API key")
-				response.WriteError(w, appErrors.NewUnauthorizedError("API key required"))
+				response.WriteError(w, appErrors.Unauthenticated("API key required"))
 				return
 			}
 

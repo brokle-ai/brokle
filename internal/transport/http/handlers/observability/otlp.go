@@ -109,7 +109,7 @@ func writeOTLPError(w http.ResponseWriter, status int, code, message, details st
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": false,
 		"error": map[string]any{
-			"type":    string(appErrors.FromHTTPStatus(status, message).Type),
+			"type":    appErrors.FromHTTPStatus(status, message).Reason.HTTPType(),
 			"code":    code,
 			"message": message,
 			"details": details,

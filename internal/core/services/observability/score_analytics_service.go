@@ -36,17 +36,17 @@ func NewScoreAnalyticsService(analyticsRepo observability.ScoreAnalyticsReposito
 
 func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observability.ScoreAnalyticsFilter) (*observability.ScoreAnalyticsResponse, error) {
 	if filter.ProjectID == uuid.Nil {
-		return nil, appErrors.NewValidationError("project_id is required", "analytics query requires a project_id")
+		return nil, appErrors.InvalidParam("project_id", "is required", appErrors.WithDetails("analytics query requires a project_id"))
 	}
 	if filter.ScoreName == "" {
-		return nil, appErrors.NewValidationError("score_name is required", "analytics query requires a score_name")
+		return nil, appErrors.InvalidParam("score_name", "is required", appErrors.WithDetails("analytics query requires a score_name"))
 	}
 
 	// Validate and default interval
 	if filter.Interval == "" {
 		filter.Interval = "day"
 	} else if !validIntervals[filter.Interval] {
-		return nil, appErrors.NewValidationError("invalid interval", "interval must be one of: hour, day, week")
+		return nil, appErrors.InvalidParam("interval", "must be one of: hour, day, week")
 	}
 
 	response := &observability.ScoreAnalyticsResponse{}
@@ -54,21 +54,21 @@ func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observ
 	stats, err := s.analyticsRepo.GetStatistics(ctx, filter)
 	if err != nil {
 		s.logger.Error("getStatistics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
-		return nil, appErrors.NewInternalError("failed to get score statistics", err)
+		return nil, appErrors.Internal("failed to get score statistics", err)
 	}
 	response.Statistics = stats
 
 	timeSeries, err := s.analyticsRepo.GetTimeSeries(ctx, filter)
 	if err != nil {
 		s.logger.Error("getTimeSeries failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
-		return nil, appErrors.NewInternalError("failed to get score time series", err)
+		return nil, appErrors.Internal("failed to get score time series", err)
 	}
 	response.TimeSeries = timeSeries
 
 	distribution, err := s.analyticsRepo.GetDistribution(ctx, filter, 10)
 	if err != nil {
 		s.logger.Error("getDistribution failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName)
-		return nil, appErrors.NewInternalError("failed to get score distribution", err)
+		return nil, appErrors.Internal("failed to get score distribution", err)
 	}
 	response.Distribution = distribution
 
@@ -76,14 +76,14 @@ func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observ
 		heatmap, err := s.analyticsRepo.GetHeatmap(ctx, filter, 10)
 		if err != nil {
 			s.logger.Error("getHeatmap failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
-			return nil, appErrors.NewInternalError("failed to get score heatmap", err)
+			return nil, appErrors.Internal("failed to get score heatmap", err)
 		}
 		response.Heatmap = heatmap
 
 		comparison, err := s.analyticsRepo.GetComparisonMetrics(ctx, filter)
 		if err != nil {
 			s.logger.Error("getComparisonMetrics failed", "error", err, "project_id", filter.ProjectID, "score_name", filter.ScoreName, "compare_score_name", *filter.CompareScoreName)
-			return nil, appErrors.NewInternalError("failed to get score comparison metrics", err)
+			return nil, appErrors.Internal("failed to get score comparison metrics", err)
 		}
 		response.Comparison = comparison
 	}
@@ -93,12 +93,12 @@ func (s *ScoreAnalyticsService) GetAnalytics(ctx context.Context, filter *observ
 
 func (s *ScoreAnalyticsService) GetDistinctScoreNames(ctx context.Context, projectID string) ([]string, error) {
 	if projectID == "" {
-		return nil, appErrors.NewValidationError("project_id is required", "score names query requires a project_id")
+		return nil, appErrors.InvalidParam("project_id", "is required", appErrors.WithDetails("score names query requires a project_id"))
 	}
 
 	names, err := s.analyticsRepo.GetDistinctScoreNames(ctx, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get distinct score names", err)
+		return nil, appErrors.Internal("failed to get distinct score names", err)
 	}
 
 	return names, nil

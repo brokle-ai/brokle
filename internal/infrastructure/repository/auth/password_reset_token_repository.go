@@ -10,6 +10,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // passwordResetTokenRepository is the pgx+sqlc implementation of
@@ -43,7 +44,7 @@ func (r *passwordResetTokenRepository) GetByID(ctx context.Context, id uuid.UUID
 	row, err := r.tm.Queries(ctx).GetPasswordResetTokenByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get password reset token: %w", authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("password_reset_token", appErrors.WithOp("repo.password_reset_token.get_by_id"))
 		}
 		return nil, fmt.Errorf("get password reset token %s: %w", id, err)
 	}
@@ -54,7 +55,7 @@ func (r *passwordResetTokenRepository) GetByToken(ctx context.Context, tokenStr 
 	row, err := r.tm.Queries(ctx).GetPasswordResetTokenByToken(ctx, tokenStr)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get password reset token: %w", authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("password_reset_token", appErrors.WithOp("repo.password_reset_token.get_by_token"))
 		}
 		return nil, fmt.Errorf("get password reset token by token: %w", err)
 	}
@@ -119,7 +120,7 @@ func (r *passwordResetTokenRepository) GetValidTokenByUserID(ctx context.Context
 	row, err := r.tm.Queries(ctx).GetValidPasswordResetTokenByUser(ctx, userID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get valid password reset token for user %s: %w", userID, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("password_reset_token", appErrors.WithOp("repo.password_reset_token.get_valid_by_user_id"))
 		}
 		return nil, fmt.Errorf("get valid password reset token for user %s: %w", userID, err)
 	}

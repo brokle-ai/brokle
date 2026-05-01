@@ -2,7 +2,6 @@ package organization
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -62,11 +61,11 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, userID uui
 
 	err := s.orgRepo.Create(ctx, org)
 	if err != nil {
-		// Repo wraps UNIQUE (slug) collisions into orgDomain.ErrAlreadyExists.
-		if errors.Is(err, orgDomain.ErrAlreadyExists) {
-			return nil, appErrors.NewConflictError("organization with this slug already exists")
+		// Repo returns appErrors.AlreadyExists("organization") on UNIQUE collision.
+		if appErrors.IsAlreadyExists(err) {
+			return nil, err
 		}
-		return nil, appErrors.NewInternalError("failed to create organization", err)
+		return nil, appErrors.Internal("failed to create organization", err)
 	}
 
 	// Provision billing with Free plan
@@ -80,12 +79,12 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, userID uui
 
 	ownerRole, err := s.roles.GetRoleByNameAndScope(ctx, "owner", authDomain.ScopeOrganization)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get owner role", err)
+		return nil, appErrors.Internal("failed to get owner role", err)
 	}
 
 	err = s.memberSvc.AddMember(ctx, org.ID, userID, ownerRole.ID, userID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to add user as organization owner", err)
+		return nil, appErrors.Internal("failed to add user as organization owner", err)
 	}
 
 	// Set as user's default organization if they don't have one
@@ -154,10 +153,10 @@ func (s *OrganizationService) GetOrganizationBySlug(ctx context.Context, slug st
 func (s *OrganizationService) UpdateOrganization(ctx context.Context, orgID uuid.UUID, req *orgDomain.UpdateOrganizationRequest) error {
 	org, err := s.orgRepo.GetByID(ctx, orgID)
 	if err != nil {
-		if errors.Is(err, orgDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("organization")
+		if appErrors.IsNotFound(err) {
+			return err
 		}
-		return appErrors.NewInternalError("failed to get organization", err)
+		return appErrors.Internal("failed to get organization", err)
 	}
 
 	if req.Name != nil {
@@ -174,7 +173,7 @@ func (s *OrganizationService) UpdateOrganization(ctx context.Context, orgID uuid
 
 	err = s.orgRepo.Update(ctx, org)
 	if err != nil {
-		return appErrors.NewInternalError("failed to update organization", err)
+		return appErrors.Internal("failed to update organization", err)
 	}
 
 	return nil
@@ -184,15 +183,15 @@ func (s *OrganizationService) DeleteOrganization(ctx context.Context, orgID uuid
 	// Verify organization exists before deletion
 	_, err := s.orgRepo.GetByID(ctx, orgID)
 	if err != nil {
-		if errors.Is(err, orgDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("organization")
+		if appErrors.IsNotFound(err) {
+			return err
 		}
-		return appErrors.NewInternalError("failed to get organization", err)
+		return appErrors.Internal("failed to get organization", err)
 	}
 
 	err = s.orgRepo.Delete(ctx, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to delete organization", err)
+		return appErrors.Internal("failed to delete organization", err)
 	}
 
 	return nil
@@ -209,14 +208,14 @@ func (s *OrganizationService) GetUserOrganizations(ctx context.Context, userID u
 func (s *OrganizationService) GetUserDefaultOrganization(ctx context.Context, userID uuid.UUID) (*orgDomain.Organization, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, userDomain.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError("user")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("user")
 		}
-		return nil, appErrors.NewInternalError("failed to get user", err)
+		return nil, appErrors.Internal("failed to get user", err)
 	}
 
 	if user.DefaultOrganizationID == nil {
-		return nil, appErrors.NewNotFoundError("user has no default organization")
+		return nil, appErrors.NotFound("default_organization", appErrors.WithMessage("user has no default organization"))
 	}
 
 	return s.orgRepo.GetByID(ctx, *user.DefaultOrganizationID)
@@ -226,10 +225,10 @@ func (s *OrganizationService) SetUserDefaultOrganization(ctx context.Context, us
 	// Verify user is member of organization using member service
 	isMember, err := s.memberSvc.IsMember(ctx, userID, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check membership", err)
+		return appErrors.Internal("failed to check membership", err)
 	}
 	if !isMember {
-		return appErrors.NewForbiddenError("user is not a member of this organization")
+		return appErrors.PermissionDenied("organization", "user is not a member of this organization")
 	}
 
 	return s.userRepo.SetDefaultOrganization(ctx, userID, orgID)

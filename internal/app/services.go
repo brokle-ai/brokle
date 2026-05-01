@@ -34,7 +34,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, repos.Organization, databases, logger)
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 	orgSvc, memberService, projectService, invitationService, settingsService :=
-		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, repos.Billing, authServices, cfg, logger)
+		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, repos.Billing, authServices, databases, cfg, logger)
 
 	// Registration orchestrates user, org, project creation atomically.
 	registrationSvc := registrationService.NewRegistrationService(

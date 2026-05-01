@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	playgroundDomain "brokle/internal/core/domain/playground"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
 )
@@ -46,7 +47,7 @@ func (r *sessionRepository) Create(ctx context.Context, s *playgroundDomain.Sess
 		UpdatedAt:   s.UpdatedAt,
 		LastUsedAt:  s.LastUsedAt,
 	}); err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return appErrors.Internal("create session", err, appErrors.WithOp("repo.playground.create"))
 	}
 	return nil
 }
@@ -55,9 +56,9 @@ func (r *sessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*playgro
 	row, err := r.tm.Queries(ctx).GetPlaygroundSessionByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get session %s: %w", id, playgroundDomain.ErrSessionNotFound)
+			return nil, appErrors.NotFound("session", appErrors.WithOp("repo.playground.get_by_id"))
 		}
-		return nil, fmt.Errorf("get session %s: %w", id, err)
+		return nil, appErrors.Internal(fmt.Sprintf("get session %s", id), err, appErrors.WithOp("repo.playground.get_by_id"))
 	}
 	return sessionFromRow(&row), nil
 }
@@ -69,7 +70,7 @@ func (r *sessionRepository) List(ctx context.Context, projectID uuid.UUID, limit
 		Limit:     int32(limit),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list sessions for project %s: %w", projectID, err)
+		return nil, appErrors.Internal(fmt.Sprintf("list sessions for project %s", projectID), err, appErrors.WithOp("repo.playground.list"))
 	}
 	return sessionsFromRows(rows), nil
 }
@@ -82,7 +83,7 @@ func (r *sessionRepository) ListByTags(ctx context.Context, projectID uuid.UUID,
 		Limit:     int32(limit),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list sessions by tags for project %s: %w", projectID, err)
+		return nil, appErrors.Internal(fmt.Sprintf("list sessions by tags for project %s", projectID), err, appErrors.WithOp("repo.playground.list_by_tags"))
 	}
 	return sessionsFromRows(rows), nil
 }
@@ -101,10 +102,10 @@ func (r *sessionRepository) Update(ctx context.Context, s *playgroundDomain.Sess
 		LastUsedAt:  s.LastUsedAt,
 	})
 	if err != nil {
-		return fmt.Errorf("update session %s: %w", s.ID, err)
+		return appErrors.Internal(fmt.Sprintf("update session %s", s.ID), err, appErrors.WithOp("repo.playground.update"))
 	}
 	if n == 0 {
-		return fmt.Errorf("update session %s: %w", s.ID, playgroundDomain.ErrSessionNotFound)
+		return appErrors.NotFound("session", appErrors.WithOp("repo.playground.update"))
 	}
 	return nil
 }
@@ -115,10 +116,10 @@ func (r *sessionRepository) UpdateLastRun(ctx context.Context, id uuid.UUID, las
 		LastRun: jsonFromPlayground(lastRun, false),
 	})
 	if err != nil {
-		return fmt.Errorf("update last run for session %s: %w", id, err)
+		return appErrors.Internal(fmt.Sprintf("update last run for session %s", id), err, appErrors.WithOp("repo.playground.update_last_run"))
 	}
 	if n == 0 {
-		return fmt.Errorf("update last run for session %s: %w", id, playgroundDomain.ErrSessionNotFound)
+		return appErrors.NotFound("session", appErrors.WithOp("repo.playground.update_last_run"))
 	}
 	return nil
 }
@@ -129,10 +130,10 @@ func (r *sessionRepository) UpdateWindows(ctx context.Context, id uuid.UUID, win
 		Windows: jsonFromPlayground(windows, false),
 	})
 	if err != nil {
-		return fmt.Errorf("update windows for session %s: %w", id, err)
+		return appErrors.Internal(fmt.Sprintf("update windows for session %s", id), err, appErrors.WithOp("repo.playground.update_windows"))
 	}
 	if n == 0 {
-		return fmt.Errorf("update windows for session %s: %w", id, playgroundDomain.ErrSessionNotFound)
+		return appErrors.NotFound("session", appErrors.WithOp("repo.playground.update_windows"))
 	}
 	return nil
 }
@@ -140,10 +141,10 @@ func (r *sessionRepository) UpdateWindows(ctx context.Context, id uuid.UUID, win
 func (r *sessionRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeletePlaygroundSession(ctx, id)
 	if err != nil {
-		return fmt.Errorf("delete session %s: %w", id, err)
+		return appErrors.Internal(fmt.Sprintf("delete session %s", id), err, appErrors.WithOp("repo.playground.delete"))
 	}
 	if n == 0 {
-		return fmt.Errorf("delete session %s: %w", id, playgroundDomain.ErrSessionNotFound)
+		return appErrors.NotFound("session", appErrors.WithOp("repo.playground.delete"))
 	}
 	return nil
 }
@@ -151,7 +152,7 @@ func (r *sessionRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *sessionRepository) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	ok, err := r.tm.Queries(ctx).PlaygroundSessionExists(ctx, id)
 	if err != nil {
-		return false, fmt.Errorf("check session exists: %w", err)
+		return false, appErrors.Internal("check session exists", err, appErrors.WithOp("repo.playground.exists"))
 	}
 	return ok, nil
 }
@@ -162,7 +163,7 @@ func (r *sessionRepository) ExistsByProjectID(ctx context.Context, id, projectID
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return false, fmt.Errorf("check session exists in project: %w", err)
+		return false, appErrors.Internal("check session exists in project", err, appErrors.WithOp("repo.playground.exists_by_project"))
 	}
 	return ok, nil
 }

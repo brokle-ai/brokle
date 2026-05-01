@@ -8,10 +8,10 @@ import {
   PendingInvitations,
   InviteMemberModal,
 } from '@/features/organizations'
-import { useHasAccess } from '@/hooks/rbac/use-has-access'
+import { useHasOrganizationAccess } from '@/hooks/rbac/use-has-organization-access'
 
 export default function OrganizationMembersPage() {
-  const canInviteMembers = useHasAccess({ scope: 'members:invite' })
+  const canInviteMembers = useHasOrganizationAccess({ scope: 'org_members:invite' })
 
   return (
     <ContentSection

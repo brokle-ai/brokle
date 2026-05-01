@@ -24,25 +24,16 @@ func ParseTimeRange(from, to, timeRangeStr string, defaultRange analytics.TimeRa
 		var parseErr error
 		fromTime, parseErr = time.Parse(time.RFC3339, from)
 		if parseErr != nil {
-			return time.Time{}, time.Time{}, appErrors.NewValidationError(
-				"Invalid 'from' date format",
-				"from must be in ISO 8601 format (e.g., 2024-01-01T00:00:00Z)",
-			)
+			return time.Time{}, time.Time{}, appErrors.InvalidParam("from", "must be in ISO 8601 format (e.g., 2024-01-01T00:00:00Z)")
 		}
 		toTime, parseErr = time.Parse(time.RFC3339, to)
 		if parseErr != nil {
-			return time.Time{}, time.Time{}, appErrors.NewValidationError(
-				"Invalid 'to' date format",
-				"to must be in ISO 8601 format (e.g., 2024-01-02T00:00:00Z)",
-			)
+			return time.Time{}, time.Time{}, appErrors.InvalidParam("to", "must be in ISO 8601 format (e.g., 2024-01-02T00:00:00Z)")
 		}
 
 		// Validate range order
 		if toTime.Before(fromTime) {
-			return time.Time{}, time.Time{}, appErrors.NewValidationError(
-				"Invalid date range",
-				"'to' must be after 'from'",
-			)
+			return time.Time{}, time.Time{}, appErrors.InvalidParam("to", "must be after 'from'")
 		}
 
 		return fromTime.UTC(), toTime.UTC(), nil
@@ -50,10 +41,7 @@ func ParseTimeRange(from, to, timeRangeStr string, defaultRange analytics.TimeRa
 
 	if from != "" || to != "" {
 		// Incomplete date range
-		return time.Time{}, time.Time{}, appErrors.NewValidationError(
-			"Incomplete date range",
-			"both 'from' and 'to' are required for custom date range",
-		)
+		return time.Time{}, time.Time{}, appErrors.InvalidParam("from", "both 'from' and 'to' are required for custom date range")
 	}
 
 	// Use predefined time range

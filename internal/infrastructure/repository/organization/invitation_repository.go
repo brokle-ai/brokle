@@ -13,6 +13,7 @@ import (
 	"brokle/internal/core/domain/shared"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/token"
 )
 
@@ -66,7 +67,7 @@ func (r *invitationRepository) GetByID(ctx context.Context, id uuid.UUID) (*orgD
 	row, err := r.tm.Queries(ctx).GetInvitationByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get invitation %s: %w", id, orgDomain.ErrInvitationNotFound)
+			return nil, appErrors.NotFound("invitation", appErrors.WithOp("repo.invitation.get_by_id"))
 		}
 		return nil, fmt.Errorf("get invitation %s: %w", id, err)
 	}
@@ -83,7 +84,7 @@ func (r *invitationRepository) GetByTokenHash(ctx context.Context, tokenHash str
 	row, err := r.tm.Queries(ctx).GetInvitationByTokenHash(ctx, tokenHash)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get invitation by token hash: %w", orgDomain.ErrInvitationNotFound)
+			return nil, appErrors.NotFound("invitation", appErrors.WithOp("repo.invitation.get_by_token_hash"))
 		}
 		return nil, fmt.Errorf("get invitation by token hash: %w", err)
 	}
@@ -149,7 +150,7 @@ func (r *invitationRepository) GetPendingByEmail(ctx context.Context, orgID uuid
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get pending invitation (org=%s email=%s): %w", orgID, email, orgDomain.ErrInvitationNotFound)
+			return nil, appErrors.NotFound("invitation", appErrors.WithOp("repo.invitation.get_pending_by_email"))
 		}
 		return nil, fmt.Errorf("get pending invitation (org=%s email=%s): %w", orgID, email, err)
 	}
@@ -223,14 +224,14 @@ func (r *invitationRepository) MarkResent(
 	row, err := r.tm.Queries(ctx).GetInvitationByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return fmt.Errorf("mark invitation %s resent: %w", id, orgDomain.ErrInvitationNotFound)
+			return appErrors.NotFound("invitation", appErrors.WithOp("repo.invitation.mark_resent"))
 		}
 		return fmt.Errorf("mark invitation %s resent: %w", id, err)
 	}
 	if int(row.ResentCount) >= maxAttempts {
-		return fmt.Errorf("mark invitation %s resent: %w", id, orgDomain.ErrInvitationResendLimit)
+		return appErrors.Conflict("invitation", "maximum invitation resend attempts reached", appErrors.WithOp("repo.invitation.mark_resent"))
 	}
-	return fmt.Errorf("mark invitation %s resent: %w", id, orgDomain.ErrInvitationResendCooldown)
+	return appErrors.RateLimit("must wait before resending invitation", appErrors.WithOp("repo.invitation.mark_resent"))
 }
 
 func (r *invitationRepository) CleanupExpiredInvitations(ctx context.Context) error {

@@ -3,8 +3,6 @@ package organization
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 
 	"github.com/google/uuid"
 
@@ -37,9 +35,10 @@ func (r *organizationSettingsRepository) Create(ctx context.Context, s *orgDomai
 		UpdatedAt:      s.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create organization_setting %s/%s: %w", s.OrganizationID, s.Key, orgDomain.ErrSettingsAlreadyExists)
+			return appErrors.AlreadyExists("organization_settings", appErrors.WithOp("repo.organization_settings.create"))
 		}
-		return fmt.Errorf("create organization_setting %s/%s: %w", s.OrganizationID, s.Key, err)
+		return appErrors.Internal("create organization_setting", err,
+			appErrors.WithOp("repo.organization_settings.create"))
 	}
 	return nil
 }
@@ -48,9 +47,10 @@ func (r *organizationSettingsRepository) GetByID(ctx context.Context, id uuid.UU
 	row, err := r.tm.Queries(ctx).GetOrganizationSettingByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get organization_setting by ID %s: %w", id, orgDomain.ErrSettingsNotFound)
+			return nil, appErrors.NotFound("organization_settings", appErrors.WithOp("repo.organization_settings.get_by_id"))
 		}
-		return nil, fmt.Errorf("get organization_setting by ID %s: %w", id, err)
+		return nil, appErrors.Internal("get organization_setting by id", err,
+			appErrors.WithOp("repo.organization_settings.get_by_id"))
 	}
 	return organizationSettingsFromRow(&row), nil
 }
@@ -62,9 +62,10 @@ func (r *organizationSettingsRepository) GetByKey(ctx context.Context, orgID uui
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get organization_setting %s/%s: %w", orgID, key, orgDomain.ErrSettingsNotFound)
+			return nil, appErrors.NotFound("organization_settings", appErrors.WithOp("repo.organization_settings.get_by_key"))
 		}
-		return nil, fmt.Errorf("get organization_setting %s/%s: %w", orgID, key, err)
+		return nil, appErrors.Internal("get organization_setting by key", err,
+			appErrors.WithOp("repo.organization_settings.get_by_key"))
 	}
 	return organizationSettingsFromRow(&row), nil
 }
@@ -75,14 +76,16 @@ func (r *organizationSettingsRepository) Update(ctx context.Context, s *orgDomai
 		Key:   s.Key,
 		Value: json.RawMessage(s.Value),
 	}); err != nil {
-		return fmt.Errorf("update organization_setting %s: %w", s.ID, err)
+		return appErrors.Internal("update organization_setting", err,
+			appErrors.WithOp("repo.organization_settings.update"))
 	}
 	return nil
 }
 
 func (r *organizationSettingsRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := r.tm.Queries(ctx).DeleteOrganizationSetting(ctx, id); err != nil {
-		return fmt.Errorf("delete organization_setting %s: %w", id, err)
+		return appErrors.Internal("delete organization_setting", err,
+			appErrors.WithOp("repo.organization_settings.delete"))
 	}
 	return nil
 }
@@ -90,7 +93,8 @@ func (r *organizationSettingsRepository) Delete(ctx context.Context, id uuid.UUI
 func (r *organizationSettingsRepository) GetAllByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*orgDomain.OrganizationSettings, error) {
 	rows, err := r.tm.Queries(ctx).ListOrganizationSettings(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("list organization_settings for org %s: %w", orgID, err)
+		return nil, appErrors.Internal("list organization_settings", err,
+			appErrors.WithOp("repo.organization_settings.list"))
 	}
 	return organizationSettingsFromRows(rows), nil
 }
@@ -120,7 +124,8 @@ func (r *organizationSettingsRepository) DeleteByKey(ctx context.Context, orgID 
 		OrganizationID: orgID,
 		Key:            key,
 	}); err != nil {
-		return fmt.Errorf("delete organization_setting %s/%s: %w", orgID, key, err)
+		return appErrors.Internal("delete organization_setting by key", err,
+			appErrors.WithOp("repo.organization_settings.delete_by_key"))
 	}
 	return nil
 }
@@ -131,7 +136,8 @@ func (r *organizationSettingsRepository) DeleteByKey(ctx context.Context, orgID 
 func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgID uuid.UUID, key string, value any) (*orgDomain.OrganizationSettings, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return nil, fmt.Errorf("marshal setting %s/%s: %w", orgID, key, err)
+		return nil, appErrors.Internal("marshal setting value", err,
+			appErrors.WithOp("repo.organization_settings.upsert"))
 	}
 	row, err := r.tm.Queries(ctx).UpsertOrganizationSetting(ctx, gen.UpsertOrganizationSettingParams{
 		ID:             mustNewSettingID(),
@@ -140,7 +146,8 @@ func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgI
 		Value:          raw,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("upsert organization_setting %s/%s: %w", orgID, key, err)
+		return nil, appErrors.Internal("upsert organization_setting", err,
+			appErrors.WithOp("repo.organization_settings.upsert"))
 	}
 	return organizationSettingsFromRow(&row), nil
 }
@@ -162,7 +169,12 @@ func (r *organizationSettingsRepository) CreateMultiple(ctx context.Context, set
 				CreatedAt:      s.CreatedAt,
 				UpdatedAt:      s.UpdatedAt,
 			}); err != nil {
-				return fmt.Errorf("create organization_setting %s/%s: %w", s.OrganizationID, s.Key, err)
+				if appErrors.IsUniqueViolation(err) {
+					return appErrors.AlreadyExists("organization_settings",
+						appErrors.WithOp("repo.organization_settings.create_multiple"))
+				}
+				return appErrors.Internal("create organization_setting", err,
+					appErrors.WithOp("repo.organization_settings.create_multiple"))
 			}
 		}
 		return nil
@@ -175,7 +187,8 @@ func (r *organizationSettingsRepository) GetByKeys(ctx context.Context, orgID uu
 		Column2:        keys,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list organization_settings by keys %s: %w", orgID, err)
+		return nil, appErrors.Internal("list organization_settings by keys", err,
+			appErrors.WithOp("repo.organization_settings.list_by_keys"))
 	}
 	return organizationSettingsFromRows(rows), nil
 }
@@ -188,7 +201,8 @@ func (r *organizationSettingsRepository) DeleteMultiple(ctx context.Context, org
 		OrganizationID: orgID,
 		Column2:        keys,
 	}); err != nil {
-		return fmt.Errorf("delete organization_settings by keys %s: %w", orgID, err)
+		return appErrors.Internal("delete organization_settings by keys", err,
+			appErrors.WithOp("repo.organization_settings.delete_by_keys"))
 	}
 	return nil
 }
@@ -222,6 +236,3 @@ func mustNewSettingID() uuid.UUID {
 	return uuid.Must(uuid.NewV7())
 }
 
-// ensure errors.Is is imported through fmt — no direct use here, kept for
-// future expansion of error classification.
-var _ = errors.Is

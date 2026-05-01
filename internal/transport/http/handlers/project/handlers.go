@@ -74,11 +74,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	// with 422 — silent ignore was exactly the bug class that produced
 	// the cross-org regression after the URL refactor.
 	if r.URL.Query().Has("organization_id") {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Unknown query parameter",
-			"organization_id is set by the URL path, not the query string",
-			appErrors.WithParam("organization_id"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("organization_id", "is set by the URL path, not the query string"))
 		return
 	}
 
@@ -164,7 +160,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.projectSvc.CreateProject(r.Context(), orgID, &organization.CreateProjectRequest{
+	p, err := h.projectSvc.CreateProject(r.Context(), orgID, userID, &organization.CreateProjectRequest{
 		Name:        body.Name,
 		Description: body.Description,
 	})

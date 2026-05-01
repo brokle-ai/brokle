@@ -522,7 +522,7 @@ func TestContractService_GetContract_NotFound(t *testing.T) {
 
 	contractID := uid.New()
 
-	contractRepo.On("GetByID", ctx, contractID).Return(nil, appErrors.NewNotFoundError("contract not found"))
+	contractRepo.On("GetByID", ctx, contractID).Return(nil, appErrors.NotFound("contract"))
 
 	// Execute
 	result, err := service.GetContract(ctx, contractID)
@@ -657,7 +657,7 @@ func TestContractService_CreateContract_MinimumDurationValidation(t *testing.T) 
 			startsAt:    "2026-01-08T10:15:00Z",
 			expiresAt:   "2026-01-09T09:15:00Z",
 			expectError: true,
-			errorMsg:    "end_date must be at least 1 day after start_date",
+			errorMsg:    "must be at least 1 day after start_date",
 		},
 		{
 			name:        "Valid: exactly 24 hours",
@@ -676,7 +676,7 @@ func TestContractService_CreateContract_MinimumDurationValidation(t *testing.T) 
 			startsAt:    "2026-01-08T10:15:00Z",
 			expiresAt:   "2026-01-08T10:15:00Z",
 			expectError: true,
-			errorMsg:    "end_date must be at least 1 day after start_date",
+			errorMsg:    "must be at least 1 day after start_date",
 		},
 	}
 

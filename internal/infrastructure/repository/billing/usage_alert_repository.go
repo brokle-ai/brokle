@@ -9,6 +9,7 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // usageAlertRepository is the pgx+sqlc implementation of
@@ -27,7 +28,7 @@ func (r *usageAlertRepository) GetByID(ctx context.Context, id uuid.UUID) (*bill
 	row, err := r.tm.Queries(ctx).GetUsageAlertByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewAlertNotFoundError(id.String())
+			return nil, appErrors.NotFound("billing_alert", appErrors.WithOp("repo.billing.alert.get_by_id"))
 		}
 		return nil, fmt.Errorf("get alert %s: %w", id, err)
 	}

@@ -2,7 +2,6 @@ package evaluation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -45,20 +44,20 @@ func (s *ExperimentService) Create(ctx context.Context, projectID uuid.UUID, req
 	if req.DatasetID != nil {
 		datasetID := *req.DatasetID
 		if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-			if errors.Is(err, evaluation.ErrDatasetNotFound) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 			}
-			return nil, appErrors.NewInternalError("failed to verify dataset", err)
+			return nil, appErrors.Internal("failed to verify dataset", err)
 		}
 		experiment.DatasetID = &datasetID
 	}
 
 	if validationErrors := experiment.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.repo.Create(ctx, experiment); err != nil {
-		return nil, appErrors.NewInternalError("failed to create experiment", err)
+		return nil, appErrors.Internal("failed to create experiment", err)
 	}
 
 	s.logger.Info("experiment created",
@@ -73,10 +72,10 @@ func (s *ExperimentService) Create(ctx context.Context, projectID uuid.UUID, req
 func (s *ExperimentService) Update(ctx context.Context, id uuid.UUID, projectID uuid.UUID, req *evaluation.UpdateExperimentRequest) (*evaluation.Experiment, error) {
 	experiment, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment", err)
+		return nil, appErrors.Internal("failed to get experiment", err)
 	}
 
 	if req.Name != nil {
@@ -109,14 +108,14 @@ func (s *ExperimentService) Update(ctx context.Context, id uuid.UUID, projectID 
 	experiment.UpdatedAt = time.Now()
 
 	if validationErrors := experiment.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.repo.Update(ctx, experiment, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to update experiment", err)
+		return nil, appErrors.Internal("failed to update experiment", err)
 	}
 
 	s.logger.Info("experiment updated",
@@ -131,17 +130,17 @@ func (s *ExperimentService) Update(ctx context.Context, id uuid.UUID, projectID 
 func (s *ExperimentService) Delete(ctx context.Context, id uuid.UUID, projectID uuid.UUID) error {
 	experiment, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return appErrors.NewInternalError("failed to get experiment", err)
+		return appErrors.Internal("failed to get experiment", err)
 	}
 
 	if err := s.repo.Delete(ctx, id, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return appErrors.NewInternalError("failed to delete experiment", err)
+		return appErrors.Internal("failed to delete experiment", err)
 	}
 
 	s.logger.Info("experiment deleted",
@@ -156,10 +155,10 @@ func (s *ExperimentService) Delete(ctx context.Context, id uuid.UUID, projectID 
 func (s *ExperimentService) GetByID(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*evaluation.Experiment, error) {
 	experiment, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment", err)
+		return nil, appErrors.Internal("failed to get experiment", err)
 	}
 	return experiment, nil
 }
@@ -168,7 +167,7 @@ func (s *ExperimentService) List(ctx context.Context, projectID uuid.UUID, filte
 	offset := (page - 1) * limit
 	experiments, total, err := s.repo.List(ctx, projectID, filter, offset, limit)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list experiments", err)
+		return nil, 0, appErrors.Internal("failed to list experiments", err)
 	}
 	return experiments, total, nil
 }
@@ -178,10 +177,10 @@ func (s *ExperimentService) Rerun(ctx context.Context, sourceID uuid.UUID, proje
 	// Get the source experiment
 	sourceExp, err := s.repo.GetByID(ctx, sourceID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", sourceID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", sourceID))
 		}
-		return nil, appErrors.NewInternalError("failed to get source experiment", err)
+		return nil, appErrors.Internal("failed to get source experiment", err)
 	}
 
 	// Generate default name if not provided: "Original Name (Re-run)"
@@ -213,11 +212,11 @@ func (s *ExperimentService) Rerun(ctx context.Context, sourceID uuid.UUID, proje
 	newExp.Metadata["source_experiment_id"] = sourceID.String()
 
 	if validationErrors := newExp.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.repo.Create(ctx, newExp); err != nil {
-		return nil, appErrors.NewInternalError("failed to create experiment", err)
+		return nil, appErrors.Internal("failed to create experiment", err)
 	}
 
 	s.logger.Info("experiment rerun created",
@@ -238,7 +237,7 @@ func (s *ExperimentService) CompareExperiments(
 	baselineID *uuid.UUID,
 ) (*evaluation.CompareExperimentsResponse, error) {
 	if len(experimentIDs) < 2 {
-		return nil, appErrors.NewValidationError("experiment_ids", "at least 2 experiments required for comparison")
+		return nil, appErrors.InvalidParam("experiment_ids", "at least 2 experiments required for comparison")
 	}
 
 	// 1. Validate all experiments exist and belong to the project
@@ -248,10 +247,10 @@ func (s *ExperimentService) CompareExperiments(
 	for i, expID := range experimentIDs {
 		exp, err := s.repo.GetByID(ctx, expID, projectID)
 		if err != nil {
-			if errors.Is(err, evaluation.ErrExperimentNotFound) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", expID))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", expID))
 			}
-			return nil, appErrors.NewInternalError("failed to get experiment", err)
+			return nil, appErrors.Internal("failed to get experiment", err)
 		}
 
 		experimentSummaries[expID.String()] = &evaluation.ExperimentSummary{
@@ -271,14 +270,14 @@ func (s *ExperimentService) CompareExperiments(
 			}
 		}
 		if !found {
-			return nil, appErrors.NewValidationError("baseline_id", "baseline must be one of the compared experiments")
+			return nil, appErrors.InvalidParam("baseline_id", "baseline must be one of the compared experiments")
 		}
 	}
 
 	// 3. Get score aggregations from ClickHouse
 	scoreAggregations, err := s.scoreRepo.GetAggregationsByExperiments(ctx, projectID.String(), experimentIDStrings)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get score aggregations", err)
+		return nil, appErrors.Internal("failed to get score aggregations", err)
 	}
 
 	// 4. Convert observability.TraceScoreAggregation to evaluation.EvaluatorScoreAggregation
@@ -335,10 +334,10 @@ func (s *ExperimentService) CompareExperiments(
 func (s *ExperimentService) GetProgress(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*evaluation.ExperimentProgressResponse, error) {
 	exp, err := s.repo.GetProgress(ctx, id, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment progress", err)
+		return nil, appErrors.Internal("failed to get experiment progress", err)
 	}
 
 	return exp.ToProgressResponse(), nil
@@ -347,14 +346,14 @@ func (s *ExperimentService) GetProgress(ctx context.Context, id uuid.UUID, proje
 // SetTotalItems sets the total number of items for an experiment.
 func (s *ExperimentService) SetTotalItems(ctx context.Context, id uuid.UUID, projectID uuid.UUID, total int) error {
 	if total < 0 {
-		return appErrors.NewValidationError("total_items", "must be non-negative")
+		return appErrors.InvalidParam("total_items", "must be non-negative")
 	}
 
 	if err := s.repo.SetTotalItems(ctx, id, projectID, total); err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return appErrors.NewInternalError("failed to set total items", err)
+		return appErrors.Internal("failed to set total items", err)
 	}
 
 	return nil
@@ -363,10 +362,10 @@ func (s *ExperimentService) SetTotalItems(ctx context.Context, id uuid.UUID, pro
 // IncrementProgress atomically increments completed and/or failed counters.
 func (s *ExperimentService) IncrementProgress(ctx context.Context, id uuid.UUID, projectID uuid.UUID, completed, failed int) error {
 	if err := s.repo.IncrementCounters(ctx, id, projectID, completed, failed); err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return appErrors.NewInternalError("failed to increment progress", err)
+		return appErrors.Internal("failed to increment progress", err)
 	}
 
 	return nil
@@ -376,10 +375,10 @@ func (s *ExperimentService) IncrementProgress(ctx context.Context, id uuid.UUID,
 func (s *ExperimentService) IncrementAndCheckCompletion(ctx context.Context, id uuid.UUID, projectID uuid.UUID, completed, failed int) (bool, error) {
 	isComplete, err := s.repo.IncrementCountersAndUpdateStatus(ctx, id, projectID, completed, failed)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return false, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		if appErrors.IsNotFound(err) {
+			return false, appErrors.NotFound(fmt.Sprintf("experiment %s", id))
 		}
-		return false, appErrors.NewInternalError("failed to increment and check completion", err)
+		return false, appErrors.Internal("failed to increment and check completion", err)
 	}
 
 	if isComplete {
@@ -398,10 +397,10 @@ func (s *ExperimentService) GetMetrics(ctx context.Context, projectID, experimen
 	// 1. Get experiment (validates existence and project ownership)
 	exp, err := s.repo.GetByID(ctx, experimentID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", experimentID))
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment", err)
+		return nil, appErrors.Internal("failed to get experiment", err)
 	}
 
 	// 2. Get score aggregations from ClickHouse (non-fatal if fails - graceful degradation)

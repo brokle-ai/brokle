@@ -90,22 +90,32 @@ type Role struct {
 	ID              uuid.UUID        `json:"id"`
 }
 
-// OrganizationMember represents user membership in an organization with a single role
+// OrganizationMember represents user membership in an organization with a single role.
+//
+// Lifecycle is single-axis via the soft-delete `deleted_at` column on
+// the `organization_members` row (set by RemoveMember, restored on
+// re-invite). The legacy per-member `status` flag (active/suspended)
+// was deleted on 2026-04-30 — it had no callers in any HTTP route or
+// CLI flow, and production peers (GitHub/GitLab/Slack/Auth0/WorkOS/
+// Clerk) all do suspension at the user level rather than per-org.
 type OrganizationMember struct {
 	JoinedAt       time.Time  `json:"joined_at"`
 	InvitedBy      *uuid.UUID `json:"invited_by,omitempty"`
 	Role           *Role      `json:"role,omitempty"`
-	Status         string     `json:"status"`
 	UserID         uuid.UUID  `json:"user_id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
 	RoleID         uuid.UUID  `json:"role_id"`
 }
 
-// ProjectMember represents user membership in a project with a single role (future)
+// ProjectMember represents user membership in a project with a single role.
+// Lifecycle is single-axis via the soft-delete `deleted_at` column on
+// the parent `organization_members` row (see OrganizationMember). The
+// project_members table itself has no lifecycle column — rows are
+// hard-deleted by ProjectMemberRepository.DeleteAllInOrgForUser when
+// the parent org membership is removed.
 type ProjectMember struct {
 	JoinedAt  time.Time `json:"joined_at"`
 	Role      *Role     `json:"role,omitempty"`
-	Status    string    `json:"status"`
 	UserID    uuid.UUID `json:"user_id"`
 	ProjectID uuid.UUID `json:"project_id"`
 	RoleID    uuid.UUID `json:"role_id"`
@@ -118,12 +128,6 @@ const (
 	ScopeProject      = "project"      // Project-specific roles
 )
 
-// Membership status constants
-const (
-	MemberStatusActive    = "active"
-	MemberStatusInvited   = "invited"
-	MemberStatusSuspended = "suspended"
-)
 
 // Helper methods for scoped roles
 func (r *Role) IsSystemRole() bool {
@@ -156,36 +160,6 @@ func (r *Role) GetScopeDisplay() string {
 	default:
 		return "Unknown"
 	}
-}
-
-// Helper methods for organization membership
-func (m *OrganizationMember) IsActive() bool {
-	return m.Status == MemberStatusActive
-}
-
-func (m *OrganizationMember) IsInvited() bool {
-	return m.Status == MemberStatusInvited
-}
-
-func (m *OrganizationMember) IsSuspended() bool {
-	return m.Status == MemberStatusSuspended
-}
-
-func (m *OrganizationMember) Activate() {
-	m.Status = MemberStatusActive
-}
-
-func (m *OrganizationMember) Suspend() {
-	m.Status = MemberStatusSuspended
-}
-
-// Helper methods for project membership
-func (m *ProjectMember) IsActive() bool {
-	return m.Status == MemberStatusActive
-}
-
-func (m *ProjectMember) Activate() {
-	m.Status = MemberStatusActive
 }
 
 // ScopeLevel defines where a scope applies in the hierarchy
@@ -474,7 +448,6 @@ func NewOrganizationMember(userID, organizationID, roleID uuid.UUID, invitedBy *
 		UserID:         userID,
 		OrganizationID: organizationID,
 		RoleID:         roleID,
-		Status:         MemberStatusActive,
 		JoinedAt:       time.Now(),
 		InvitedBy:      invitedBy,
 	}
@@ -485,7 +458,6 @@ func NewProjectMember(userID, projectID, roleID uuid.UUID) *ProjectMember {
 		UserID:    userID,
 		ProjectID: projectID,
 		RoleID:    roleID,
-		Status:    MemberStatusActive,
 		JoinedAt:  time.Now(),
 	}
 }

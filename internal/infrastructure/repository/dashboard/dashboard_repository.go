@@ -10,6 +10,7 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	dashboardDomain "brokle/internal/core/domain/dashboard"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
 )
@@ -25,7 +26,7 @@ func NewDashboardRepository(tm *db.TxManager) dashboardDomain.DashboardRepositor
 func (r *dashboardRepository) Create(ctx context.Context, d *dashboardDomain.Dashboard) error {
 	cfg, layout, err := marshalDashboardContent(&d.Config, d.Layout)
 	if err != nil {
-		return fmt.Errorf("create dashboard: %w", err)
+		return appErrors.Internal("marshal dashboard content", err, appErrors.WithOp("repo.dashboard.create"))
 	}
 	if err := r.tm.Queries(ctx).CreateDashboard(ctx, gen.CreateDashboardParams{
 		ID:          d.ID,
@@ -37,7 +38,10 @@ func (r *dashboardRepository) Create(ctx context.Context, d *dashboardDomain.Das
 		IsLocked:    d.IsLocked,
 		CreatedBy:   d.CreatedBy,
 	}); err != nil {
-		return fmt.Errorf("create dashboard: %w", err)
+		if appErrors.IsUniqueViolation(err) {
+			return appErrors.AlreadyExists("dashboard", appErrors.WithOp("repo.dashboard.create"), appErrors.WithCause(err))
+		}
+		return appErrors.Internal("create dashboard", err, appErrors.WithOp("repo.dashboard.create"))
 	}
 	return nil
 }
@@ -46,9 +50,9 @@ func (r *dashboardRepository) GetByID(ctx context.Context, id uuid.UUID) (*dashb
 	row, err := r.tm.Queries(ctx).GetDashboardByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get dashboard by ID %s: %w", id, dashboardDomain.ErrDashboardNotFound)
+			return nil, appErrors.NotFound("dashboard", appErrors.WithOp("repo.dashboard.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal(fmt.Sprintf("get dashboard %s", id), err, appErrors.WithOp("repo.dashboard.get_by_id"))
 	}
 	return dashboardFromRow(&row)
 }
@@ -57,7 +61,7 @@ func (r *dashboardRepository) Update(ctx context.Context, d *dashboardDomain.Das
 	d.UpdatedAt = time.Now()
 	cfg, layout, err := marshalDashboardContent(&d.Config, d.Layout)
 	if err != nil {
-		return fmt.Errorf("update dashboard: %w", err)
+		return appErrors.Internal("marshal dashboard content", err, appErrors.WithOp("repo.dashboard.update"))
 	}
 	if err := r.tm.Queries(ctx).UpdateDashboard(ctx, gen.UpdateDashboardParams{
 		ID:          d.ID,
@@ -67,7 +71,10 @@ func (r *dashboardRepository) Update(ctx context.Context, d *dashboardDomain.Das
 		Layout:      layout,
 		IsLocked:    d.IsLocked,
 	}); err != nil {
-		return fmt.Errorf("update dashboard: %w", err)
+		if appErrors.IsUniqueViolation(err) {
+			return appErrors.AlreadyExists("dashboard", appErrors.WithOp("repo.dashboard.update"), appErrors.WithCause(err))
+		}
+		return appErrors.Internal("update dashboard", err, appErrors.WithOp("repo.dashboard.update"))
 	}
 	return nil
 }
@@ -76,7 +83,7 @@ func (r *dashboardRepository) Update(ctx context.Context, d *dashboardDomain.Das
 // — explicit SQL soft-delete via deleted_at.
 func (r *dashboardRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := r.tm.Queries(ctx).SoftDeleteDashboard(ctx, id); err != nil {
-		return fmt.Errorf("delete dashboard: %w", err)
+		return appErrors.Internal("delete dashboard", err, appErrors.WithOp("repo.dashboard.delete"))
 	}
 	return nil
 }
@@ -92,9 +99,9 @@ func (r *dashboardRepository) GetByNameAndProject(ctx context.Context, projectID
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get dashboard by name %s: %w", name, dashboardDomain.ErrDashboardNotFound)
+			return nil, appErrors.NotFound("dashboard", appErrors.WithOp("repo.dashboard.get_by_name_and_project"))
 		}
-		return nil, err
+		return nil, appErrors.Internal(fmt.Sprintf("get dashboard by name %s", name), err, appErrors.WithOp("repo.dashboard.get_by_name_and_project"))
 	}
 	return dashboardFromRow(&row)
 }
@@ -102,7 +109,7 @@ func (r *dashboardRepository) GetByNameAndProject(ctx context.Context, projectID
 func (r *dashboardRepository) CountByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
 	n, err := r.tm.Queries(ctx).CountDashboardsByProject(ctx, projectID)
 	if err != nil {
-		return 0, err
+		return 0, appErrors.Internal("count dashboards by project", err, appErrors.WithOp("repo.dashboard.count_by_project"))
 	}
 	return n, nil
 }
@@ -126,11 +133,11 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 	cntSQL, cntArgs, err := sq.Select("COUNT(*)").From("dashboards").Where(whereSQL, whereArgs...).
 		PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
-		return nil, 0, fmt.Errorf("build dashboard count query: %w", err)
+		return nil, 0, appErrors.Internal("build dashboard count query", err, appErrors.WithOp("repo.dashboard.list"))
 	}
 	var total int64
 	if err := r.tm.DB(ctx).QueryRow(ctx, cntSQL, cntArgs...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count dashboards: %w", err)
+		return nil, 0, appErrors.Internal("count dashboards", err, appErrors.WithOp("repo.dashboard.list"))
 	}
 
 	selSQL, selArgs, err := sq.Select(
@@ -142,12 +149,12 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 		Limit(uint64(limit)).Offset(uint64(offset)).
 		PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
-		return nil, 0, fmt.Errorf("build dashboard list query: %w", err)
+		return nil, 0, appErrors.Internal("build dashboard list query", err, appErrors.WithOp("repo.dashboard.list"))
 	}
 
 	rows, err := r.tm.DB(ctx).Query(ctx, selSQL, selArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list dashboards: %w", err)
+		return nil, 0, appErrors.Internal("list dashboards", err, appErrors.WithOp("repo.dashboard.list"))
 	}
 	defer rows.Close()
 	out := make([]*dashboardDomain.Dashboard, 0)
@@ -164,19 +171,22 @@ func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid
 			&cfgRaw, &layoutRaw, &d.CreatedBy,
 			&d.CreatedAt, &d.UpdatedAt, &deletedAt, &d.IsLocked,
 		); err != nil {
-			return nil, 0, fmt.Errorf("scan dashboard row: %w", err)
+			return nil, 0, appErrors.Internal("scan dashboard row", err, appErrors.WithOp("repo.dashboard.list"))
 		}
 		if description != nil {
 			d.Description = *description
 		}
 		if err := unmarshalDashboardContent(cfgRaw, layoutRaw, &d.Config, &d.Layout); err != nil {
-			return nil, 0, err
+			return nil, 0, appErrors.Internal("decode dashboard content", err, appErrors.WithOp("repo.dashboard.list"))
 		}
 		d.DeletedAt = deletedAt
 		out = append(out, &d)
 	}
 
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, appErrors.Internal("iterate dashboard rows", err, appErrors.WithOp("repo.dashboard.list"))
+	}
+	return out, total, nil
 }
 
 // buildDashboardFilter returns a sqlizer-ready WHERE clause + args.

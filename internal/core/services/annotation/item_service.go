@@ -3,7 +3,6 @@ package annotation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -61,15 +60,12 @@ func (s *ItemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return 0, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return 0, appErrors.NewInternalError("failed to get annotation queue", err)
+		return 0, err
 	}
 
 	// Check queue is active
 	if queue.Status == annotation.QueueStatusArchived {
-		return 0, appErrors.NewBadRequestError("cannot add items to an archived queue", "queue is archived")
+		return 0, appErrors.Conflict("annotation_queue", "cannot add items to an archived queue")
 	}
 
 	// Create items
@@ -82,7 +78,7 @@ func (s *ItemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID
 		}
 
 		if validationErrors := item.Validate(); len(validationErrors) > 0 {
-			return 0, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+			return 0, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 		}
 
 		items = append(items, item)
@@ -91,7 +87,7 @@ func (s *ItemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID
 	// Batch create with duplicate handling (ON CONFLICT DO NOTHING)
 	createdCount, err := s.itemRepo.CreateBatch(ctx, items)
 	if err != nil {
-		return 0, appErrors.NewInternalError("failed to add items to queue", err)
+		return 0, appErrors.Internal("failed to add items to queue", err)
 	}
 
 	s.logger.Info("items added to annotation queue",
@@ -107,17 +103,13 @@ func (s *ItemService) AddItems(ctx context.Context, queueID, projectID uuid.UUID
 // ListItems retrieves items in a queue with optional filtering and pagination.
 func (s *ItemService) ListItems(ctx context.Context, queueID, projectID uuid.UUID, filter *annotation.ItemFilter) ([]*annotation.QueueItem, int64, error) {
 	// Verify queue exists and belongs to project
-	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
-	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return nil, 0, appErrors.NewInternalError("failed to get annotation queue", err)
+	if _, err := s.queueRepo.GetByID(ctx, queueID, projectID); err != nil {
+		return nil, 0, err
 	}
 
 	items, total, err := s.itemRepo.List(ctx, queueID, filter)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list queue items", err)
+		return nil, 0, appErrors.Internal("failed to list queue items", err)
 	}
 
 	return items, total, nil
@@ -129,15 +121,12 @@ func (s *ItemService) ClaimNext(ctx context.Context, queueID, projectID, userID 
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return nil, appErrors.NewInternalError("failed to get annotation queue", err)
+		return nil, err
 	}
 
 	// Check queue is active
 	if queue.Status != annotation.QueueStatusActive {
-		return nil, appErrors.NewBadRequestError(fmt.Sprintf("cannot claim items from %s queue", queue.Status), "queue is not active")
+		return nil, appErrors.Conflict("annotation_queue", fmt.Sprintf("cannot claim items from %s queue: queue is not active", queue.Status))
 	}
 
 	// Fetch and lock the next available item within a transaction.
@@ -151,10 +140,10 @@ func (s *ItemService) ClaimNext(ctx context.Context, queueID, projectID, userID 
 	})
 
 	if err != nil {
-		if errors.Is(err, annotation.ErrNoItemsAvailable) {
-			return nil, appErrors.NewNotFoundError("no items available for annotation")
-		}
-		return nil, appErrors.NewInternalError("failed to claim next item", err)
+		// Repo returns self-describing *appErrors.Error
+		// (Reason=NotFound with Message="no items available for annotation"
+		// when the queue is empty; Reason=Internal otherwise). Passthrough.
+		return nil, err
 	}
 
 	s.logger.Info("item claimed for annotation",
@@ -173,33 +162,30 @@ func (s *ItemService) Complete(ctx context.Context, itemID, queueID, projectID, 
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return appErrors.NewInternalError("failed to get annotation queue", err)
+		return err
 	}
 
 	// Get the item
 	item, err := s.itemRepo.GetByIDForQueue(ctx, itemID, queueID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrItemNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("queue item %s", itemID))
-		}
-		return appErrors.NewInternalError("failed to get queue item", err)
+		return err
 	}
 
-	// Verify item status
+	// Verify item status — state-machine rejections are Conflict, not
+	// InvalidParam (the latter is for malformed wire fields, see
+	// internal/CLAUDE.md error taxonomy + line 413's existing
+	// Conflict("annotation_item", ...) precedent).
 	if item.Status == annotation.ItemStatusCompleted {
-		return appErrors.NewBadRequestError("item is already completed", "status is completed")
+		return appErrors.Conflict("annotation_item", "item is already completed")
 	}
 	if item.Status == annotation.ItemStatusSkipped {
-		return appErrors.NewBadRequestError("item was skipped and cannot be completed", "status is skipped")
+		return appErrors.Conflict("annotation_item", "item was skipped and cannot be completed")
 	}
 
 	// Verify user holds the lock (or lock expired and they can complete anyway)
 	lockDuration := queue.GetLockDuration()
 	if item.IsLocked(lockDuration) && !item.IsLockedBy(userID, lockDuration) {
-		return appErrors.NewForbiddenError("item is locked by another user")
+		return appErrors.PermissionDenied("", "item is locked by another user")
 	}
 
 	// Submit scores to ClickHouse if any were provided
@@ -218,7 +204,7 @@ func (s *ItemService) Complete(ctx context.Context, itemID, queueID, projectID, 
 
 	// Mark as completed
 	if err := s.itemRepo.Complete(ctx, itemID, userID); err != nil {
-		return appErrors.NewInternalError("failed to complete item", err)
+		return appErrors.Internal("failed to complete item", err)
 	}
 
 	s.logger.Info("item completed",
@@ -368,38 +354,33 @@ func (s *ItemService) Skip(ctx context.Context, itemID, queueID, projectID, user
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return appErrors.NewInternalError("failed to get annotation queue", err)
+		return err
 	}
 
 	// Get the item
 	item, err := s.itemRepo.GetByIDForQueue(ctx, itemID, queueID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrItemNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("queue item %s", itemID))
-		}
-		return appErrors.NewInternalError("failed to get queue item", err)
+		return err
 	}
 
-	// Verify item status
+	// Verify item status — state-machine rejections are Conflict, not
+	// InvalidParam.
 	if item.Status == annotation.ItemStatusCompleted {
-		return appErrors.NewBadRequestError("item is already completed", "status is completed")
+		return appErrors.Conflict("annotation_item", "item is already completed")
 	}
 	if item.Status == annotation.ItemStatusSkipped {
-		return appErrors.NewBadRequestError("item is already skipped", "status is skipped")
+		return appErrors.Conflict("annotation_item", "item is already skipped")
 	}
 
 	// Verify user holds the lock (or lock expired and they can skip anyway)
 	lockDuration := queue.GetLockDuration()
 	if item.IsLocked(lockDuration) && !item.IsLockedBy(userID, lockDuration) {
-		return appErrors.NewForbiddenError("item is locked by another user")
+		return appErrors.PermissionDenied("", "item is locked by another user")
 	}
 
 	// Mark as skipped
 	if err := s.itemRepo.Skip(ctx, itemID, userID); err != nil {
-		return appErrors.NewInternalError("failed to skip item", err)
+		return appErrors.Internal("failed to skip item", err)
 	}
 
 	reason := ""
@@ -422,39 +403,33 @@ func (s *ItemService) ReleaseLock(ctx context.Context, itemID, queueID, projectI
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return appErrors.NewInternalError("failed to get annotation queue", err)
+		return err
 	}
 
 	// Get the item
 	item, err := s.itemRepo.GetByIDForQueue(ctx, itemID, queueID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrItemNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("queue item %s", itemID))
-		}
-		return appErrors.NewInternalError("failed to get queue item", err)
+		return err
 	}
 
 	// Verify item is pending and locked
 	if item.Status != annotation.ItemStatusPending {
-		return appErrors.NewBadRequestError("cannot release lock on completed or skipped item", "status is not pending")
+		return appErrors.Conflict("annotation_item", "cannot release lock on completed or skipped item")
 	}
 
 	lockDuration := queue.GetLockDuration()
 	if !item.IsLocked(lockDuration) {
-		return appErrors.NewBadRequestError("item is not currently locked", "no active lock")
+		return appErrors.Conflict("annotation_item", "item is not currently locked")
 	}
 
 	// Verify user holds the lock
 	if !item.IsLockedBy(userID, lockDuration) {
-		return appErrors.NewForbiddenError("item is locked by another user")
+		return appErrors.PermissionDenied("", "item is locked by another user")
 	}
 
 	// Release the lock
 	if err := s.itemRepo.ReleaseLock(ctx, itemID); err != nil {
-		return appErrors.NewInternalError("failed to release lock", err)
+		return appErrors.Internal("failed to release lock", err)
 	}
 
 	s.logger.Info("item lock released",
@@ -469,20 +444,13 @@ func (s *ItemService) ReleaseLock(ctx context.Context, itemID, queueID, projectI
 // DeleteItem removes an item from the queue.
 func (s *ItemService) DeleteItem(ctx context.Context, itemID, queueID, projectID uuid.UUID) error {
 	// Verify queue exists and belongs to project
-	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
-	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return appErrors.NewInternalError("failed to get annotation queue", err)
+	if _, err := s.queueRepo.GetByID(ctx, queueID, projectID); err != nil {
+		return err
 	}
 
 	// Delete the item
 	if err := s.itemRepo.Delete(ctx, itemID, queueID); err != nil {
-		if errors.Is(err, annotation.ErrItemNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("queue item %s", itemID))
-		}
-		return appErrors.NewInternalError("failed to delete queue item", err)
+		return err
 	}
 
 	s.logger.Info("queue item deleted",
@@ -499,15 +467,12 @@ func (s *ItemService) GetStats(ctx context.Context, queueID, projectID uuid.UUID
 	// Verify queue exists and belongs to project
 	queue, err := s.queueRepo.GetByID(ctx, queueID, projectID)
 	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return nil, appErrors.NewInternalError("failed to get annotation queue", err)
+		return nil, err
 	}
 
 	stats, err := s.itemRepo.GetStats(ctx, queueID, queue.Settings.LockTimeoutSeconds)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get queue stats", err)
+		return nil, appErrors.Internal("failed to get queue stats", err)
 	}
 
 	return stats, nil

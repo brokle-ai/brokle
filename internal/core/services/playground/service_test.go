@@ -89,12 +89,12 @@ func (m *MockSessionRepository) ExistsByProjectID(ctx context.Context, sessionID
 // Test Helpers
 // ============================================================================
 
-func assertAppErrorType(t *testing.T, err error, expectedType appErrors.ErrorType) {
+func assertAppErrorType(t *testing.T, err error, expectedReason appErrors.Reason) {
 	t.Helper()
-	appErr, ok := appErrors.IsAppError(err)
-	assert.True(t, ok, "expected AppError but got: %v", err)
-	if ok {
-		assert.Equal(t, expectedType, appErr.Type, "expected error type %s but got %s", expectedType, appErr.Type)
+	e := appErrors.As(err)
+	assert.NotNil(t, e, "expected *Error but got: %v", err)
+	if e != nil {
+		assert.Equal(t, expectedReason, e.Reason, "expected reason %s but got %s", expectedReason, e.Reason)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 		request         *playgroundDomain.CreatePlaygroundSessionRequest
 		mockSetup       func(*MockSessionRepository)
 		expectErr       bool
-		expectedErrType appErrors.ErrorType
+		expectedErrType appErrors.Reason
 		checkResult     func(*testing.T, *playgroundDomain.SessionResponse)
 	}{
 		{
@@ -152,7 +152,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 			},
 			mockSetup:       func(repo *MockSessionRepository) {},
 			expectErr:       true,
-			expectedErrType: appErrors.TypeValidation,
+			expectedErrType: appErrors.ReasonInvalidInput,
 			checkResult:     nil,
 		},
 		{
@@ -164,7 +164,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 			},
 			mockSetup:       func(repo *MockSessionRepository) {},
 			expectErr:       true,
-			expectedErrType: appErrors.TypeValidation,
+			expectedErrType: appErrors.ReasonInvalidInput,
 			checkResult:     nil,
 		},
 		{
@@ -177,7 +177,7 @@ func TestPlaygroundService_CreateSession(t *testing.T) {
 			},
 			mockSetup:       func(repo *MockSessionRepository) {},
 			expectErr:       true,
-			expectedErrType: appErrors.TypeValidation,
+			expectedErrType: appErrors.ReasonInvalidInput,
 			checkResult:     nil,
 		},
 	}
@@ -220,7 +220,7 @@ func TestPlaygroundService_UpdateSession(t *testing.T) {
 		request         *playgroundDomain.UpdateSessionRequest
 		mockSetup       func(*MockSessionRepository)
 		expectErr       bool
-		expectedErrType appErrors.ErrorType
+		expectedErrType appErrors.Reason
 		checkResult     func(*testing.T, *playgroundDomain.SessionResponse)
 	}{
 		{
@@ -261,10 +261,10 @@ func TestPlaygroundService_UpdateSession(t *testing.T) {
 				Name:      stringPtr("Updated Name"),
 			},
 			mockSetup: func(repo *MockSessionRepository) {
-				repo.On("GetByID", mock.Anything, sessionID).Return(nil, playgroundDomain.ErrSessionNotFound)
+				repo.On("GetByID", mock.Anything, sessionID).Return(nil, appErrors.NotFound("session"))
 			},
 			expectErr:       true,
-			expectedErrType: appErrors.TypeNotFound,
+			expectedErrType: appErrors.ReasonNotFound,
 			checkResult:     nil,
 		},
 		{
@@ -287,7 +287,7 @@ func TestPlaygroundService_UpdateSession(t *testing.T) {
 				repo.On("GetByID", mock.Anything, sessionID).Return(session, nil)
 			},
 			expectErr:       true,
-			expectedErrType: appErrors.TypeValidation,
+			expectedErrType: appErrors.ReasonInvalidInput,
 			checkResult:     nil,
 		},
 	}

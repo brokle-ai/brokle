@@ -9,6 +9,7 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	dashboardDomain "brokle/internal/core/domain/dashboard"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
 )
@@ -44,11 +45,11 @@ func (r *templateRepository) List(ctx context.Context, filter *dashboardDomain.T
 
 	sqlStr, args, err := b.PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("build template list query: %w", err)
+		return nil, appErrors.Internal("build template list query", err, appErrors.WithOp("repo.dashboard_template.list"))
 	}
 	rows, err := r.tm.DB(ctx).Query(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list templates: %w", err)
+		return nil, appErrors.Internal("list templates", err, appErrors.WithOp("repo.dashboard_template.list"))
 	}
 	defer rows.Close()
 	out := make([]*dashboardDomain.Template, 0)
@@ -64,26 +65,29 @@ func (r *templateRepository) List(ctx context.Context, filter *dashboardDomain.T
 			&cfgRaw, &layoutRaw, &t.IsActive,
 			&t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan template row: %w", err)
+			return nil, appErrors.Internal("scan template row", err, appErrors.WithOp("repo.dashboard_template.list"))
 		}
 		if description != nil {
 			t.Description = *description
 		}
 		if err := unmarshalDashboardContent(cfgRaw, layoutRaw, &t.Config, &t.Layout); err != nil {
-			return nil, err
+			return nil, appErrors.Internal("decode template content", err, appErrors.WithOp("repo.dashboard_template.list"))
 		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, appErrors.Internal("iterate template rows", err, appErrors.WithOp("repo.dashboard_template.list"))
+	}
+	return out, nil
 }
 
 func (r *templateRepository) GetByID(ctx context.Context, id uuid.UUID) (*dashboardDomain.Template, error) {
 	row, err := r.tm.Queries(ctx).GetDashboardTemplateByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get template by ID %s: %w", id, dashboardDomain.ErrTemplateNotFound)
+			return nil, appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.get_by_id"))
 		}
-		return nil, fmt.Errorf("get template by ID %s: %w", id, err)
+		return nil, appErrors.Internal(fmt.Sprintf("get template %s", id), err, appErrors.WithOp("repo.dashboard_template.get_by_id"))
 	}
 	return templateFromRow(&row)
 }
@@ -92,9 +96,9 @@ func (r *templateRepository) GetByName(ctx context.Context, name string) (*dashb
 	row, err := r.tm.Queries(ctx).GetDashboardTemplateByName(ctx, name)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get template by name %s: %w", name, dashboardDomain.ErrTemplateNotFound)
+			return nil, appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.get_by_name"))
 		}
-		return nil, fmt.Errorf("get template by name %s: %w", name, err)
+		return nil, appErrors.Internal(fmt.Sprintf("get template by name %s", name), err, appErrors.WithOp("repo.dashboard_template.get_by_name"))
 	}
 	return templateFromRow(&row)
 }
@@ -103,9 +107,9 @@ func (r *templateRepository) GetByCategory(ctx context.Context, category dashboa
 	row, err := r.tm.Queries(ctx).GetActiveDashboardTemplateByCategory(ctx, string(category))
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get template by category %s: %w", category, dashboardDomain.ErrTemplateNotFound)
+			return nil, appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.get_by_category"))
 		}
-		return nil, fmt.Errorf("get template by category %s: %w", category, err)
+		return nil, appErrors.Internal(fmt.Sprintf("get template by category %s", category), err, appErrors.WithOp("repo.dashboard_template.get_by_category"))
 	}
 	return templateFromRow(&row)
 }
@@ -113,7 +117,7 @@ func (r *templateRepository) GetByCategory(ctx context.Context, category dashboa
 func (r *templateRepository) Create(ctx context.Context, t *dashboardDomain.Template) error {
 	cfg, layout, err := marshalDashboardContent(&t.Config, t.Layout)
 	if err != nil {
-		return fmt.Errorf("create template: %w", err)
+		return appErrors.Internal("marshal template content", err, appErrors.WithOp("repo.dashboard_template.create"))
 	}
 	if err := r.tm.Queries(ctx).CreateDashboardTemplate(ctx, gen.CreateDashboardTemplateParams{
 		ID:          t.ID,
@@ -124,7 +128,10 @@ func (r *templateRepository) Create(ctx context.Context, t *dashboardDomain.Temp
 		Layout:      layout,
 		IsActive:    t.IsActive,
 	}); err != nil {
-		return fmt.Errorf("create template: %w", err)
+		if appErrors.IsUniqueViolation(err) {
+			return appErrors.AlreadyExists("dashboard_template", appErrors.WithOp("repo.dashboard_template.create"), appErrors.WithCause(err))
+		}
+		return appErrors.Internal("create template", err, appErrors.WithOp("repo.dashboard_template.create"))
 	}
 	return nil
 }
@@ -132,7 +139,7 @@ func (r *templateRepository) Create(ctx context.Context, t *dashboardDomain.Temp
 func (r *templateRepository) Update(ctx context.Context, t *dashboardDomain.Template) error {
 	cfg, layout, err := marshalDashboardContent(&t.Config, t.Layout)
 	if err != nil {
-		return fmt.Errorf("update template: %w", err)
+		return appErrors.Internal("marshal template content", err, appErrors.WithOp("repo.dashboard_template.update"))
 	}
 	if err := r.tm.Queries(ctx).UpdateDashboardTemplate(ctx, gen.UpdateDashboardTemplateParams{
 		ID:          t.ID,
@@ -143,7 +150,10 @@ func (r *templateRepository) Update(ctx context.Context, t *dashboardDomain.Temp
 		Layout:      layout,
 		IsActive:    t.IsActive,
 	}); err != nil {
-		return fmt.Errorf("update template: %w", err)
+		if appErrors.IsUniqueViolation(err) {
+			return appErrors.AlreadyExists("dashboard_template", appErrors.WithOp("repo.dashboard_template.update"), appErrors.WithCause(err))
+		}
+		return appErrors.Internal("update template", err, appErrors.WithOp("repo.dashboard_template.update"))
 	}
 	return nil
 }
@@ -151,10 +161,10 @@ func (r *templateRepository) Update(ctx context.Context, t *dashboardDomain.Temp
 func (r *templateRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).DeleteDashboardTemplate(ctx, id)
 	if err != nil {
-		return fmt.Errorf("delete template: %w", err)
+		return appErrors.Internal("delete template", err, appErrors.WithOp("repo.dashboard_template.delete"))
 	}
 	if n == 0 {
-		return dashboardDomain.ErrTemplateNotFound
+		return appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.delete"))
 	}
 	return nil
 }
@@ -162,7 +172,7 @@ func (r *templateRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *templateRepository) Upsert(ctx context.Context, t *dashboardDomain.Template) error {
 	cfg, layout, err := marshalDashboardContent(&t.Config, t.Layout)
 	if err != nil {
-		return fmt.Errorf("upsert template: %w", err)
+		return appErrors.Internal("marshal template content", err, appErrors.WithOp("repo.dashboard_template.upsert"))
 	}
 	if err := r.tm.Queries(ctx).UpsertDashboardTemplateByName(ctx, gen.UpsertDashboardTemplateByNameParams{
 		ID:          t.ID,
@@ -173,7 +183,7 @@ func (r *templateRepository) Upsert(ctx context.Context, t *dashboardDomain.Temp
 		Layout:      layout,
 		IsActive:    t.IsActive,
 	}); err != nil {
-		return fmt.Errorf("upsert template: %w", err)
+		return appErrors.Internal("upsert template", err, appErrors.WithOp("repo.dashboard_template.upsert"))
 	}
 	return nil
 }
@@ -191,7 +201,7 @@ func templateFromRow(row *gen.DashboardTemplate) (*dashboardDomain.Template, err
 		t.Description = *row.Description
 	}
 	if err := unmarshalDashboardContent(row.Config, row.Layout, &t.Config, &t.Layout); err != nil {
-		return nil, err
+		return nil, appErrors.Internal("decode template content", err, appErrors.WithOp("repo.dashboard_template.from_row"))
 	}
 	return t, nil
 }

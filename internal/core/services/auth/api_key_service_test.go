@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -65,6 +64,22 @@ func noopLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// errorReason returns the Reason of a wrapped *Error.
+func errorReason(err error) (appErrors.Reason, bool) {
+	if e := appErrors.As(err); e != nil {
+		return e.Reason, true
+	}
+	return 0, false
+}
+
+// errorMessage extracts the public message from a wrapped *Error.
+func errorMessage(err error) string {
+	if e := appErrors.As(err); e != nil {
+		return e.PublicMessage()
+	}
+	return ""
+}
+
 func newServiceUnderTest(repo *stubAPIKeyRepo) *APIKeyService {
 	return &APIKeyService{
 		apiKeyRepo: repo,
@@ -81,7 +96,7 @@ func newServiceUnderTest(repo *stubAPIKeyRepo) *APIKeyService {
 func TestGetAPIKey_WrapsErrAPIKeyNotFound_To404AppError(t *testing.T) {
 	repo := &stubAPIKeyRepo{
 		// Mirror the exact wrap shape used by api_key_repository.go:GetByID.
-		getByIDErr: fmt.Errorf("get api_key by ID xxx: %w", authDomain.ErrAPIKeyNotFound),
+		getByIDErr: appErrors.NotFound("api_key"),
 	}
 	svc := newServiceUnderTest(repo)
 
@@ -89,12 +104,12 @@ func TestGetAPIKey_WrapsErrAPIKeyNotFound_To404AppError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T: %v", err, err)
+		t.Fatalf("expected typed error, got %T: %v", err, err)
 	}
-	if appErr.Type != appErrors.TypeNotFound {
-		t.Errorf("expected Type=%q, got %q", appErrors.TypeNotFound, appErr.Type)
+	if gotType != appErrors.ReasonNotFound {
+		t.Errorf("expected Type=%q, got %q", appErrors.ReasonNotFound, gotType)
 	}
 }
 
@@ -107,46 +122,46 @@ func TestGetAPIKey_WrapsOtherError_ToInternalError(t *testing.T) {
 	svc := newServiceUnderTest(repo)
 
 	_, err := svc.GetAPIKey(context.Background(), uuid.New())
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T", err)
+		t.Fatalf("expected typed error, got %T", err)
 	}
-	if appErr.Type != appErrors.TypeAPIError {
-		t.Errorf("expected Type=%q, got %q", appErrors.TypeAPIError, appErr.Type)
+	if gotType != appErrors.ReasonInternal {
+		t.Errorf("expected Type=%q, got %q", appErrors.ReasonInternal, gotType)
 	}
 }
 
 // TestGetAPIKeyContext_NotFound_Returns404 covers the second buggy site from P2.
 func TestGetAPIKeyContext_NotFound_Returns404(t *testing.T) {
 	repo := &stubAPIKeyRepo{
-		getByIDErr: fmt.Errorf("get api_key by ID xxx: %w", authDomain.ErrAPIKeyNotFound),
+		getByIDErr: appErrors.NotFound("api_key"),
 	}
 	svc := newServiceUnderTest(repo)
 
 	_, err := svc.GetAPIKeyContext(context.Background(), uuid.New())
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T", err)
+		t.Fatalf("expected typed error, got %T", err)
 	}
-	if appErr.Type != appErrors.TypeNotFound {
-		t.Errorf("expected Type=%q, got %q", appErrors.TypeNotFound, appErr.Type)
+	if gotType != appErrors.ReasonNotFound {
+		t.Errorf("expected Type=%q, got %q", appErrors.ReasonNotFound, gotType)
 	}
 }
 
 // TestCanAPIKeyAccessResource_NotFound_Returns404 covers the third buggy site.
 func TestCanAPIKeyAccessResource_NotFound_Returns404(t *testing.T) {
 	repo := &stubAPIKeyRepo{
-		getByIDErr: fmt.Errorf("get api_key by ID xxx: %w", authDomain.ErrAPIKeyNotFound),
+		getByIDErr: appErrors.NotFound("api_key"),
 	}
 	svc := newServiceUnderTest(repo)
 
 	_, err := svc.CanAPIKeyAccessResource(context.Background(), uuid.New(), "some:resource")
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T", err)
+		t.Fatalf("expected typed error, got %T", err)
 	}
-	if appErr.Type != appErrors.TypeNotFound {
-		t.Errorf("expected Type=%q, got %q", appErrors.TypeNotFound, appErr.Type)
+	if gotType != appErrors.ReasonNotFound {
+		t.Errorf("expected Type=%q, got %q", appErrors.ReasonNotFound, gotType)
 	}
 }
 
@@ -161,17 +176,17 @@ func TestValidateAPIKey_NotFound_Returns401(t *testing.T) {
 	validFormatKey := "bk_" + strings.Repeat("a", 40)
 
 	repo := &stubAPIKeyRepo{
-		getByHashErr: fmt.Errorf("get api_key by hash: %w", authDomain.ErrAPIKeyNotFound),
+		getByHashErr: appErrors.NotFound("api_key"),
 	}
 	svc := newServiceUnderTest(repo)
 
 	_, err := svc.ValidateAPIKey(context.Background(), validFormatKey)
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T: %v", err, err)
+		t.Fatalf("expected typed error, got %T: %v", err, err)
 	}
-	if appErr.Type != appErrors.TypeAuthentication {
-		t.Errorf("expected Type=%q (401), got %q", appErrors.TypeAuthentication, appErr.Type)
+	if gotType != appErrors.ReasonUnauthenticated {
+		t.Errorf("expected Type=%q (401), got %q", appErrors.ReasonUnauthenticated, gotType)
 	}
 }
 
@@ -182,7 +197,7 @@ func TestValidateAPIKey_NotFound_Returns401(t *testing.T) {
 // constraint.
 func TestCreateAPIKey_HashCollision_ReturnsAccurateConflict(t *testing.T) {
 	repo := &stubAPIKeyRepo{
-		createErr: fmt.Errorf("create api_key: %w", authDomain.ErrAPIKeyAlreadyExists),
+		createErr: appErrors.AlreadyExists("api_key"),
 	}
 	svc := newServiceUnderTest(repo)
 
@@ -195,20 +210,21 @@ func TestCreateAPIKey_HashCollision_ReturnsAccurateConflict(t *testing.T) {
 		},
 	)
 
-	appErr, ok := appErrors.IsAppError(err)
+	gotType, ok := errorReason(err)
 	if !ok {
-		t.Fatalf("expected *AppError, got %T: %v", err, err)
+		t.Fatalf("expected typed error, got %T: %v", err, err)
 	}
-	if appErr.Type != appErrors.TypeConflict {
-		t.Errorf("expected Type=%q, got %q", appErrors.TypeConflict, appErr.Type)
+	if gotType != appErrors.ReasonConflict {
+		t.Errorf("expected Type=%q, got %q", appErrors.ReasonConflict, gotType)
 	}
+	msg := errorMessage(err)
 	// The pre-fix message used "name" wording. Guard against regression.
-	if strings.Contains(strings.ToLower(appErr.Message), "name") {
-		t.Errorf("message should not blame the name constraint (no name UNIQUE exists): %q", appErr.Message)
+	if strings.Contains(strings.ToLower(msg), "name") {
+		t.Errorf("message should not blame the name constraint (no name UNIQUE exists): %q", msg)
 	}
 	// Positive check: message should invite a retry, which is the actual fix path.
-	if !strings.Contains(strings.ToLower(appErr.Message), "retry") {
-		t.Errorf("message should direct callers to retry; got %q", appErr.Message)
+	if !strings.Contains(strings.ToLower(msg), "retry") {
+		t.Errorf("message should direct callers to retry; got %q", msg)
 	}
 }
 

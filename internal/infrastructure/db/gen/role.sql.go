@@ -89,7 +89,7 @@ func (q *Queries) CountRolesByScopeType(ctx context.Context) ([]CountRolesByScop
 const createRole = `-- name: CreateRole :exec
 
 INSERT INTO roles (
-    id, name, scope_type, scope_id, description, created_at, updated_at
+    id, name, scope_type, description, created_at, updated_at, scope_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 )
@@ -99,10 +99,10 @@ type CreateRoleParams struct {
 	ID          uuid.UUID  `json:"id"`
 	Name        string     `json:"name"`
 	ScopeType   string     `json:"scope_type"`
-	ScopeID     *uuid.UUID `json:"scope_id"`
 	Description *string    `json:"description"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+	ScopeID     *uuid.UUID `json:"scope_id"`
 }
 
 // Static queries for roles (RBAC template and custom). The GORM-era
@@ -115,10 +115,10 @@ func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) error {
 		arg.ID,
 		arg.Name,
 		arg.ScopeType,
-		arg.ScopeID,
 		arg.Description,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.ScopeID,
 	)
 	return err
 }

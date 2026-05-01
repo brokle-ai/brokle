@@ -48,7 +48,7 @@ func (s *ModelCatalogService) GetAvailableModels(
 			"error", err,
 			"organization_id", orgID,
 		)
-		return nil, appErrors.NewInternalError("failed to list credentials", err)
+		return nil, appErrors.Internal("failed to list credentials", err)
 	}
 
 	if len(credentials) == 0 {
@@ -98,7 +98,7 @@ func (s *ModelCatalogService) GetAvailableModels(
 				"error", err,
 				"providers", standardProviders,
 			)
-			return nil, appErrors.NewInternalError("failed to fetch default models", err)
+			return nil, appErrors.Internal("failed to fetch default models", err)
 		}
 
 		for _, m := range defaultModels {

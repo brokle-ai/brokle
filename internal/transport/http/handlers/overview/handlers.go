@@ -45,7 +45,7 @@ func (h *Handler) GetOverview(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "overview: fetch failed",
 			"project_id", projectID, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get project overview", err))
+		response.WriteError(w, appErrors.Internal("Failed to get project overview", err))
 		return
 	}
 

@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 
 	orgDomain "brokle/internal/core/domain/organization"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
-	appErrors "brokle/pkg/errors"
 )
 
 // projectRepository is the pgx+sqlc implementation of
@@ -34,9 +34,9 @@ func (r *projectRepository) Create(ctx context.Context, project *orgDomain.Proje
 		UpdatedAt:      project.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create project: %w", orgDomain.ErrProjectAlreadyExists)
+			return appErrors.AlreadyExists("project", appErrors.WithOp("repo.project.create"), appErrors.WithCause(err))
 		}
-		return fmt.Errorf("create project: %w", err)
+		return appErrors.Internal("create project", err, appErrors.WithOp("repo.project.create"))
 	}
 	return nil
 }
@@ -45,18 +45,18 @@ func (r *projectRepository) GetByID(ctx context.Context, id uuid.UUID) (*orgDoma
 	row, err := r.tm.Queries(ctx).GetProjectByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get project by ID %s: %w", id, orgDomain.ErrProjectNotFound)
+			return nil, appErrors.NotFound("project", appErrors.WithOp("repo.project.get_by_id"))
 		}
-		return nil, fmt.Errorf("get project by ID %s: %w", id, err)
+		return nil, appErrors.Internal(fmt.Sprintf("get project %s", id), err, appErrors.WithOp("repo.project.get_by_id"))
 	}
 	return projectFromRow(&row), nil
 }
 
 // GetBySlug is retained by the domain interface but the slug column was
 // dropped in migration 20251101020000_refactor_onboarding_to_signup.
-// Returns ErrProjectNotFound to surface the deprecation without panicking.
+// Returns NotFound to surface the deprecation without panicking.
 func (r *projectRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*orgDomain.Project, error) {
-	return nil, fmt.Errorf("get project by org %s and slug %s: %w", orgID, slug, orgDomain.ErrProjectNotFound)
+	return nil, appErrors.NotFound("project", appErrors.WithOp("repo.project.get_by_slug_deprecated"))
 }
 
 func (r *projectRepository) Update(ctx context.Context, project *orgDomain.Project) error {

@@ -4,7 +4,6 @@ package credentials
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -45,12 +44,12 @@ func NewProviderCredentialService(
 func (s *ProviderCredentialService) Create(ctx context.Context, req *credentialsDomain.CreateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error) {
 	// Validate adapter
 	if !req.Adapter.IsValid() {
-		return nil, appErrors.NewValidationError("invalid adapter", fmt.Sprintf("adapter must be one of: %v", credentialsDomain.ValidProviders()))
+		return nil, appErrors.InvalidParam("adapter", fmt.Sprintf("must be one of: %v", credentialsDomain.ValidProviders()))
 	}
 
 	// Validate name
 	if strings.TrimSpace(req.Name) == "" {
-		return nil, appErrors.NewValidationError("name required", "Configuration name is required")
+		return nil, appErrors.InvalidParam("name", "is required", appErrors.WithDetails("Configuration name is required"))
 	}
 
 	existing, err := s.repo.GetByOrgAndName(ctx, req.OrganizationID, req.Name)
@@ -60,23 +59,23 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 			"organization_id", req.OrganizationID,
 			"name", req.Name,
 		)
-		return nil, appErrors.NewInternalError("failed to check name uniqueness", err)
+		return nil, appErrors.Internal("failed to check name uniqueness", err)
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError(fmt.Sprintf("A configuration named '%s' already exists in this organization", req.Name))
+		return nil, appErrors.Conflict("", fmt.Sprintf("A configuration named '%s' already exists in this organization", req.Name))
 	}
 
 	// Custom provider validation
 	if req.Adapter == credentialsDomain.ProviderCustom {
 		if req.BaseURL == nil || *req.BaseURL == "" {
-			return nil, appErrors.NewValidationError("base URL required", "Custom providers require a base_url")
+			return nil, appErrors.InvalidParam("base_url", "is required", appErrors.WithDetails("Custom providers require a base_url"))
 		}
 	}
 
 	// Azure validation
 	if req.Adapter == credentialsDomain.ProviderAzure {
 		if req.BaseURL == nil || *req.BaseURL == "" {
-			return nil, appErrors.NewValidationError("base URL required", "Azure OpenAI requires a base_url (your Azure endpoint)")
+			return nil, appErrors.InvalidParam("base_url", "is required", appErrors.WithDetails("Azure OpenAI requires a base_url (your Azure endpoint)"))
 		}
 		deploymentID := ""
 		if req.Config != nil {
@@ -85,13 +84,13 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 			}
 		}
 		if deploymentID == "" {
-			return nil, appErrors.NewValidationError("deployment ID required", "Azure OpenAI requires deployment_id to be configured")
+			return nil, appErrors.InvalidParam("deployment_id", "is required", appErrors.WithDetails("Azure OpenAI requires deployment_id to be configured"))
 		}
 	}
 
 	// Validate API key
 	if len(req.APIKey) < 10 {
-		return nil, appErrors.NewValidationError("invalid API key", "API key is too short")
+		return nil, appErrors.InvalidParam("api_key", "is too short")
 	}
 
 	if err := s.ValidateKey(ctx, req.Adapter, req.APIKey, req.BaseURL, req.Config); err != nil {
@@ -106,7 +105,7 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 			"organization_id", req.OrganizationID,
 			"adapter", req.Adapter,
 		)
-		return nil, appErrors.NewInternalError("failed to secure API key", err)
+		return nil, appErrors.Internal("failed to secure API key", err)
 	}
 	keyPreview := credentialsDomain.MaskAPIKey(req.APIKey)
 
@@ -115,11 +114,11 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 	if len(req.Headers) > 0 {
 		headersJSON, err := json.Marshal(req.Headers)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to serialize headers", err)
+			return nil, appErrors.Internal("failed to serialize headers", err)
 		}
 		h, err := s.encryptor.Encrypt(string(headersJSON))
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to secure headers", err)
+			return nil, appErrors.Internal("failed to secure headers", err)
 		}
 		encryptedHeaders = &h
 	}
@@ -147,10 +146,10 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 			"name", req.Name,
 			"adapter", req.Adapter,
 		)
-		if errors.Is(err, credentialsDomain.ErrCredentialExists) {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("A configuration named '%s' already exists", req.Name))
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("", fmt.Sprintf("A configuration named '%s' already exists", req.Name))
 		}
-		return nil, appErrors.NewInternalError("failed to create credential", err)
+		return nil, appErrors.Internal("failed to create credential", err)
 	}
 
 	s.logger.Info("provider credential created",
@@ -166,23 +165,23 @@ func (s *ProviderCredentialService) Create(ctx context.Context, req *credentials
 func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, orgID uuid.UUID, req *credentialsDomain.UpdateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error) {
 	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return nil, appErrors.NewNotFoundError("credential not found")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("credential")
 		}
-		return nil, appErrors.NewInternalError("failed to get credential", err)
+		return nil, appErrors.Internal("failed to get credential", err)
 	}
 
 	if req.Name != nil && *req.Name != credential.Name {
 		trimmedName := strings.TrimSpace(*req.Name)
 		if trimmedName == "" {
-			return nil, appErrors.NewValidationError("name required", "Configuration name cannot be empty")
+			return nil, appErrors.InvalidParam("name", "cannot be empty")
 		}
 		existing, err := s.repo.GetByOrgAndName(ctx, credential.OrganizationID, trimmedName)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check name uniqueness", err)
+			return nil, appErrors.Internal("failed to check name uniqueness", err)
 		}
 		if existing != nil && existing.ID != id {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("A configuration named '%s' already exists", trimmedName))
+			return nil, appErrors.Conflict("", fmt.Sprintf("A configuration named '%s' already exists", trimmedName))
 		}
 		credential.Name = trimmedName
 	}
@@ -190,7 +189,7 @@ func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, or
 	// Update API key if provided
 	if req.APIKey != nil && *req.APIKey != "" {
 		if len(*req.APIKey) < 10 {
-			return nil, appErrors.NewValidationError("invalid API key", "API key is too short")
+			return nil, appErrors.InvalidParam("api_key", "is too short")
 		}
 
 		// Use existing config if not updated
@@ -209,7 +208,7 @@ func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, or
 
 		encryptedKey, err := s.encryptor.Encrypt(*req.APIKey)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to secure API key", err)
+			return nil, appErrors.Internal("failed to secure API key", err)
 		}
 		credential.EncryptedKey = encryptedKey
 		credential.KeyPreview = credentialsDomain.MaskAPIKey(*req.APIKey)
@@ -231,11 +230,11 @@ func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, or
 		if len(*req.Headers) > 0 {
 			headersJSON, err := json.Marshal(*req.Headers)
 			if err != nil {
-				return nil, appErrors.NewInternalError("failed to serialize headers", err)
+				return nil, appErrors.Internal("failed to serialize headers", err)
 			}
 			encryptedHeaders, err := s.encryptor.Encrypt(string(headersJSON))
 			if err != nil {
-				return nil, appErrors.NewInternalError("failed to secure headers", err)
+				return nil, appErrors.Internal("failed to secure headers", err)
 			}
 			credential.Headers = &encryptedHeaders
 		} else {
@@ -251,10 +250,10 @@ func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, or
 			"error", err,
 			"credential_id", id,
 		)
-		if errors.Is(err, credentialsDomain.ErrCredentialExists) {
-			return nil, appErrors.NewConflictError("a configuration with that name already exists")
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("", "a configuration with that name already exists")
 		}
-		return nil, appErrors.NewInternalError("failed to update credential", err)
+		return nil, appErrors.Internal("failed to update credential", err)
 	}
 
 	s.logger.Info("provider credential updated",
@@ -268,10 +267,10 @@ func (s *ProviderCredentialService) Update(ctx context.Context, id uuid.UUID, or
 func (s *ProviderCredentialService) GetByID(ctx context.Context, id uuid.UUID, orgID uuid.UUID) (*credentialsDomain.ProviderCredentialResponse, error) {
 	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return nil, appErrors.NewNotFoundError("credential not found")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("credential")
 		}
-		return nil, appErrors.NewInternalError("failed to retrieve credential", err)
+		return nil, appErrors.Internal("failed to retrieve credential", err)
 	}
 	return s.toResponseWithHeaders(credential), nil
 }
@@ -279,10 +278,10 @@ func (s *ProviderCredentialService) GetByID(ctx context.Context, id uuid.UUID, o
 func (s *ProviderCredentialService) GetByName(ctx context.Context, orgID uuid.UUID, name string) (*credentialsDomain.ProviderCredentialResponse, error) {
 	credential, err := s.repo.GetByOrgAndName(ctx, orgID, name)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to retrieve credential", err)
+		return nil, appErrors.Internal("failed to retrieve credential", err)
 	}
 	if credential == nil {
-		return nil, appErrors.NewNotFoundError("credential not found")
+		return nil, appErrors.NotFound("credential")
 	}
 	return s.toResponseWithHeaders(credential), nil
 }
@@ -290,7 +289,7 @@ func (s *ProviderCredentialService) GetByName(ctx context.Context, orgID uuid.UU
 func (s *ProviderCredentialService) List(ctx context.Context, orgID uuid.UUID) ([]*credentialsDomain.ProviderCredentialResponse, error) {
 	credentials, err := s.repo.ListByOrganization(ctx, orgID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list credentials", err)
+		return nil, appErrors.Internal("failed to list credentials", err)
 	}
 
 	responses := make([]*credentialsDomain.ProviderCredentialResponse, len(credentials))
@@ -304,17 +303,17 @@ func (s *ProviderCredentialService) Delete(ctx context.Context, id uuid.UUID, or
 	// Get credential first for logging
 	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return appErrors.NewNotFoundError("credential not found")
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("credential")
 		}
-		return appErrors.NewInternalError("failed to get credential", err)
+		return appErrors.Internal("failed to get credential", err)
 	}
 
 	if err := s.repo.Delete(ctx, id, orgID); err != nil {
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return appErrors.NewNotFoundError("credential not found")
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("credential")
 		}
-		return appErrors.NewInternalError("failed to delete credential", err)
+		return appErrors.Internal("failed to delete credential", err)
 	}
 
 	s.logger.Info("provider credential deleted",
@@ -328,9 +327,6 @@ func (s *ProviderCredentialService) Delete(ctx context.Context, id uuid.UUID, or
 func (s *ProviderCredentialService) GetDecryptedByID(ctx context.Context, credentialID uuid.UUID, orgID uuid.UUID) (*credentialsDomain.DecryptedKeyConfig, error) {
 	credential, err := s.repo.GetByID(ctx, credentialID, orgID)
 	if err != nil {
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return nil, credentialsDomain.ErrCredentialNotFound
-		}
 		return nil, err
 	}
 
@@ -373,7 +369,7 @@ func (s *ProviderCredentialService) decryptCredential(credential *credentialsDom
 			"error", err,
 			"credential_id", credential.ID,
 		)
-		return nil, credentialsDomain.ErrDecryptionFailed
+		return nil, appErrors.Internal("credential decryption failed", err)
 	}
 
 	config := &credentialsDomain.DecryptedKeyConfig{
@@ -422,7 +418,7 @@ func (s *ProviderCredentialService) GetExecutionConfig(ctx context.Context, orgI
 
 	// Validate adapter match
 	if config.Provider != adapter {
-		return nil, credentialsDomain.NewAdapterMismatchError(string(adapter), string(config.Provider))
+		return nil, appErrors.Conflict("credential", fmt.Sprintf("provider adapter mismatch: expected '%s', credential uses '%s'", string(adapter), string(config.Provider)))
 	}
 
 	return config, nil
@@ -443,7 +439,7 @@ func (s *ProviderCredentialService) ValidateKey(ctx context.Context, adapter cre
 	case credentialsDomain.ProviderCustom:
 		return s.validateCustomProvider(ctx, apiKey, baseURL)
 	default:
-		return credentialsDomain.NewInvalidAdapterError(string(adapter))
+		return appErrors.InvalidParam("provider", fmt.Sprintf("invalid provider '%s' (must be one of: openai, anthropic, azure, gemini, openrouter, custom)", string(adapter)))
 	}
 }
 
@@ -483,24 +479,27 @@ func (s *ProviderCredentialService) validateOpenAIKey(ctx context.Context, apiKe
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return appErrors.NewValidationError("API key validation failed", "Could not connect to OpenAI: "+err.Error())
+		return appErrors.Upstream("openai", err, appErrors.WithMessage("could not connect to OpenAI"))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "OpenAI rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by OpenAI")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return appErrors.NewValidationError("API key validation failed", fmt.Sprintf("OpenAI returned status %d: %s", resp.StatusCode, string(body)))
+		return appErrors.Upstream("openai",
+			fmt.Errorf("status %d: %s", resp.StatusCode, string(body)),
+			appErrors.WithMessage("OpenAI returned unexpected status"),
+		)
 	}
 
 	return nil
@@ -516,7 +515,7 @@ func (s *ProviderCredentialService) validateAnthropicKey(ctx context.Context, ap
 
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(reqBody))
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	req.Header.Set("x-api-key", apiKey)
@@ -525,12 +524,12 @@ func (s *ProviderCredentialService) validateAnthropicKey(ctx context.Context, ap
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return appErrors.NewValidationError("API key validation failed", "Could not connect to Anthropic: "+err.Error())
+		return appErrors.Upstream("anthropic", err, appErrors.WithMessage("could not connect to Anthropic"))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "Anthropic rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by Anthropic")
 	}
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusBadRequest {
@@ -543,7 +542,7 @@ func (s *ProviderCredentialService) validateAnthropicKey(ctx context.Context, ap
 			}
 			if json.Unmarshal(body, &errResp) == nil {
 				if errResp.Error.Type == "authentication_error" {
-					return appErrors.NewValidationError("invalid API key", "Anthropic authentication failed")
+					return appErrors.InvalidParam("api_key", "Anthropic authentication failed")
 				}
 			}
 		}
@@ -551,12 +550,15 @@ func (s *ProviderCredentialService) validateAnthropicKey(ctx context.Context, ap
 	}
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-	return appErrors.NewValidationError("API key validation failed", fmt.Sprintf("Anthropic returned status %d: %s", resp.StatusCode, string(body)))
+	return appErrors.Upstream("anthropic",
+		fmt.Errorf("status %d: %s", resp.StatusCode, string(body)),
+		appErrors.WithMessage("Anthropic returned unexpected status"),
+	)
 }
 
 func (s *ProviderCredentialService) validateAzureKey(ctx context.Context, apiKey string, baseURL *string, config map[string]any) error {
 	if baseURL == nil || *baseURL == "" {
-		return appErrors.NewValidationError("base URL required", "Azure OpenAI requires a base URL (your Azure endpoint)")
+		return appErrors.InvalidParam("base_url", "is required", appErrors.WithDetails("Azure OpenAI requires a base URL (your Azure endpoint)"))
 	}
 
 	deploymentID := ""
@@ -566,7 +568,7 @@ func (s *ProviderCredentialService) validateAzureKey(ctx context.Context, apiKey
 		}
 	}
 	if deploymentID == "" {
-		return appErrors.NewValidationError("deployment ID required", "Azure OpenAI requires deployment_id to be configured")
+		return appErrors.InvalidParam("deployment_id", "is required", appErrors.WithDetails("Azure OpenAI requires deployment_id to be configured"))
 	}
 
 	apiVersion := "2024-10-21"
@@ -580,24 +582,27 @@ func (s *ProviderCredentialService) validateAzureKey(ctx context.Context, apiKey
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	req.Header.Set("api-key", apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return appErrors.NewValidationError("API key validation failed", "Could not connect to Azure OpenAI: "+err.Error())
+		return appErrors.Upstream("azure_openai", err, appErrors.WithMessage("could not connect to Azure OpenAI"))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "Azure OpenAI rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by Azure OpenAI")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return appErrors.NewValidationError("API key validation failed", fmt.Sprintf("Azure OpenAI returned status %d: %s", resp.StatusCode, string(body)))
+		return appErrors.Upstream("azure_openai",
+			fmt.Errorf("status %d: %s", resp.StatusCode, string(body)),
+			appErrors.WithMessage("Azure OpenAI returned unexpected status"),
+		)
 	}
 
 	return nil
@@ -608,31 +613,34 @@ func (s *ProviderCredentialService) validateGeminiKey(ctx context.Context, apiKe
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	req.Header.Set("x-goog-api-key", apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return appErrors.NewValidationError("API key validation failed", "Could not connect to Google Gemini: "+err.Error())
+		return appErrors.Upstream("google_gemini", err, appErrors.WithMessage("could not connect to Google Gemini"))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "Google Gemini rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by Google Gemini")
 	}
 
 	if resp.StatusCode == http.StatusBadRequest {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if strings.Contains(string(body), "API_KEY_INVALID") || strings.Contains(string(body), "INVALID_ARGUMENT") {
-			return appErrors.NewValidationError("invalid API key", "Google Gemini API key is invalid")
+			return appErrors.InvalidParam("api_key", "Google Gemini API key is invalid")
 		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return appErrors.NewValidationError("API key validation failed", fmt.Sprintf("Google Gemini returned status %d: %s", resp.StatusCode, string(body)))
+		return appErrors.Upstream("google_gemini",
+			fmt.Errorf("status %d: %s", resp.StatusCode, string(body)),
+			appErrors.WithMessage("Google Gemini returned unexpected status"),
+		)
 	}
 
 	return nil
@@ -643,24 +651,27 @@ func (s *ProviderCredentialService) validateOpenRouterKey(ctx context.Context, a
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return appErrors.NewValidationError("API key validation failed", "Could not connect to OpenRouter: "+err.Error())
+		return appErrors.Upstream("openrouter", err, appErrors.WithMessage("could not connect to OpenRouter"))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "OpenRouter rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by OpenRouter")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return appErrors.NewValidationError("API key validation failed", fmt.Sprintf("OpenRouter returned status %d: %s", resp.StatusCode, string(body)))
+		return appErrors.Upstream("openrouter",
+			fmt.Errorf("status %d: %s", resp.StatusCode, string(body)),
+			appErrors.WithMessage("OpenRouter returned unexpected status"),
+		)
 	}
 
 	return nil
@@ -668,14 +679,14 @@ func (s *ProviderCredentialService) validateOpenRouterKey(ctx context.Context, a
 
 func (s *ProviderCredentialService) validateCustomProvider(ctx context.Context, apiKey string, baseURL *string) error {
 	if baseURL == nil || *baseURL == "" {
-		return appErrors.NewValidationError("base URL required", "Custom providers require a base URL")
+		return appErrors.InvalidParam("base_url", "is required", appErrors.WithDetails("Custom providers require a base URL"))
 	}
 
 	endpoint := strings.TrimSuffix(*baseURL, "/") + "/v1/models"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create validation request", err)
+		return appErrors.Internal("failed to create validation request", err)
 	}
 
 	if apiKey != "" {
@@ -693,7 +704,7 @@ func (s *ProviderCredentialService) validateCustomProvider(ctx context.Context, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return appErrors.NewValidationError("invalid API key", "Custom provider rejected the API key")
+		return appErrors.InvalidParam("api_key", "rejected by custom provider")
 	}
 
 	return nil

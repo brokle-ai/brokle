@@ -40,7 +40,7 @@ func (s *WebsiteService) SubmitContactForm(ctx context.Context, req *website.Cre
 			"error", err,
 			"email", req.Email,
 		)
-		return appErrors.NewInternalError("failed to store contact submission", err)
+		return appErrors.Internal("failed to store contact submission", err)
 	}
 
 	s.logger.Info("contact form submitted",

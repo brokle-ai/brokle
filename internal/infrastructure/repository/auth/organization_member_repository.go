@@ -33,7 +33,9 @@ func (r *organizationMemberRepository) Create(ctx context.Context, m *authDomain
 	if m.JoinedAt.IsZero() {
 		m.JoinedAt = now
 	}
-	if err := r.tm.Queries(ctx).CreateMember(ctx, gen.CreateMemberParams{
+	// UPSERT-WHERE absorbs the (user_id, organization_id) PK conflict
+	// structurally — see member.sql CreateMember query comment.
+	rows, err := r.tm.Queries(ctx).CreateMember(ctx, gen.CreateMemberParams{
 		UserID:         m.UserID,
 		OrganizationID: m.OrganizationID,
 		RoleID:         m.RoleID,
@@ -41,8 +43,14 @@ func (r *organizationMemberRepository) Create(ctx context.Context, m *authDomain
 		InvitedBy:      m.InvitedBy,
 		CreatedAt:      now,
 		UpdatedAt:      now,
-	}); err != nil {
-		return fmt.Errorf("create organization member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
+	})
+	if err != nil {
+		return appErrors.Internal("create organization member", err,
+			appErrors.WithOp("repo.organization_member.create"))
+	}
+	if rows == 0 {
+		return appErrors.AlreadyExists("organization_member",
+			appErrors.WithOp("repo.organization_member.create"))
 	}
 	return nil
 }
@@ -204,7 +212,7 @@ func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members [
 			if m.JoinedAt.IsZero() {
 				m.JoinedAt = now
 			}
-			if err := q.CreateMember(ctx, gen.CreateMemberParams{
+			rows, err := q.CreateMember(ctx, gen.CreateMemberParams{
 				UserID:         m.UserID,
 				OrganizationID: m.OrganizationID,
 				RoleID:         m.RoleID,
@@ -212,8 +220,14 @@ func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members [
 				InvitedBy:      m.InvitedBy,
 				CreatedAt:      now,
 				UpdatedAt:      now,
-			}); err != nil {
-				return fmt.Errorf("bulk-create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
+			})
+			if err != nil {
+				return appErrors.Internal("bulk-create member", err,
+					appErrors.WithOp("repo.organization_member.bulk_create"))
+			}
+			if rows == 0 {
+				return appErrors.AlreadyExists("organization_member",
+					appErrors.WithOp("repo.organization_member.bulk_create"))
 			}
 		}
 		return nil

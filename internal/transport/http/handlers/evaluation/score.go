@@ -53,8 +53,7 @@ func (h *Handler) SdkCreateScoreBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(body.Scores) == 0 {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid request body", "scores array cannot be empty"))
+		response.WriteError(w, appErrors.InvalidParam("scores", "array cannot be empty"))
 		return
 	}
 
@@ -102,24 +101,23 @@ func (h *Handler) validateScoreAgainstConfig(
 	}
 
 	if string(cfg.Type) != scoreType {
-		return appErrors.NewValidationError("type",
-			"must match score config (expected: "+string(cfg.Type)+")")
+		return appErrors.InvalidParam("type", "must match score config (expected: "+string(cfg.Type)+")")
 	}
 
 	switch cfg.Type {
 	case evaluationDomain.ScoreTypeNumeric:
 		if value == nil {
-			return appErrors.NewValidationError("value", "required for NUMERIC type")
+			return appErrors.InvalidParam("value", "required for NUMERIC type")
 		}
 		if cfg.MinValue != nil && *value < *cfg.MinValue {
-			return appErrors.NewValidationError("value", "below minimum configured value")
+			return appErrors.InvalidParam("value", "below minimum configured value")
 		}
 		if cfg.MaxValue != nil && *value > *cfg.MaxValue {
-			return appErrors.NewValidationError("value", "above maximum configured value")
+			return appErrors.InvalidParam("value", "above maximum configured value")
 		}
 	case evaluationDomain.ScoreTypeCategorical:
 		if stringValue == nil {
-			return appErrors.NewValidationError("string_value", "required for CATEGORICAL type")
+			return appErrors.InvalidParam("string_value", "required for CATEGORICAL type")
 		}
 		found := false
 		for _, cat := range cfg.Categories {
@@ -129,14 +127,14 @@ func (h *Handler) validateScoreAgainstConfig(
 			}
 		}
 		if !found {
-			return appErrors.NewValidationError("string_value", "not in allowed categories")
+			return appErrors.InvalidParam("string_value", "not in allowed categories")
 		}
 	case evaluationDomain.ScoreTypeBoolean:
 		if value == nil && stringValue == nil {
-			return appErrors.NewValidationError("value", "required for BOOLEAN type (0 or 1)")
+			return appErrors.InvalidParam("value", "required for BOOLEAN type (0 or 1)")
 		}
 		if value != nil && *value != 0 && *value != 1 {
-			return appErrors.NewValidationError("value", "must be 0 or 1 for BOOLEAN type")
+			return appErrors.InvalidParam("value", "must be 0 or 1 for BOOLEAN type")
 		}
 	}
 	return nil

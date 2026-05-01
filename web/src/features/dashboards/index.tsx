@@ -21,7 +21,6 @@ export type {
   DashboardListItem,
   CreateDashboardRequest,
   UpdateDashboardRequest,
-  DashboardListResponse,
   DashboardFilter,
   GetDashboardsParams,
   // Query execution types

@@ -33,23 +33,27 @@ func (s *OrganizationSettingsService) CreateSetting(ctx context.Context, orgID u
 		return nil, err
 	}
 
-	// Check if setting already exists
+	// Check if setting already exists. The repo returns *Error
+	// (NotFound on no-rows, Internal on infra failure); use the
+	// canonical predicate instead of stringly-typed comparison so a
+	// rename of the repo's error message can never silently flip this
+	// branch into a 500.
 	existing, err := s.settingsRepo.GetByKey(ctx, orgID, req.Key)
-	if err != nil && err.Error() != "organization setting not found" {
-		return nil, appErrors.NewInternalError("failed to check existing setting", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, appErrors.Internal("failed to check existing setting", err)
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError("setting with this key already exists")
+		return nil, appErrors.AlreadyExists("organization_setting")
 	}
 
 	// Create new setting
 	setting, err := orgDomain.NewOrganizationSettings(orgID, req.Key, req.Value)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to create setting", err)
+		return nil, appErrors.Internal("failed to create setting", err)
 	}
 
 	if err := s.settingsRepo.Create(ctx, setting); err != nil {
-		return nil, appErrors.NewInternalError("failed to save setting", err)
+		return nil, appErrors.Internal("failed to save setting", err)
 	}
 
 	return setting, nil
@@ -72,19 +76,21 @@ func (s *OrganizationSettingsService) UpdateSetting(ctx context.Context, orgID u
 		return nil, err
 	}
 
-	// Get existing setting
+	// Get existing setting. Pass the repo's self-describing *Error
+	// through (NotFound vs Internal) — the previous blanket
+	// translation to NotFound("setting") was hiding 500s as 404s.
 	setting, err := s.settingsRepo.GetByKey(ctx, orgID, key)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("setting not found")
+		return nil, err
 	}
 
 	// Update setting value
 	if err := setting.SetValue(req.Value); err != nil {
-		return nil, appErrors.NewInternalError("failed to set value", err)
+		return nil, appErrors.Internal("failed to set value", err)
 	}
 
 	if err := s.settingsRepo.Update(ctx, setting); err != nil {
-		return nil, appErrors.NewInternalError("failed to update setting", err)
+		return nil, err
 	}
 
 	return setting, nil
@@ -97,14 +103,15 @@ func (s *OrganizationSettingsService) DeleteSetting(ctx context.Context, orgID u
 		return err
 	}
 
-	// Verify setting exists before deletion
-	_, err := s.settingsRepo.GetByKey(ctx, orgID, key)
-	if err != nil {
-		return appErrors.NewNotFoundError("setting not found")
+	// Verify setting exists before deletion. Pass the repo's
+	// self-describing *Error through (NotFound vs Internal) — the
+	// previous blanket translation hid 500s as 404s.
+	if _, err := s.settingsRepo.GetByKey(ctx, orgID, key); err != nil {
+		return err
 	}
 
 	if err := s.settingsRepo.DeleteByKey(ctx, orgID, key); err != nil {
-		return appErrors.NewInternalError("failed to delete setting", err)
+		return err
 	}
 
 	return nil
@@ -119,7 +126,7 @@ func (s *OrganizationSettingsService) UpsertSetting(ctx context.Context, orgID u
 
 	setting, err := s.settingsRepo.UpsertSetting(ctx, orgID, key, value)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to upsert setting", err)
+		return nil, err
 	}
 
 	return setting, nil
@@ -136,13 +143,13 @@ func (s *OrganizationSettingsService) CreateMultipleSettings(ctx context.Context
 	for key, value := range settings {
 		setting, err := orgDomain.NewOrganizationSettings(orgID, key, value)
 		if err != nil {
-			return appErrors.NewInternalError("failed to create setting for key "+key, err)
+			return appErrors.Internal("failed to create setting for key "+key, err)
 		}
 		settingEntities = append(settingEntities, setting)
 	}
 
 	if err := s.settingsRepo.CreateMultiple(ctx, settingEntities); err != nil {
-		return appErrors.NewInternalError("failed to create multiple settings", err)
+		return appErrors.Internal("failed to create multiple settings", err)
 	}
 
 	return nil
@@ -152,7 +159,7 @@ func (s *OrganizationSettingsService) CreateMultipleSettings(ctx context.Context
 func (s *OrganizationSettingsService) GetSettingsByKeys(ctx context.Context, orgID uuid.UUID, keys []string) (map[string]any, error) {
 	settings, err := s.settingsRepo.GetByKeys(ctx, orgID, keys)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get settings by keys", err)
+		return nil, appErrors.Internal("failed to get settings by keys", err)
 	}
 
 	result := make(map[string]any)
@@ -176,7 +183,7 @@ func (s *OrganizationSettingsService) DeleteMultipleSettings(ctx context.Context
 	}
 
 	if err := s.settingsRepo.DeleteMultiple(ctx, orgID, keys); err != nil {
-		return appErrors.NewInternalError("failed to delete multiple settings", err)
+		return appErrors.Internal("failed to delete multiple settings", err)
 	}
 
 	return nil
@@ -187,10 +194,10 @@ func (s *OrganizationSettingsService) ValidateSettingsAccess(ctx context.Context
 	// Check if user is a member of the organization
 	isMember, err := s.memberRepo.IsMember(ctx, userID, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check membership", err)
+		return appErrors.Internal("failed to check membership", err)
 	}
 	if !isMember {
-		return appErrors.NewForbiddenError("user is not a member of this organization")
+		return appErrors.PermissionDenied("organization", "user is not a member of this organization")
 	}
 
 	// For now, allow any member to manage settings
@@ -214,7 +221,7 @@ func (s *OrganizationSettingsService) ResetToDefaults(ctx context.Context, orgID
 	// Get all current settings
 	currentSettings, err := s.settingsRepo.GetAllByOrganizationID(ctx, orgID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to get current settings", err)
+		return appErrors.Internal("failed to get current settings", err)
 	}
 
 	// Delete all current settings
@@ -224,7 +231,7 @@ func (s *OrganizationSettingsService) ResetToDefaults(ctx context.Context, orgID
 			keys[i] = setting.Key
 		}
 		if err := s.settingsRepo.DeleteMultiple(ctx, orgID, keys); err != nil {
-			return appErrors.NewInternalError("failed to clear current settings", err)
+			return appErrors.Internal("failed to clear current settings", err)
 		}
 	}
 
@@ -240,7 +247,7 @@ func (s *OrganizationSettingsService) ExportSettings(ctx context.Context, orgID 
 
 	settings, err := s.settingsRepo.GetSettingsMap(ctx, orgID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to export settings", err)
+		return nil, appErrors.Internal("failed to export settings", err)
 	}
 
 	return settings, nil
@@ -257,7 +264,7 @@ func (s *OrganizationSettingsService) ImportSettings(ctx context.Context, orgID 
 	for key, value := range settings {
 		_, err := s.settingsRepo.UpsertSetting(ctx, orgID, key, value)
 		if err != nil {
-			return appErrors.NewInternalError("failed to import setting "+key, err)
+			return appErrors.Internal("failed to import setting "+key, err)
 		}
 	}
 

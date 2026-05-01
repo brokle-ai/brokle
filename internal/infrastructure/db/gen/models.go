@@ -600,7 +600,6 @@ type OrganizationMember struct {
 	UserID         uuid.UUID  `json:"user_id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
 	RoleID         uuid.UUID  `json:"role_id"`
-	Status         string     `json:"status"`
 	JoinedAt       time.Time  `json:"joined_at"`
 	InvitedBy      *uuid.UUID `json:"invited_by"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -708,7 +707,6 @@ type ProjectMember struct {
 	UserID    uuid.UUID `json:"user_id"`
 	ProjectID uuid.UUID `json:"project_id"`
 	RoleID    uuid.UUID `json:"role_id"`
-	Status    string    `json:"status"`
 	JoinedAt  time.Time `json:"joined_at"`
 }
 

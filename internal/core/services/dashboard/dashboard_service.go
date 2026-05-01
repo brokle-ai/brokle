@@ -3,7 +3,6 @@ package dashboard
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -31,7 +30,7 @@ func NewDashboardService(
 
 func (s *DashboardService) CreateDashboard(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateDashboardRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name", "dashboard name is required")
+		return nil, appErrors.InvalidParam("name", "dashboard name is required")
 	}
 
 	if req.Config.Widgets != nil {
@@ -41,11 +40,11 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, projectID uuid.U
 	}
 
 	existing, err := s.repo.GetByNameAndProject(ctx, projectID, req.Name)
-	if err != nil && !errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-		return nil, appErrors.NewInternalError("failed to check existing dashboard", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, err
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError("dashboard with this name already exists")
+		return nil, appErrors.Conflict("", "dashboard with this name already exists")
 	}
 
 	config := req.Config
@@ -69,7 +68,7 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, projectID uuid.U
 	}
 
 	if err := s.repo.Create(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to create dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard created",
@@ -82,27 +81,17 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, projectID uuid.U
 }
 
 func (s *DashboardService) GetDashboard(ctx context.Context, id uuid.UUID) (*dashboardDomain.Dashboard, error) {
-	dashboard, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-			return nil, appErrors.NewNotFoundError("dashboard")
-		}
-		return nil, appErrors.NewInternalError("failed to get dashboard", err)
-	}
-	return dashboard, nil
+	return s.repo.GetByID(ctx, id)
 }
 
 func (s *DashboardService) GetDashboardByProject(ctx context.Context, projectID, dashboardID uuid.UUID) (*dashboardDomain.Dashboard, error) {
 	dashboard, err := s.repo.GetByID(ctx, dashboardID)
 	if err != nil {
-		if errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-			return nil, appErrors.NewNotFoundError("dashboard")
-		}
-		return nil, appErrors.NewInternalError("failed to get dashboard", err)
+		return nil, err
 	}
 
 	if dashboard.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError("dashboard")
+		return nil, appErrors.NotFound("dashboard", appErrors.WithOp("service.dashboard.get_by_project"))
 	}
 
 	return dashboard, nil
@@ -115,7 +104,7 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, projectID, dashb
 	}
 
 	if dashboard.IsLocked {
-		return nil, appErrors.NewValidationError("is_locked", "cannot update a locked dashboard; unlock it first")
+		return nil, appErrors.InvalidParam("is_locked", "cannot update a locked dashboard; unlock it first")
 	}
 
 	if req.Config != nil {
@@ -126,11 +115,11 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, projectID, dashb
 
 	if req.Name != nil && *req.Name != dashboard.Name {
 		existing, err := s.repo.GetByNameAndProject(ctx, projectID, *req.Name)
-		if err != nil && !errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-			return nil, appErrors.NewInternalError("failed to check existing dashboard", err)
+		if err != nil && !appErrors.IsNotFound(err) {
+			return nil, err
 		}
 		if existing != nil {
-			return nil, appErrors.NewConflictError("dashboard with this name already exists")
+			return nil, appErrors.Conflict("", "dashboard with this name already exists")
 		}
 		dashboard.Name = *req.Name
 	}
@@ -148,7 +137,7 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, projectID, dashb
 	}
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to update dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard updated",
@@ -166,11 +155,11 @@ func (s *DashboardService) DeleteDashboard(ctx context.Context, projectID, dashb
 	}
 
 	if dashboard.IsLocked {
-		return appErrors.NewValidationError("is_locked", "cannot delete a locked dashboard; unlock it first")
+		return appErrors.InvalidParam("is_locked", "cannot delete a locked dashboard; unlock it first")
 	}
 
 	if err := s.repo.SoftDelete(ctx, dashboardID); err != nil {
-		return appErrors.NewInternalError("failed to delete dashboard", err)
+		return err
 	}
 
 	s.logger.Info("dashboard deleted",
@@ -192,7 +181,7 @@ func (s *DashboardService) ListDashboards(ctx context.Context, projectID uuid.UU
 
 	items, total, err := s.repo.GetByProjectID(ctx, projectID, filter)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list dashboards", err)
+		return nil, 0, err
 	}
 	return items, total, nil
 }
@@ -204,7 +193,7 @@ func (s *DashboardService) AddWidget(ctx context.Context, projectID, dashboardID
 	}
 
 	if !widget.Type.IsValid() {
-		return nil, appErrors.NewValidationError("widget.type", "invalid widget type")
+		return nil, appErrors.InvalidParam("widget.type", "invalid widget type")
 	}
 
 	if err := s.ValidateWidgetQuery(&widget.Query); err != nil {
@@ -217,14 +206,14 @@ func (s *DashboardService) AddWidget(ctx context.Context, projectID, dashboardID
 
 	for _, w := range dashboard.Config.Widgets {
 		if w.ID == widget.ID {
-			return nil, appErrors.NewConflictError("widget with this ID already exists")
+			return nil, appErrors.Conflict("", "widget with this ID already exists")
 		}
 	}
 
 	dashboard.Config.Widgets = append(dashboard.Config.Widgets, *widget)
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to add widget", err)
+		return nil, err
 	}
 
 	return dashboard, nil
@@ -247,11 +236,11 @@ func (s *DashboardService) UpdateWidget(ctx context.Context, projectID, dashboar
 	}
 
 	if !found {
-		return nil, appErrors.NewNotFoundError("widget")
+		return nil, appErrors.NotFound("widget")
 	}
 
 	if !widget.Type.IsValid() {
-		return nil, appErrors.NewValidationError("widget.type", "invalid widget type")
+		return nil, appErrors.InvalidParam("widget.type", "invalid widget type")
 	}
 
 	if err := s.ValidateWidgetQuery(&widget.Query); err != nil {
@@ -259,7 +248,7 @@ func (s *DashboardService) UpdateWidget(ctx context.Context, projectID, dashboar
 	}
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to update widget", err)
+		return nil, err
 	}
 
 	return dashboard, nil
@@ -282,7 +271,7 @@ func (s *DashboardService) RemoveWidget(ctx context.Context, projectID, dashboar
 	}
 
 	if !found {
-		return nil, appErrors.NewNotFoundError("widget")
+		return nil, appErrors.NotFound("widget")
 	}
 
 	dashboard.Config.Widgets = widgets
@@ -296,7 +285,7 @@ func (s *DashboardService) RemoveWidget(ctx context.Context, projectID, dashboar
 	dashboard.Layout = layout
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to remove widget", err)
+		return nil, err
 	}
 
 	return dashboard, nil
@@ -315,14 +304,14 @@ func (s *DashboardService) UpdateLayout(ctx context.Context, projectID, dashboar
 
 	for _, item := range layout {
 		if !widgetIDs[item.WidgetID] {
-			return nil, appErrors.NewValidationError("layout", "layout references non-existent widget: "+item.WidgetID)
+			return nil, appErrors.InvalidParam("layout", "layout references non-existent widget: "+item.WidgetID)
 		}
 	}
 
 	dashboard.Layout = layout
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to update layout", err)
+		return nil, err
 	}
 
 	return dashboard, nil
@@ -330,7 +319,7 @@ func (s *DashboardService) UpdateLayout(ctx context.Context, projectID, dashboar
 
 func (s *DashboardService) DuplicateDashboard(ctx context.Context, projectID, dashboardID uuid.UUID, req *dashboardDomain.DuplicateDashboardRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name", "dashboard name is required")
+		return nil, appErrors.InvalidParam("name", "dashboard name is required")
 	}
 
 	source, err := s.GetDashboardByProject(ctx, projectID, dashboardID)
@@ -339,11 +328,11 @@ func (s *DashboardService) DuplicateDashboard(ctx context.Context, projectID, da
 	}
 
 	existing, err := s.repo.GetByNameAndProject(ctx, projectID, req.Name)
-	if err != nil && !errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-		return nil, appErrors.NewInternalError("failed to check existing dashboard", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, err
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError("dashboard with this name already exists")
+		return nil, appErrors.Conflict("", "dashboard with this name already exists")
 	}
 
 	config := s.copyConfig(source.Config)
@@ -375,7 +364,7 @@ func (s *DashboardService) DuplicateDashboard(ctx context.Context, projectID, da
 	}
 
 	if err := s.repo.Create(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to duplicate dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard duplicated",
@@ -401,7 +390,7 @@ func (s *DashboardService) LockDashboard(ctx context.Context, projectID, dashboa
 	dashboard.IsLocked = true
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to lock dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard locked",
@@ -425,7 +414,7 @@ func (s *DashboardService) UnlockDashboard(ctx context.Context, projectID, dashb
 	dashboard.IsLocked = false
 
 	if err := s.repo.Update(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to unlock dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard unlocked",
@@ -465,7 +454,7 @@ func (s *DashboardService) ImportDashboard(ctx context.Context, projectID uuid.U
 		name = req.Data.Name
 	}
 	if name == "" {
-		return nil, appErrors.NewValidationError("name", "dashboard name is required")
+		return nil, appErrors.InvalidParam("name", "dashboard name is required")
 	}
 
 	if err := s.ValidateDashboardConfig(&req.Data.Config); err != nil {
@@ -473,11 +462,11 @@ func (s *DashboardService) ImportDashboard(ctx context.Context, projectID uuid.U
 	}
 
 	existing, err := s.repo.GetByNameAndProject(ctx, projectID, name)
-	if err != nil && !errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-		return nil, appErrors.NewInternalError("failed to check existing dashboard", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, err
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError("dashboard with this name already exists")
+		return nil, appErrors.Conflict("", "dashboard with this name already exists")
 	}
 
 	config := s.copyConfig(req.Data.Config)
@@ -509,7 +498,7 @@ func (s *DashboardService) ImportDashboard(ctx context.Context, projectID uuid.U
 	}
 
 	if err := s.repo.Create(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to import dashboard", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard imported",
@@ -632,13 +621,13 @@ func (s *DashboardService) ValidateDashboardConfig(config *dashboardDomain.Dashb
 	for _, widget := range config.Widgets {
 		if widget.ID != "" {
 			if widgetIDs[widget.ID] {
-				return appErrors.NewValidationError("widgets", "duplicate widget ID: "+widget.ID)
+				return appErrors.InvalidParam("widgets", "duplicate widget ID: "+widget.ID)
 			}
 			widgetIDs[widget.ID] = true
 		}
 
 		if !widget.Type.IsValid() {
-			return appErrors.NewValidationError("widgets", "invalid widget type: "+string(widget.Type))
+			return appErrors.InvalidParam("widgets", "invalid widget type: "+string(widget.Type))
 		}
 
 		if err := s.ValidateWidgetQuery(&widget.Query); err != nil {
@@ -651,15 +640,15 @@ func (s *DashboardService) ValidateDashboardConfig(config *dashboardDomain.Dashb
 
 func (s *DashboardService) ValidateWidgetQuery(query *dashboardDomain.WidgetQuery) error {
 	if query == nil {
-		return appErrors.NewValidationError("query", "widget query is required")
+		return appErrors.InvalidParam("query", "widget query is required")
 	}
 
 	if !query.View.IsValid() {
-		return appErrors.NewValidationError("query.view", "invalid view type: "+string(query.View))
+		return appErrors.InvalidParam("query.view", "invalid view type: "+string(query.View))
 	}
 
 	if len(query.Measures) == 0 {
-		return appErrors.NewValidationError("query.measures", "at least one measure is required")
+		return appErrors.InvalidParam("query.measures", "at least one measure is required")
 	}
 
 	// TODO: Validate measures and dimensions against the view schema

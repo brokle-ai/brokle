@@ -32,7 +32,7 @@ func (r *promptRepository) Create(ctx context.Context, p *promptDomain.Prompt) e
 		Tags:        db.NonNilStrings(p.Tags),
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create prompt %s: %w", p.Name, promptDomain.ErrPromptAlreadyExists)
+			return appErrors.AlreadyExists("prompt", appErrors.WithOp("repo.prompt.create"))
 		}
 		return fmt.Errorf("create prompt: %w", err)
 	}
@@ -43,7 +43,7 @@ func (r *promptRepository) GetByID(ctx context.Context, id uuid.UUID) (*promptDo
 	row, err := r.tm.Queries(ctx).GetPromptByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get prompt by ID %s: %w", id, promptDomain.ErrPromptNotFound)
+			return nil, appErrors.NotFound("prompt", appErrors.WithOp("repo.prompt.get_by_id"))
 		}
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (r *promptRepository) GetByName(ctx context.Context, projectID uuid.UUID, n
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get prompt by name %s: %w", name, promptDomain.ErrPromptNotFound)
+			return nil, appErrors.NotFound("prompt", appErrors.WithOp("repo.prompt.get_by_name"))
 		}
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (r *promptRepository) Update(ctx context.Context, p *promptDomain.Prompt) e
 		Tags:        db.NonNilStrings(p.Tags),
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("update prompt %s: %w", p.Name, promptDomain.ErrPromptAlreadyExists)
+			return appErrors.AlreadyExists("prompt", appErrors.WithOp("repo.prompt.update"))
 		}
 		return fmt.Errorf("update prompt: %w", err)
 	}

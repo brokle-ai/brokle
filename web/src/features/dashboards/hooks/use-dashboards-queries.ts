@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import {
   getDashboards,
   getDashboardById,
@@ -51,6 +52,10 @@ export function useDashboardsQuery(
       if (!projectId) {
         throw new Error('Project ID is required')
       }
+      // Return the full {data, pagination} envelope so consumers can
+      // read the server's authoritative pagination.total — not a fake
+      // total derived from page length. useProjectDashboards extracts
+      // both data and pagination.total for the UI.
       return getDashboards(projectId, filter)
     },
     enabled: !!projectId && (options.enabled ?? true),
@@ -169,16 +174,21 @@ export function useDeleteDashboardMutation(projectId: string) {
         queryKey: dashboardQueryKeys.lists(),
       })
 
-      // Optimistic update
-      queryClient.setQueriesData<{ dashboards: Dashboard[] }>(
+      // Optimistic update — useDashboardsQuery's queryFn returns the
+      // full {data, pagination} envelope. Filter the data array;
+      // pagination.total is intentionally NOT decremented here. The
+      // optimistic update is reverted on error and confirmed via
+      // invalidate-on-success, so the next fetch reads the server's
+      // authoritative count.
+      queryClient.setQueriesData<PaginatedResponse<Dashboard>>(
         { queryKey: dashboardQueryKeys.lists() },
         (old) => {
           if (!old) return old
           return {
             ...old,
-            dashboards: old.dashboards.filter((d) => d.id !== dashboardId),
+            data: old.data.filter((d) => d.id !== dashboardId),
           }
-        }
+        },
       )
 
       return { previousDashboards }

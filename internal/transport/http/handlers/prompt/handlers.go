@@ -62,10 +62,7 @@ func buildPromptFilters(r *http.Request) (*promptDomain.PromptFilters, error) {
 	if t := q.Get("type"); t != "" {
 		pt := promptDomain.PromptType(t)
 		if pt != promptDomain.PromptTypeText && pt != promptDomain.PromptTypeChat {
-			return nil, appErrors.NewValidationError(
-				"Invalid type", "type must be 'text' or 'chat'",
-				appErrors.WithParam("type"),
-			)
+			return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 		}
 		filters.Type = &pt
 	}
@@ -134,17 +131,11 @@ func (h *Handler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name is required"))
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "prompt template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "prompt template is required"))
 		return
 	}
 	prompt, version, labels, err := h.promptSvc.CreatePrompt(r.Context(), projectID, userIDPtr(r.Context()), &body)
@@ -259,10 +250,7 @@ func (h *Handler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	version, labels, err := h.promptSvc.CreateVersion(r.Context(), projectID, promptID, userIDPtr(r.Context()), &body)
@@ -298,11 +286,7 @@ func (h *Handler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	versionID, err := uuid.Parse(raw)
 	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid version ID",
-			"versionId must be a valid UUID or integer version number",
-			appErrors.WithParam("versionId"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("versionId", "must be a valid UUID or integer version number"))
 		return
 	}
 	resp, err := h.promptSvc.GetVersionByID(r.Context(), projectID, promptID, versionID)
@@ -422,17 +406,11 @@ func (h *Handler) ValidateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 
@@ -481,24 +459,15 @@ func (h *Handler) PreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Variables == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing variables", "variables is required",
-			appErrors.WithParam("variables"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("variables", "variables is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 
@@ -522,16 +491,14 @@ func (h *Handler) PreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	case promptDomain.PromptTypeText:
 		content, ok := compiled.(string)
 		if !ok {
-			response.WriteError(w, appErrors.NewInternalError(
-				"unexpected compilation result type for text template", nil))
+			response.WriteError(w, appErrors.Internal("unexpected compilation result type for text template", nil))
 			return
 		}
 		wrapped = promptDomain.TextTemplate{Content: content}
 	case promptDomain.PromptTypeChat:
 		msgs, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			response.WriteError(w, appErrors.NewInternalError(
-				"unexpected compilation result type for chat template", nil))
+			response.WriteError(w, appErrors.Internal("unexpected compilation result type for chat template", nil))
 			return
 		}
 		wrapped = promptDomain.ChatTemplate{Messages: msgs}
@@ -548,17 +515,11 @@ func (h *Handler) DetectDialect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 	dialect, err := h.compilerSvc.DetectDialect(body.Template, body.Type)
@@ -580,17 +541,11 @@ func (h *Handler) UpsertPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name is required"))
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "prompt template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "prompt template is required"))
 		return
 	}
 	result, err := h.promptSvc.UpsertPrompt(r.Context(), projectID, nil, &body)
@@ -633,10 +588,7 @@ func (h *Handler) GetPromptByName(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	name := chi.URLParam(r, "name")
 	if name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name path parameter is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name path parameter is required"))
 		return
 	}
 
@@ -647,10 +599,7 @@ func (h *Handler) GetPromptByName(w http.ResponseWriter, r *http.Request) {
 	if versionStr := r.URL.Query().Get("version"); versionStr != "" {
 		v, err := strconv.Atoi(versionStr)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid version", "version must be an integer",
-				appErrors.WithParam("version"),
-			))
+			response.WriteError(w, appErrors.InvalidParam("version", "must be an integer"))
 			return
 		}
 		if v > 0 {
@@ -661,10 +610,7 @@ func (h *Handler) GetPromptByName(w http.ResponseWriter, r *http.Request) {
 	if cacheTTLStr := r.URL.Query().Get("cache_ttl"); cacheTTLStr != "" {
 		t, err := strconv.Atoi(cacheTTLStr)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid cache_ttl", "cache_ttl must be an integer",
-				appErrors.WithParam("cache_ttl"),
-			))
+			response.WriteError(w, appErrors.InvalidParam("cache_ttl", "must be an integer"))
 			return
 		}
 		if t > 0 {

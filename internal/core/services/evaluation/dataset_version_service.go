@@ -2,7 +2,6 @@ package evaluation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -42,16 +41,16 @@ func (s *DatasetVersionService) CreateVersion(ctx context.Context, datasetID uui
 	// Verify dataset exists (outside transaction - read-only)
 	_, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	// Get next version number (outside transaction - read-only)
 	nextVersion, err := s.versionRepo.GetNextVersionNumber(ctx, datasetID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get next version number", err)
+		return nil, appErrors.Internal("failed to get next version number", err)
 	}
 
 	// Create version entity with placeholder ItemCount (will be set inside transaction)
@@ -69,7 +68,7 @@ func (s *DatasetVersionService) CreateVersion(ctx context.Context, datasetID uui
 		// Get all current items FIRST inside transaction to ensure consistency
 		items, err := s.itemRepo.ListAll(txCtx, datasetID)
 		if err != nil {
-			return appErrors.NewInternalError("failed to list items", err)
+			return appErrors.Internal("failed to list items", err)
 		}
 
 		// Derive ItemCount from actual items to prevent race condition
@@ -77,15 +76,15 @@ func (s *DatasetVersionService) CreateVersion(ctx context.Context, datasetID uui
 
 		// Validate after setting ItemCount
 		if validationErrors := version.Validate(); len(validationErrors) > 0 {
-			return appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+			return appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 		}
 
 		// Create the version record
 		if err := s.versionRepo.Create(txCtx, version); err != nil {
-			if errors.Is(err, evaluation.ErrDatasetVersionExists) {
-				return appErrors.NewConflictError("version already exists")
+			if appErrors.IsAlreadyExists(err) {
+				return appErrors.Conflict("", "version already exists")
 			}
-			return appErrors.NewInternalError("failed to create version", err)
+			return appErrors.Internal("failed to create version", err)
 		}
 
 		// Associate items with this version
@@ -95,7 +94,7 @@ func (s *DatasetVersionService) CreateVersion(ctx context.Context, datasetID uui
 				itemIDs[i] = item.ID
 			}
 			if err := s.versionRepo.AddItems(txCtx, version.ID, itemIDs); err != nil {
-				return appErrors.NewInternalError("failed to associate items with version", err)
+				return appErrors.Internal("failed to associate items with version", err)
 			}
 		}
 
@@ -120,18 +119,18 @@ func (s *DatasetVersionService) GetVersion(ctx context.Context, versionID uuid.U
 	// Verify dataset exists and belongs to project
 	_, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	version, err := s.versionRepo.GetByID(ctx, versionID, datasetID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetVersionNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("version %s", versionID))
 		}
-		return nil, appErrors.NewInternalError("failed to get version", err)
+		return nil, appErrors.Internal("failed to get version", err)
 	}
 
 	return version, nil
@@ -142,15 +141,15 @@ func (s *DatasetVersionService) ListVersions(ctx context.Context, datasetID uuid
 	// Verify dataset exists and belongs to project
 	_, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	versions, err := s.versionRepo.List(ctx, datasetID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list versions", err)
+		return nil, appErrors.Internal("failed to list versions", err)
 	}
 
 	return versions, nil
@@ -161,18 +160,18 @@ func (s *DatasetVersionService) GetLatestVersion(ctx context.Context, datasetID 
 	// Verify dataset exists and belongs to project
 	_, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	version, err := s.versionRepo.GetLatest(ctx, datasetID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetVersionNotFound) {
-			return nil, appErrors.NewNotFoundError("no versions exist for this dataset")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("no versions exist for this dataset")
 		}
-		return nil, appErrors.NewInternalError("failed to get latest version", err)
+		return nil, appErrors.Internal("failed to get latest version", err)
 	}
 
 	return version, nil
@@ -183,24 +182,24 @@ func (s *DatasetVersionService) GetVersionItems(ctx context.Context, versionID u
 	// Verify dataset exists and belongs to project
 	_, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, 0, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, 0, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, 0, appErrors.Internal("failed to get dataset", err)
 	}
 
 	// Verify version exists
 	_, err = s.versionRepo.GetByID(ctx, versionID, datasetID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetVersionNotFound) {
-			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		if appErrors.IsNotFound(err) {
+			return nil, 0, appErrors.NotFound(fmt.Sprintf("version %s", versionID))
 		}
-		return nil, 0, appErrors.NewInternalError("failed to get version", err)
+		return nil, 0, appErrors.Internal("failed to get version", err)
 	}
 
 	items, total, err := s.versionRepo.GetItems(ctx, versionID, limit, offset)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to get version items", err)
+		return nil, 0, appErrors.Internal("failed to get version items", err)
 	}
 
 	return items, total, nil
@@ -210,26 +209,26 @@ func (s *DatasetVersionService) GetVersionItems(ctx context.Context, versionID u
 func (s *DatasetVersionService) PinVersion(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, versionID *uuid.UUID) (*evaluation.Dataset, error) {
 	dataset, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	// If pinning to a specific version, verify it exists
 	if versionID != nil {
 		_, err := s.versionRepo.GetByID(ctx, *versionID, datasetID)
 		if err != nil {
-			if errors.Is(err, evaluation.ErrDatasetVersionNotFound) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", *versionID))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound(fmt.Sprintf("version %s", *versionID))
 			}
-			return nil, appErrors.NewInternalError("failed to get version", err)
+			return nil, appErrors.Internal("failed to get version", err)
 		}
 	}
 
 	dataset.CurrentVersionID = versionID
 	if err := s.datasetRepo.Update(ctx, dataset, projectID); err != nil {
-		return nil, appErrors.NewInternalError("failed to update dataset", err)
+		return nil, appErrors.Internal("failed to update dataset", err)
 	}
 
 	action := "unpinned from version"
@@ -249,10 +248,10 @@ func (s *DatasetVersionService) PinVersion(ctx context.Context, datasetID uuid.U
 func (s *DatasetVersionService) GetDatasetWithVersionInfo(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID) (*evaluation.DatasetWithVersionResponse, error) {
 	dataset, err := s.datasetRepo.GetByID(ctx, datasetID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	response := &evaluation.DatasetWithVersionResponse{

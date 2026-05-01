@@ -56,15 +56,11 @@ func (h *Handler) validateSessionAccess(ctx context.Context, sessionIDStr *strin
 	}
 	sessionID, err := uuid.Parse(*sessionIDStr)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			"Invalid session_id",
-			"session_id must be a valid UUID",
-			appErrors.WithParam("session_id"),
-		)
+		return nil, appErrors.InvalidParam("session_id", "must be a valid UUID")
 	}
 	session, err := h.svc.GetSession(ctx, sessionID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("Session not found")
+		return nil, appErrors.NotFound("session")
 	}
 	if session.ProjectID != projectID {
 		h.logger.Warn("Session does not belong to pinned project",
@@ -72,7 +68,7 @@ func (h *Handler) validateSessionAccess(ctx context.Context, sessionIDStr *strin
 			"session_project", session.ProjectID.String(),
 			"pinned_project", projectID.String(),
 		)
-		return nil, appErrors.NewForbiddenError("You don't have access to this session")
+		return nil, appErrors.PermissionDenied("session", "You don't have access to this session")
 	}
 	return &sessionID, nil
 }
@@ -130,7 +126,7 @@ func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		response.WriteError(w, appErrors.NewInternalError(
+		response.WriteError(w, appErrors.Internal(
 			"Streaming unsupported", fmt.Errorf("ResponseWriter does not implement http.Flusher"),
 		))
 		return

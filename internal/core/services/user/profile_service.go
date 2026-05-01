@@ -33,7 +33,7 @@ func NewProfileService(userRepo userDomain.Repository) *ProfileService {
 func (s *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID) (*userDomain.UserProfile, error) {
 	profile, err := s.userRepo.GetProfile(ctx, userID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("profile not found")
+		return nil, appErrors.NotFound("profile")
 	}
 	return profile, nil
 }
@@ -43,7 +43,7 @@ func (s *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID) (*use
 func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *userDomain.UpdateUserProfileRequest) (*userDomain.UserProfile, error) {
 	profile, err := s.userRepo.GetProfile(ctx, userID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("profile not found")
+		return nil, appErrors.NotFound("profile")
 	}
 
 	if req.Bio != nil {
@@ -76,7 +76,7 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, re
 	profile.UpdatedAt = time.Now()
 
 	if err := s.userRepo.UpdateProfile(ctx, profile); err != nil {
-		return nil, appErrors.NewInternalError("failed to update profile", err)
+		return nil, appErrors.Internal("failed to update profile", err)
 	}
 	return profile, nil
 }
@@ -88,7 +88,7 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, re
 func (s *ProfileService) GetProfileCompleteness(ctx context.Context, userID uuid.UUID) (*userDomain.ProfileCompleteness, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("user not found")
+		return nil, appErrors.NotFound("user")
 	}
 
 	completeness := &userDomain.ProfileCompleteness{

@@ -53,7 +53,7 @@ func fmtSscanf(s, format string, args ...any) (int, error) {
 	// Minimal positive-int parser — just strconv.Atoi.
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {
-			return 0, appErrors.NewValidationError("Invalid number", "expected positive integer")
+			return 0, appErrors.InvalidParam("value", "expected positive integer")
 		}
 		n = n*10 + int(s[i]-'0')
 	}
@@ -91,11 +91,7 @@ func splitCSV(s string) []string {
 func validateStatusList(values []string, field string) error {
 	for _, v := range values {
 		if v != "ok" && v != "error" && v != "unset" {
-			return appErrors.NewValidationError(
-				"Invalid "+field+" value",
-				field+" must be one of: ok, error, unset (got: "+v+")",
-				appErrors.WithParam(field),
-			)
+			return appErrors.InvalidParam(field, "must be one of: ok, error, unset (got: "+v+")")
 		}
 	}
 	return nil
@@ -230,7 +226,7 @@ func (h *DashboardHandler) ListTraces(w http.ResponseWriter, r *http.Request) {
 func (h *DashboardHandler) GetTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	summary, err := h.traces.GetTrace(r.Context(), id)
@@ -244,7 +240,7 @@ func (h *DashboardHandler) GetTrace(w http.ResponseWriter, r *http.Request) {
 func (h *DashboardHandler) DeleteTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	if err := h.traces.DeleteTrace(r.Context(), id); err != nil {
@@ -257,7 +253,7 @@ func (h *DashboardHandler) DeleteTrace(w http.ResponseWriter, r *http.Request) {
 func (h *DashboardHandler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	spans, err := h.traces.GetTraceSpans(r.Context(), id)
@@ -271,7 +267,7 @@ func (h *DashboardHandler) GetTraceSpans(w http.ResponseWriter, r *http.Request)
 func (h *DashboardHandler) GetTraceScores(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	scores, err := h.scores.GetScoresByTraceID(r.Context(), id)
@@ -289,7 +285,7 @@ func (h *DashboardHandler) GetTraceScores(w http.ResponseWriter, r *http.Request
 func (h *DashboardHandler) CreateTraceScore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	projectID := httpctx.MustGetProjectID(r.Context())
@@ -307,7 +303,7 @@ func (h *DashboardHandler) CreateTraceScore(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if rootSpan.ProjectID != projectID {
-		response.WriteError(w, appErrors.NewValidationError("project_id", "does not match trace's project"))
+		response.WriteError(w, appErrors.InvalidParam("project_id", "does not match trace's project"))
 		return
 	}
 
@@ -341,7 +337,7 @@ func (h *DashboardHandler) CreateTraceScore(w http.ResponseWriter, r *http.Reque
 func (h *DashboardHandler) DeleteTraceScore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	scoreID, err := request.URLParamUUID(r, "scoreId")
@@ -357,15 +353,15 @@ func (h *DashboardHandler) DeleteTraceScore(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if score.TraceID == nil || *score.TraceID != id {
-		response.WriteError(w, appErrors.NewNotFoundError("score"))
+		response.WriteError(w, appErrors.NotFound("score"))
 		return
 	}
 	if score.Source != observability.ScoreSourceAnnotation {
-		response.WriteError(w, appErrors.NewForbiddenError("only annotation scores can be deleted"))
+		response.WriteError(w, appErrors.PermissionDenied("", "only annotation scores can be deleted"))
 		return
 	}
 	if score.CreatedBy == nil || *score.CreatedBy != userID.String() {
-		response.WriteError(w, appErrors.NewForbiddenError("only the creator can delete this annotation"))
+		response.WriteError(w, appErrors.PermissionDenied("", "only the creator can delete this annotation"))
 		return
 	}
 	if err := h.scores.DeleteScore(r.Context(), scoreID); err != nil {
@@ -380,7 +376,7 @@ func (h *DashboardHandler) DeleteTraceScore(w http.ResponseWriter, r *http.Reque
 func (h *DashboardHandler) UpdateTraceTags(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	projectID := httpctx.MustGetProjectID(r.Context())
@@ -390,7 +386,7 @@ func (h *DashboardHandler) UpdateTraceTags(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if errs := body.Validate(); len(errs) > 0 {
-		response.WriteError(w, appErrors.NewValidationError("Validation failed", errs[0].Message))
+		response.WriteError(w, appErrors.InvalidParam("tags", errs[0].Message))
 		return
 	}
 	tags, err := h.traces.UpdateTraceTags(r.Context(), projectID, id, body.Tags)
@@ -404,7 +400,7 @@ func (h *DashboardHandler) UpdateTraceTags(w http.ResponseWriter, r *http.Reques
 func (h *DashboardHandler) UpdateTraceBookmark(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing trace ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	projectID := httpctx.MustGetProjectID(r.Context())
@@ -499,7 +495,7 @@ func (h *DashboardHandler) ListSpans(w http.ResponseWriter, r *http.Request) {
 func (h *DashboardHandler) GetSpan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	span, err := h.traces.GetSpan(r.Context(), id)
@@ -513,7 +509,7 @@ func (h *DashboardHandler) GetSpan(w http.ResponseWriter, r *http.Request) {
 func (h *DashboardHandler) DeleteSpan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing span ID", "id is required"))
+		response.WriteError(w, appErrors.InvalidParam("id", "is required"))
 		return
 	}
 	if err := h.traces.DeleteSpan(r.Context(), id); err != nil {
@@ -606,7 +602,7 @@ func (h *DashboardHandler) UpdateScore(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(body.Metadata) > 0 {
 		if !json.Valid(body.Metadata) {
-			response.WriteError(w, appErrors.NewValidationError("Invalid metadata", "metadata must be valid JSON"))
+			response.WriteError(w, appErrors.InvalidParam("metadata", "must be valid JSON"))
 			return
 		}
 		score.Metadata = body.Metadata
@@ -628,7 +624,7 @@ func (h *DashboardHandler) GetScoreAnalytics(w http.ResponseWriter, r *http.Requ
 	q := r.URL.Query()
 	scoreName := q.Get("score_name")
 	if scoreName == "" {
-		response.WriteError(w, appErrors.NewValidationError("Missing score name", "score_name is required", appErrors.WithParam("score_name")))
+		response.WriteError(w, appErrors.InvalidParam("score_name", "is required"))
 		return
 	}
 	interval := q.Get("interval")
@@ -646,7 +642,7 @@ func (h *DashboardHandler) GetScoreAnalytics(w http.ResponseWriter, r *http.Requ
 	if v := q.Get("from_timestamp"); v != "" {
 		ts, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError("Invalid from_timestamp", "must be RFC3339 format", appErrors.WithParam("from_timestamp")))
+			response.WriteError(w, appErrors.InvalidParam("from_timestamp", "must be RFC3339 format"))
 			return
 		}
 		filter.FromTimestamp = &ts
@@ -654,7 +650,7 @@ func (h *DashboardHandler) GetScoreAnalytics(w http.ResponseWriter, r *http.Requ
 	if v := q.Get("to_timestamp"); v != "" {
 		ts, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError("Invalid to_timestamp", "must be RFC3339 format", appErrors.WithParam("to_timestamp")))
+			response.WriteError(w, appErrors.InvalidParam("to_timestamp", "must be RFC3339 format"))
 			return
 		}
 		filter.ToTimestamp = &ts
@@ -834,7 +830,7 @@ func parseFloat(s string) (float64, error) {
 	var v float64
 	n, err := fmtSscanfFloat(s, &v)
 	if err != nil || n == 0 {
-		return 0, appErrors.NewValidationError("Invalid number", "expected a number")
+		return 0, appErrors.InvalidParam("value", "expected a number")
 	}
 	return v, nil
 }
@@ -855,7 +851,7 @@ func fmtSscanfFloat(s string, out *float64) (int, error) {
 			break
 		}
 		if c < '0' || c > '9' {
-			return 0, appErrors.NewValidationError("Invalid number", "expected numeric digits")
+			return 0, appErrors.InvalidParam("value", "expected numeric digits")
 		}
 		intPart = intPart*10 + float64(c-'0')
 		seenDigit = true
@@ -865,7 +861,7 @@ func fmtSscanfFloat(s string, out *float64) (int, error) {
 		for ; i < len(s); i++ {
 			c := s[i]
 			if c < '0' || c > '9' {
-				return 0, appErrors.NewValidationError("Invalid number", "expected numeric digits after decimal")
+				return 0, appErrors.InvalidParam("value", "expected numeric digits after decimal")
 			}
 			fracPart = fracPart*10 + float64(c-'0')
 			fracDiv *= 10
@@ -894,13 +890,13 @@ func parseInt64(s string) (int64, error) {
 	for ; i < len(s); i++ {
 		c := s[i]
 		if c < '0' || c > '9' {
-			return 0, appErrors.NewValidationError("Invalid number", "expected integer")
+			return 0, appErrors.InvalidParam("value", "expected integer")
 		}
 		v = v*10 + int64(c-'0')
 		seenDigit = true
 	}
 	if !seenDigit {
-		return 0, appErrors.NewValidationError("Invalid number", "expected integer")
+		return 0, appErrors.InvalidParam("value", "expected integer")
 	}
 	return sign * v, nil
 }

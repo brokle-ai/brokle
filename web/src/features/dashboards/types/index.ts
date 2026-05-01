@@ -138,14 +138,6 @@ export interface UpdateDashboardRequest {
   layout?: LayoutItem[]
 }
 
-// Dashboard list response
-export interface DashboardListResponse {
-  dashboards: Dashboard[]
-  total: number
-  limit: number
-  offset: number
-}
-
 // Dashboard filter parameters
 export interface DashboardFilter {
   name?: string

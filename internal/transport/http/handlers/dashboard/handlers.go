@@ -104,10 +104,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Name is required", "dashboard name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "dashboard name is required"))
 		return
 	}
 	dash, err := h.svc.CreateDashboard(r.Context(), projectID, userIDPtr(r.Context()), &body)
@@ -190,10 +187,7 @@ func (h *Handler) Duplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Name is required", "dashboard name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "dashboard name is required"))
 		return
 	}
 	dash, err := h.svc.DuplicateDashboard(r.Context(), projectID, dashboardID, &body)
@@ -319,10 +313,7 @@ func (h *Handler) ExecuteWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	widgetID := chi.URLParam(r, "widgetId")
 	if widgetID == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid widget ID", "widgetId is required",
-			appErrors.WithParam("widgetId"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("widgetId", "is required"))
 		return
 	}
 	var body executeDashboardBody
@@ -344,7 +335,7 @@ func (h *Handler) ExecuteWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	result, ok := results.Results[widgetID]
 	if !ok {
-		response.WriteError(w, appErrors.NewNotFoundError("widget"))
+		response.WriteError(w, appErrors.NotFound("widget"))
 		return
 	}
 	response.Success(w, result)
@@ -364,17 +355,11 @@ func (h *Handler) VariableOptions(w http.ResponseWriter, r *http.Request) {
 	view := r.URL.Query().Get("view")
 	dimension := r.URL.Query().Get("dimension")
 	if view == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"View required", "view query parameter is required",
-			appErrors.WithParam("view"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("view", "query parameter is required"))
 		return
 	}
 	if dimension == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Dimension required", "dimension query parameter is required",
-			appErrors.WithParam("dimension"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("dimension", "query parameter is required"))
 		return
 	}
 	limit, err := request.QueryInt(r, "limit", 100)

@@ -3,8 +3,6 @@ package annotation
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -35,26 +33,22 @@ func NewAssignmentService(
 // Assign assigns a user to a queue with the specified role.
 func (s *AssignmentService) Assign(ctx context.Context, queueID, projectID, userID uuid.UUID, role annotation.AssignmentRole, assignedBy *uuid.UUID) (*annotation.QueueAssignment, error) {
 	// Verify queue exists and belongs to project
-	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
-	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return nil, appErrors.NewInternalError("failed to get annotation queue", err)
+	if _, err := s.queueRepo.GetByID(ctx, queueID, projectID); err != nil {
+		return nil, err
 	}
 
 	// Check if already assigned
 	isAssigned, err := s.assignmentRepo.IsAssigned(ctx, queueID, userID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to check assignment", err)
+		return nil, appErrors.Internal("failed to check assignment", err)
 	}
 	if isAssigned {
-		return nil, appErrors.NewConflictError("user is already assigned to this queue")
+		return nil, appErrors.Conflict("", "user is already assigned to this queue")
 	}
 
 	// Validate role
 	if !role.IsValid() {
-		return nil, appErrors.NewValidationError("role", "invalid role, must be annotator, reviewer, or admin")
+		return nil, appErrors.InvalidParam("role", "invalid role, must be annotator, reviewer, or admin")
 	}
 
 	// Create assignment
@@ -62,14 +56,11 @@ func (s *AssignmentService) Assign(ctx context.Context, queueID, projectID, user
 	assignment.AssignedBy = assignedBy
 
 	if validationErrors := assignment.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.assignmentRepo.Create(ctx, assignment); err != nil {
-		if errors.Is(err, annotation.ErrAssignmentExists) {
-			return nil, appErrors.NewConflictError("user is already assigned to this queue")
-		}
-		return nil, appErrors.NewInternalError("failed to create assignment", err)
+		return nil, err
 	}
 
 	s.logger.Info("user assigned to annotation queue",
@@ -85,19 +76,12 @@ func (s *AssignmentService) Assign(ctx context.Context, queueID, projectID, user
 // Unassign removes a user's assignment from a queue.
 func (s *AssignmentService) Unassign(ctx context.Context, queueID, projectID, userID uuid.UUID) error {
 	// Verify queue exists and belongs to project
-	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
-	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return appErrors.NewInternalError("failed to get annotation queue", err)
+	if _, err := s.queueRepo.GetByID(ctx, queueID, projectID); err != nil {
+		return err
 	}
 
 	if err := s.assignmentRepo.Delete(ctx, queueID, userID); err != nil {
-		if errors.Is(err, annotation.ErrAssignmentNotFound) {
-			return appErrors.NewNotFoundError("assignment not found")
-		}
-		return appErrors.NewInternalError("failed to remove assignment", err)
+		return err
 	}
 
 	s.logger.Info("user unassigned from annotation queue",
@@ -111,17 +95,13 @@ func (s *AssignmentService) Unassign(ctx context.Context, queueID, projectID, us
 // ListAssignments retrieves all assignments for a queue.
 func (s *AssignmentService) ListAssignments(ctx context.Context, queueID, projectID uuid.UUID) ([]*annotation.QueueAssignment, error) {
 	// Verify queue exists and belongs to project
-	_, err := s.queueRepo.GetByID(ctx, queueID, projectID)
-	if err != nil {
-		if errors.Is(err, annotation.ErrQueueNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("annotation queue %s", queueID))
-		}
-		return nil, appErrors.NewInternalError("failed to get annotation queue", err)
+	if _, err := s.queueRepo.GetByID(ctx, queueID, projectID); err != nil {
+		return nil, err
 	}
 
 	assignments, err := s.assignmentRepo.List(ctx, queueID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list assignments", err)
+		return nil, appErrors.Internal("failed to list assignments", err)
 	}
 
 	return assignments, nil
@@ -131,7 +111,7 @@ func (s *AssignmentService) ListAssignments(ctx context.Context, queueID, projec
 func (s *AssignmentService) GetUserQueues(ctx context.Context, userID uuid.UUID) ([]*annotation.QueueAssignment, error) {
 	assignments, err := s.assignmentRepo.ListByUser(ctx, userID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list user queue assignments", err)
+		return nil, appErrors.Internal("failed to list user queue assignments", err)
 	}
 	return assignments, nil
 }
@@ -140,11 +120,11 @@ func (s *AssignmentService) GetUserQueues(ctx context.Context, userID uuid.UUID)
 func (s *AssignmentService) CheckAccess(ctx context.Context, queueID, userID uuid.UUID, minRole annotation.AssignmentRole) error {
 	hasRole, err := s.assignmentRepo.HasRole(ctx, queueID, userID, minRole)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check access", err)
+		return appErrors.Internal("failed to check access", err)
 	}
 
 	if !hasRole {
-		return appErrors.NewForbiddenError("insufficient permissions for this queue")
+		return appErrors.PermissionDenied("", "insufficient permissions for this queue")
 	}
 
 	return nil

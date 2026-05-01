@@ -93,10 +93,7 @@ func newTestRouter(t *testing.T, orgSvc handler.OrganizationService) (*chi.Mux, 
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				orgID, err := uuid.Parse(chi.URLParam(req, "orgId"))
 				if err != nil {
-					response.WriteError(w, appErrors.NewValidationError(
-						"Invalid orgId", "orgId must be a valid UUID",
-						appErrors.WithParam("orgId"),
-					))
+					response.WriteError(w, appErrors.InvalidParam("orgId", "must be a valid UUID"))
 					return
 				}
 				ctx := httpctx.WithOrganizationID(req.Context(), orgID)

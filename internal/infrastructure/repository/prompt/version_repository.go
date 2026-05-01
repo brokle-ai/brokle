@@ -10,6 +10,7 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type versionRepository struct {
@@ -48,7 +49,7 @@ func (r *versionRepository) GetByID(ctx context.Context, id uuid.UUID) (*promptD
 	row, err := r.tm.Queries(ctx).GetPromptVersionByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get version by ID %s: %w", id, promptDomain.ErrVersionNotFound)
+			return nil, appErrors.NotFound("prompt_version", appErrors.WithOp("repo.prompt_version.get_by_id"))
 		}
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func (r *versionRepository) GetByPromptAndVersion(ctx context.Context, promptID 
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get version %d: %w", version, promptDomain.ErrVersionNotFound)
+			return nil, appErrors.NotFound("prompt_version", appErrors.WithOp("repo.prompt_version.get_by_prompt_and_version"))
 		}
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func (r *versionRepository) GetLatestByPrompt(ctx context.Context, promptID uuid
 	row, err := r.tm.Queries(ctx).GetLatestPromptVersion(ctx, promptID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get latest version: %w", promptDomain.ErrVersionNotFound)
+			return nil, appErrors.NotFound("prompt_version", appErrors.WithOp("repo.prompt_version.get_latest"))
 		}
 		return nil, err
 	}

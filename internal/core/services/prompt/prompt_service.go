@@ -3,7 +3,6 @@ package prompt
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -60,7 +59,7 @@ func NewPromptService(
 
 func (s *PromptService) CreatePrompt(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *promptDomain.CreatePromptRequest) (*promptDomain.Prompt, *promptDomain.Version, []string, error) {
 	if !namePattern.MatchString(req.Name) {
-		return nil, nil, nil, appErrors.NewValidationError("name", "must start with letter and contain only alphanumeric, underscore, and hyphen")
+		return nil, nil, nil, appErrors.InvalidParam("name", "name must start with letter and contain only alphanumeric, underscore, and hyphen")
 	}
 
 	promptType := req.Type
@@ -69,17 +68,17 @@ func (s *PromptService) CreatePrompt(ctx context.Context, projectID uuid.UUID, u
 	}
 
 	if err := s.compiler.ValidateTemplate(req.Template, promptType); err != nil {
-		return nil, nil, nil, appErrors.NewValidationError("template", err.Error())
+		return nil, nil, nil, appErrors.InvalidParam("template", err.Error(), appErrors.WithCause(err))
 	}
 
 	variables, err := s.compiler.ExtractVariables(req.Template, promptType)
 	if err != nil {
-		return nil, nil, nil, appErrors.NewValidationError("template", err.Error())
+		return nil, nil, nil, appErrors.InvalidParam("template", err.Error(), appErrors.WithCause(err))
 	}
 
 	templateJSON, err := json.Marshal(req.Template)
 	if err != nil {
-		return nil, nil, nil, appErrors.NewInternalError("failed to marshal template", err)
+		return nil, nil, nil, appErrors.Internal("failed to marshal template", err)
 	}
 
 	// Validate all labels for format and protection (BEFORE transaction to fail fast)
@@ -88,16 +87,16 @@ func (s *PromptService) CreatePrompt(ctx context.Context, projectID uuid.UUID, u
 			continue
 		}
 		if !labelPattern.MatchString(labelName) {
-			return nil, nil, nil, appErrors.NewValidationError("labels", fmt.Sprintf("invalid label name: %s", labelName))
+			return nil, nil, nil, appErrors.InvalidParam("labels", fmt.Sprintf("invalid label name: %s", labelName))
 		}
 
 		// CRITICAL: Check if label is protected (fail-closed for security)
 		isProtected, err := s.protectedLabelRepo.IsProtected(ctx, projectID, labelName)
 		if err != nil {
-			return nil, nil, nil, appErrors.NewInternalError("failed to check label protection", err)
+			return nil, nil, nil, appErrors.Internal("failed to check label protection", err)
 		}
 		if isProtected {
-			return nil, nil, nil, appErrors.NewForbiddenError(fmt.Sprintf("label '%s' is protected and requires admin permissions", labelName))
+			return nil, nil, nil, appErrors.PermissionDenied("label", fmt.Sprintf("label '%s' is protected and requires admin permissions", labelName))
 		}
 	}
 
@@ -107,18 +106,18 @@ func (s *PromptService) CreatePrompt(ctx context.Context, projectID uuid.UUID, u
 	// TRANSACTION: Create prompt, version, and labels atomically
 	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 		if err := s.promptRepo.Create(ctx, prompt); err != nil {
-			if errors.Is(err, promptDomain.ErrPromptAlreadyExists) {
-				return appErrors.NewConflictError(fmt.Sprintf("prompt '%s' already exists in this project", req.Name))
+			if appErrors.IsAlreadyExists(err) {
+				return appErrors.Conflict("prompt", fmt.Sprintf("prompt '%s' already exists in this project", req.Name))
 			}
-			return appErrors.NewInternalError("failed to create prompt", err)
+			return appErrors.Internal("failed to create prompt", err)
 		}
 
 		if err := s.versionRepo.Create(ctx, version); err != nil {
-			return appErrors.NewInternalError("failed to create version", err)
+			return appErrors.Internal("failed to create version", err)
 		}
 
 		if err := s.labelRepo.SetLabel(ctx, prompt.ID, version.ID, promptDomain.LabelLatest, userID); err != nil {
-			return appErrors.NewInternalError("failed to create latest label", err)
+			return appErrors.Internal("failed to create latest label", err)
 		}
 
 		for _, labelName := range req.Labels {
@@ -126,7 +125,7 @@ func (s *PromptService) CreatePrompt(ctx context.Context, projectID uuid.UUID, u
 				continue
 			}
 			if err := s.labelRepo.SetLabel(ctx, prompt.ID, version.ID, labelName, userID); err != nil {
-				return appErrors.NewInternalError(fmt.Sprintf("failed to create label '%s'", labelName), err)
+				return appErrors.Internal(fmt.Sprintf("failed to create label '%s'", labelName), err)
 			}
 		}
 
@@ -174,32 +173,32 @@ func (s *PromptService) GetPrompt(ctx context.Context, projectID uuid.UUID, name
 
 	prompt, err := s.promptRepo.GetByName(ctx, projectID, name)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt '%s'", name))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt '%s' not found", name)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	var version *promptDomain.Version
 	if opts != nil && opts.Version != nil {
 		version, err = s.versionRepo.GetByPromptAndVersion(ctx, prompt.ID, *opts.Version)
 		if err != nil {
-			if promptDomain.IsNotFoundError(err) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %d of prompt '%s'", *opts.Version, name))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %d of prompt '%s' not found", *opts.Version, name)))
 			}
-			return nil, appErrors.NewInternalError("failed to get version", err)
+			return nil, appErrors.Internal("failed to get version", err)
 		}
 	} else {
 		labelEntity, err := s.labelRepo.GetByPromptAndName(ctx, prompt.ID, label)
 		if err != nil {
-			if promptDomain.IsNotFoundError(err) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("label '%s' for prompt '%s'", label, name))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound("label", appErrors.WithMessage(fmt.Sprintf("label '%s' for prompt '%s' not found", label, name)))
 			}
-			return nil, appErrors.NewInternalError("failed to get label", err)
+			return nil, appErrors.Internal("failed to get label", err)
 		}
 		version, err = s.versionRepo.GetByID(ctx, labelEntity.VersionID)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to get version by label", err)
+			return nil, appErrors.Internal("failed to get version by label", err)
 		}
 	}
 
@@ -228,15 +227,15 @@ func (s *PromptService) GetPrompt(ctx context.Context, projectID uuid.UUID, name
 func (s *PromptService) GetPromptByID(ctx context.Context, projectID, promptID uuid.UUID) (*promptDomain.Prompt, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	return prompt, nil
@@ -245,15 +244,15 @@ func (s *PromptService) GetPromptByID(ctx context.Context, projectID, promptID u
 func (s *PromptService) UpdatePrompt(ctx context.Context, projectID, promptID uuid.UUID, req *promptDomain.UpdatePromptRequest) (*promptDomain.Prompt, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	oldName := prompt.Name
@@ -261,7 +260,7 @@ func (s *PromptService) UpdatePrompt(ctx context.Context, projectID, promptID uu
 
 	if req.Name != nil {
 		if !namePattern.MatchString(*req.Name) {
-			return nil, appErrors.NewValidationError("name", "must start with letter and contain only alphanumeric, underscore, and hyphen")
+			return nil, appErrors.InvalidParam("name", "name must start with letter and contain only alphanumeric, underscore, and hyphen")
 		}
 		if *req.Name != oldName {
 			nameChanged = true
@@ -278,10 +277,10 @@ func (s *PromptService) UpdatePrompt(ctx context.Context, projectID, promptID uu
 	prompt.UpdatedAt = time.Now()
 
 	if err := s.promptRepo.Update(ctx, prompt); err != nil {
-		if errors.Is(err, promptDomain.ErrPromptAlreadyExists) {
-			return nil, appErrors.NewConflictError(fmt.Sprintf("prompt '%s' already exists", *req.Name))
+		if appErrors.IsAlreadyExists(err) {
+			return nil, appErrors.Conflict("prompt", fmt.Sprintf("prompt '%s' already exists", *req.Name))
 		}
-		return nil, appErrors.NewInternalError("failed to update prompt", err)
+		return nil, appErrors.Internal("failed to update prompt", err)
 	}
 
 	if err := s.InvalidateCache(ctx, prompt.ProjectID, oldName); err != nil {
@@ -300,19 +299,19 @@ func (s *PromptService) UpdatePrompt(ctx context.Context, projectID, promptID uu
 func (s *PromptService) DeletePrompt(ctx context.Context, projectID, promptID uuid.UUID) error {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return appErrors.NewInternalError("failed to get prompt", err)
+		return appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	if err := s.promptRepo.SoftDelete(ctx, promptID); err != nil {
-		return appErrors.NewInternalError("failed to delete prompt", err)
+		return appErrors.Internal("failed to delete prompt", err)
 	}
 
 	if err := s.InvalidateCache(ctx, prompt.ProjectID, prompt.Name); err != nil {
@@ -327,7 +326,7 @@ func (s *PromptService) DeletePrompt(ctx context.Context, projectID, promptID uu
 func (s *PromptService) ListPrompts(ctx context.Context, projectID uuid.UUID, filters *promptDomain.PromptFilters) ([]*promptDomain.PromptListItem, int64, error) {
 	prompts, total, err := s.promptRepo.ListByProject(ctx, projectID, filters)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list prompts", err)
+		return nil, 0, appErrors.Internal("failed to list prompts", err)
 	}
 
 	if len(prompts) == 0 {
@@ -417,8 +416,8 @@ func (s *PromptService) ListPrompts(ctx context.Context, projectID uuid.UUID, fi
 func (s *PromptService) UpsertPrompt(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *promptDomain.UpsertPromptRequest) (*promptDomain.UpsertResponse, error) {
 	prompt, err := s.promptRepo.GetByName(ctx, projectID, req.Name)
 	if err != nil {
-		if !promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewInternalError("failed to check prompt existence", err)
+		if !appErrors.IsNotFound(err) {
+			return nil, appErrors.Internal("failed to check prompt existence", err)
 		}
 
 		createReq := &promptDomain.CreatePromptRequest{
@@ -474,29 +473,29 @@ func (s *PromptService) UpsertPrompt(ctx context.Context, projectID uuid.UUID, u
 func (s *PromptService) CreateVersion(ctx context.Context, projectID, promptID uuid.UUID, userID *uuid.UUID, req *promptDomain.CreateVersionRequest) (*promptDomain.Version, []string, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	if err := s.compiler.ValidateTemplate(req.Template, prompt.Type); err != nil {
-		return nil, nil, appErrors.NewValidationError("template", err.Error())
+		return nil, nil, appErrors.InvalidParam("template", err.Error(), appErrors.WithCause(err))
 	}
 
 	variables, err := s.compiler.ExtractVariables(req.Template, prompt.Type)
 	if err != nil {
-		return nil, nil, appErrors.NewValidationError("template", err.Error())
+		return nil, nil, appErrors.InvalidParam("template", err.Error(), appErrors.WithCause(err))
 	}
 
 	templateJSON, err := json.Marshal(req.Template)
 	if err != nil {
-		return nil, nil, appErrors.NewInternalError("failed to marshal template", err)
+		return nil, nil, appErrors.Internal("failed to marshal template", err)
 	}
 
 	// Validate labels before transaction to fail fast
@@ -505,16 +504,16 @@ func (s *PromptService) CreateVersion(ctx context.Context, projectID, promptID u
 			continue
 		}
 		if !labelPattern.MatchString(labelName) {
-			return nil, nil, appErrors.NewValidationError("labels", fmt.Sprintf("invalid label name: %s", labelName))
+			return nil, nil, appErrors.InvalidParam("labels", fmt.Sprintf("invalid label name: %s", labelName))
 		}
 
 		// CRITICAL: Check if label is protected (fail-closed for security)
 		isProtected, err := s.protectedLabelRepo.IsProtected(ctx, prompt.ProjectID, labelName)
 		if err != nil {
-			return nil, nil, appErrors.NewInternalError("failed to check label protection", err)
+			return nil, nil, appErrors.Internal("failed to check label protection", err)
 		}
 		if isProtected {
-			return nil, nil, appErrors.NewForbiddenError(fmt.Sprintf("label '%s' is protected and requires admin permissions", labelName))
+			return nil, nil, appErrors.PermissionDenied("label", fmt.Sprintf("label '%s' is protected and requires admin permissions", labelName))
 		}
 	}
 
@@ -524,17 +523,17 @@ func (s *PromptService) CreateVersion(ctx context.Context, projectID, promptID u
 	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 		versionNum, err := s.versionRepo.GetNextVersionNumber(ctx, promptID)
 		if err != nil {
-			return appErrors.NewInternalError("failed to get next version number", err)
+			return appErrors.Internal("failed to get next version number", err)
 		}
 
 		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, req.Config, variables, req.CommitMessage, userID)
 
 		if err := s.versionRepo.Create(ctx, version); err != nil {
-			return appErrors.NewInternalError("failed to create version", err)
+			return appErrors.Internal("failed to create version", err)
 		}
 
 		if err := s.labelRepo.SetLabel(ctx, promptID, version.ID, promptDomain.LabelLatest, userID); err != nil {
-			return appErrors.NewInternalError("failed to update latest label", err)
+			return appErrors.Internal("failed to update latest label", err)
 		}
 
 		for _, labelName := range req.Labels {
@@ -542,7 +541,7 @@ func (s *PromptService) CreateVersion(ctx context.Context, projectID, promptID u
 				continue
 			}
 			if err := s.labelRepo.SetLabel(ctx, promptID, version.ID, labelName, userID); err != nil {
-				return appErrors.NewInternalError(fmt.Sprintf("failed to create label '%s'", labelName), err)
+				return appErrors.Internal(fmt.Sprintf("failed to create label '%s'", labelName), err)
 			}
 		}
 
@@ -571,23 +570,23 @@ func (s *PromptService) CreateVersion(ctx context.Context, projectID, promptID u
 func (s *PromptService) GetVersion(ctx context.Context, projectID, promptID uuid.UUID, version int) (*promptDomain.VersionResponse, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	v, err := s.versionRepo.GetByPromptAndVersion(ctx, promptID, version)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %d", version))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %d not found", version)))
 		}
-		return nil, appErrors.NewInternalError("failed to get version", err)
+		return nil, appErrors.Internal("failed to get version", err)
 	}
 
 	// Fetch labels separately (single query, no N+1)
@@ -608,28 +607,28 @@ func (s *PromptService) GetVersion(ctx context.Context, projectID, promptID uuid
 func (s *PromptService) GetVersionEntity(ctx context.Context, projectID, promptID, versionID uuid.UUID) (*promptDomain.Version, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	version, err := s.versionRepo.GetByID(ctx, versionID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %s not found", versionID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get version", err)
+		return nil, appErrors.Internal("failed to get version", err)
 	}
 
 	// CRITICAL: Validate version belongs to prompt
 	if version.PromptID != promptID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %s not found", versionID)))
 	}
 
 	return version, nil
@@ -638,28 +637,28 @@ func (s *PromptService) GetVersionEntity(ctx context.Context, projectID, promptI
 func (s *PromptService) GetVersionByID(ctx context.Context, projectID, promptID, versionID uuid.UUID) (*promptDomain.VersionResponse, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	version, err := s.versionRepo.GetByID(ctx, versionID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %s not found", versionID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get version", err)
+		return nil, appErrors.Internal("failed to get version", err)
 	}
 
 	// CRITICAL: Validate version belongs to prompt
 	if version.PromptID != promptID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %s not found", versionID)))
 	}
 
 	labels, err := s.labelRepo.ListByVersion(ctx, version.ID)
@@ -679,20 +678,20 @@ func (s *PromptService) GetVersionByID(ctx context.Context, projectID, promptID,
 func (s *PromptService) ListVersions(ctx context.Context, projectID, promptID uuid.UUID) ([]*promptDomain.VersionResponse, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	versions, err := s.versionRepo.ListByPrompt(ctx, promptID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list versions", err)
+		return nil, appErrors.Internal("failed to list versions", err)
 	}
 
 	if len(versions) == 0 {
@@ -729,25 +728,25 @@ func (s *PromptService) ListVersions(ctx context.Context, projectID, promptID uu
 func (s *PromptService) GetVersionDiff(ctx context.Context, projectID, promptID uuid.UUID, fromVersion, toVersion int) (*promptDomain.VersionDiffResponse, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	from, err := s.versionRepo.GetByPromptAndVersion(ctx, promptID, fromVersion)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %d", fromVersion))
+		return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %d not found", fromVersion)))
 	}
 
 	to, err := s.versionRepo.GetByPromptAndVersion(ctx, promptID, toVersion)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %d", toVersion))
+		return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %d not found", toVersion)))
 	}
 
 	var templateFrom, templateTo any
@@ -789,27 +788,27 @@ func (s *PromptService) GetVersionDiff(ctx context.Context, projectID, promptID 
 func (s *PromptService) SetLabels(ctx context.Context, projectID, promptID, versionID uuid.UUID, userID *uuid.UUID, labels []string) ([]string, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	version, err := s.versionRepo.GetByID(ctx, versionID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		return nil, appErrors.NotFound("version", appErrors.WithMessage(fmt.Sprintf("version %s not found", versionID)))
 	}
 
 	// CRITICAL: Validate version belongs to prompt
 	if version.PromptID != promptID {
-		return nil, appErrors.NewValidationError("version_id", "version does not belong to this prompt")
+		return nil, appErrors.InvalidParam("version_id", "version does not belong to this prompt")
 	}
 
 	currentLabels, err := s.labelRepo.ListByVersion(ctx, versionID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get current labels", err)
+		return nil, appErrors.Internal("failed to get current labels", err)
 	}
 
 	newLabelSet := make(map[string]bool)
@@ -826,7 +825,7 @@ func (s *PromptService) SetLabels(ctx context.Context, projectID, promptID, vers
 		}
 		if !newLabelSet[currentLabel.Name] {
 			if err := s.labelRepo.RemoveLabel(ctx, promptID, currentLabel.Name); err != nil {
-				return nil, appErrors.NewInternalError(fmt.Sprintf("failed to remove label %s", currentLabel.Name), err)
+				return nil, appErrors.Internal(fmt.Sprintf("failed to remove label %s", currentLabel.Name), err)
 			}
 		}
 	}
@@ -836,20 +835,20 @@ func (s *PromptService) SetLabels(ctx context.Context, projectID, promptID, vers
 			continue
 		}
 		if !labelPattern.MatchString(labelName) {
-			return nil, appErrors.NewValidationError("labels", fmt.Sprintf("invalid label name: %s", labelName))
+			return nil, appErrors.InvalidParam("labels", fmt.Sprintf("invalid label name: %s", labelName))
 		}
 
 		// CRITICAL: Check if label is protected (fail-closed for security)
 		isProtected, err := s.protectedLabelRepo.IsProtected(ctx, prompt.ProjectID, labelName)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check label protection", err)
+			return nil, appErrors.Internal("failed to check label protection", err)
 		}
 		if isProtected {
-			return nil, appErrors.NewForbiddenError(fmt.Sprintf("label '%s' is protected and requires admin permissions to modify", labelName))
+			return nil, appErrors.PermissionDenied("label", fmt.Sprintf("label '%s' is protected and requires admin permissions to modify", labelName))
 		}
 
 		if err := s.labelRepo.SetLabel(ctx, promptID, versionID, labelName, userID); err != nil {
-			return nil, appErrors.NewInternalError(fmt.Sprintf("failed to set label %s", labelName), err)
+			return nil, appErrors.Internal(fmt.Sprintf("failed to set label %s", labelName), err)
 		}
 	}
 
@@ -860,7 +859,7 @@ func (s *PromptService) SetLabels(ctx context.Context, projectID, promptID, vers
 	// Return the final label state for this version
 	finalLabels, err := s.labelRepo.ListByVersion(ctx, versionID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get final labels", err)
+		return nil, appErrors.Internal("failed to get final labels", err)
 	}
 	labelNames := make([]string, len(finalLabels))
 	for i, l := range finalLabels {
@@ -871,24 +870,24 @@ func (s *PromptService) SetLabels(ctx context.Context, projectID, promptID, vers
 
 func (s *PromptService) RemoveLabel(ctx context.Context, projectID, promptID uuid.UUID, userID *uuid.UUID, labelName string) error {
 	if labelName == promptDomain.LabelLatest {
-		return appErrors.NewValidationError("label", "'latest' label cannot be removed")
+		return appErrors.InvalidParam("label", "'latest' label cannot be removed")
 	}
 
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	if err := s.labelRepo.RemoveLabel(ctx, promptID, labelName); err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("label '%s'", labelName))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("label", appErrors.WithMessage(fmt.Sprintf("label '%s' not found", labelName)))
 		}
-		return appErrors.NewInternalError("failed to remove label", err)
+		return appErrors.Internal("failed to remove label", err)
 	}
 
 	if err := s.InvalidateCache(ctx, prompt.ProjectID, prompt.Name); err != nil {
@@ -901,28 +900,28 @@ func (s *PromptService) RemoveLabel(ctx context.Context, projectID, promptID uui
 func (s *PromptService) GetVersionByLabel(ctx context.Context, projectID, promptID uuid.UUID, label string) (*promptDomain.Version, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 		}
-		return nil, appErrors.NewInternalError("failed to get prompt", err)
+		return nil, appErrors.Internal("failed to get prompt", err)
 	}
 
 	// CRITICAL: Validate project ownership
 	if prompt.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		return nil, appErrors.NotFound("prompt", appErrors.WithMessage(fmt.Sprintf("prompt %s not found", promptID)))
 	}
 
 	labelEntity, err := s.labelRepo.GetByPromptAndName(ctx, promptID, label)
 	if err != nil {
-		if promptDomain.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("label '%s'", label))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("label", appErrors.WithMessage(fmt.Sprintf("label '%s' not found", label)))
 		}
-		return nil, appErrors.NewInternalError("failed to get label", err)
+		return nil, appErrors.Internal("failed to get label", err)
 	}
 
 	version, err := s.versionRepo.GetByID(ctx, labelEntity.VersionID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get version", err)
+		return nil, appErrors.Internal("failed to get version", err)
 	}
 
 	return version, nil
@@ -931,7 +930,7 @@ func (s *PromptService) GetVersionByLabel(ctx context.Context, projectID, prompt
 func (s *PromptService) GetProtectedLabels(ctx context.Context, projectID uuid.UUID) ([]string, error) {
 	labels, err := s.protectedLabelRepo.ListByProject(ctx, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get protected labels", err)
+		return nil, appErrors.Internal("failed to get protected labels", err)
 	}
 
 	result := make([]string, 0, len(labels))
@@ -945,12 +944,12 @@ func (s *PromptService) GetProtectedLabels(ctx context.Context, projectID uuid.U
 func (s *PromptService) SetProtectedLabels(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, labels []string) ([]string, error) {
 	for _, labelName := range labels {
 		if !labelPattern.MatchString(labelName) {
-			return nil, appErrors.NewValidationError("protected_labels", fmt.Sprintf("invalid label name: %s", labelName))
+			return nil, appErrors.InvalidParam("protected_labels", fmt.Sprintf("invalid label name: %s", labelName))
 		}
 	}
 
 	if err := s.protectedLabelRepo.SetProtectedLabels(ctx, projectID, labels, userID); err != nil {
-		return nil, appErrors.NewInternalError("failed to set protected labels", err)
+		return nil, appErrors.Internal("failed to set protected labels", err)
 	}
 
 	return labels, nil

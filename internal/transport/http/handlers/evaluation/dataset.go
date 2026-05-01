@@ -50,7 +50,7 @@ func (h *Handler) listDatasetsCore(
 	}
 	params.SetDefaults("updated_at")
 	if err := params.Validate(); err != nil {
-		return nil, 0, params, appErrors.NewValidationError("Invalid pagination parameters", err.Error())
+		return nil, 0, params, appErrors.InvalidParam("pagination", err.Error())
 	}
 
 	datasets, total, err := h.datasetSvc.ListWithFilters(ctx, projectID, filter, params)
@@ -83,7 +83,7 @@ func (h *Handler) importItemsJSONCore(ctx context.Context, datasetID, projectID 
 	if body.Source != "" {
 		src := evaluationDomain.DatasetItemSource(body.Source)
 		if !src.IsValid() {
-			return nil, appErrors.NewValidationError("Invalid source", "source must be one of: manual, trace, span, csv, json, sdk")
+			return nil, appErrors.InvalidParam("source", "must be one of: manual, trace, span, csv, json, sdk")
 		}
 	}
 	domainReq := &evaluationDomain.ImportDatasetItemsFromJSONRequest{

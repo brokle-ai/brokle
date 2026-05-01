@@ -170,7 +170,7 @@ func (s *OverviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 	// already wrapped with context via fmt.Errorf %w inside each goroutine;
 	// translate the first error back to an AppError at the service boundary.
 	if err := g.Wait(); err != nil {
-		return nil, appErrors.NewInternalError("failed to load overview", err)
+		return nil, appErrors.Internal("failed to load overview", err)
 	}
 
 	// Build response from collected results
