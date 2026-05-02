@@ -357,7 +357,7 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	for _, m := range members {
 		out = append(out, toMemberResponse(m))
 	}
-	response.Success(w, listMembersBody{Members: out, Total: len(out)})
+	response.Success(w, listMembersBody{Data: out})
 }
 
 // ----- remove-member --------------------------------------------------
@@ -448,10 +448,7 @@ func (h *Handler) ListPendingInvitations(w http.ResponseWriter, r *http.Request)
 	for _, inv := range invitations {
 		resp = append(resp, toInvitationResponse(inv))
 	}
-	response.Success(w, listPendingInvitationsBody{
-		Invitations: resp,
-		Total:       len(resp),
-	})
+	response.Success(w, listPendingInvitationsBody{Data: resp})
 }
 
 // ----- resend-invitation ----------------------------------------------
@@ -536,10 +533,7 @@ func (h *Handler) ListUserInvitations(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:        inv.CreatedAt,
 		})
 	}
-	response.Success(w, listUserInvitationsBody{
-		Invitations: out,
-		Total:       len(out),
-	})
+	response.Success(w, listUserInvitationsBody{Data: out})
 }
 
 // ----- validate-invitation-token --------------------------------------

@@ -88,18 +88,15 @@ type listOrganizationsBody struct {
 }
 
 type listMembersBody struct {
-	Members []memberResponse `json:"members"`
-	Total   int              `json:"total"`
+	Data []memberResponse `json:"data"`
 }
 
 type listPendingInvitationsBody struct {
-	Invitations []invitationResponse `json:"invitations"`
-	Total       int                  `json:"total"`
+	Data []invitationResponse `json:"data"`
 }
 
 type listUserInvitationsBody struct {
-	Invitations []userInvitationResponse `json:"invitations"`
-	Total       int                      `json:"total"`
+	Data []userInvitationResponse `json:"data"`
 }
 
 type listSettingsBody struct {

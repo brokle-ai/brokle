@@ -18,8 +18,7 @@ export interface MemberListItem {
 }
 
 export interface MemberListResponse {
-  members: MemberListItem[]
-  total: number
+  data: MemberListItem[]
 }
 
 // Role hydration shape returned alongside invitations (and used to
@@ -56,8 +55,7 @@ export interface Invitation {
 }
 
 export interface InvitationListResponse {
-  invitations: Invitation[]
-  total: number
+  data: Invitation[]
 }
 
 export interface InviteMemberRequest {

@@ -88,7 +88,7 @@ function MembersPage() {
   // Filter out non-pending rows for the "pending" table — accepted /
   // revoked / expired invitations live on the same list endpoint but
   // this view is intentionally scoped to actionable ones.
-  const pendingRows = invitations.invitations.filter(
+  const pendingRows = invitations.data.filter(
     (inv) => inv.status === 'pending',
   )
 
@@ -99,13 +99,13 @@ function MembersPage() {
           <div>
             <h2 className="text-lg font-semibold">Members</h2>
             <p className="text-sm text-muted-foreground">
-              {data.total.toLocaleString()} total
+              {data.data.length.toLocaleString()} total
             </p>
           </div>
           <Button onClick={() => setInviteOpen(true)}>Invite member</Button>
         </div>
 
-        <MembersTable orgId={orgId} rows={data.members} />
+        <MembersTable orgId={orgId} rows={data.data} />
       </div>
 
       <div className="space-y-3">

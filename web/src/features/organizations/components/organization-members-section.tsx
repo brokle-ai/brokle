@@ -61,7 +61,7 @@ export function OrganizationMembersSection() {
 
   // Transform members data for display
   const members: MemberRow[] = useMemo(() =>
-    (membersResponse?.data || []).map((member: Member) => ({
+    (membersResponse ?? []).map((member: Member) => ({
       id: member.userId,
       name: member.name,
       email: member.email,

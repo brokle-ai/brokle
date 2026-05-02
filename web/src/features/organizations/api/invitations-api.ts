@@ -144,7 +144,7 @@ export const createInvitation = async (
 export const getPendingInvitations = async (
   organizationId: string
 ): Promise<Invitation[]> => {
-  const response = await client.get<{ invitations: InvitationAPIResponse[]; total: number }>(
+  const response = await client.get<{ data: InvitationAPIResponse[] }>(
     `/v1/organizations/${organizationId}/invitations`,
     { status: 'pending' },
     {
@@ -153,7 +153,7 @@ export const getPendingInvitations = async (
     }
   )
 
-  return response.invitations.map(mapInvitationFromAPI)
+  return response.data.map(mapInvitationFromAPI)
 }
 
 /**
@@ -224,11 +224,11 @@ export const declineInvitation = async (
  * Get invitations for the current user
  */
 export const getUserInvitations = async (): Promise<UserInvitation[]> => {
-  const response = await client.get<{ invitations: UserInvitationAPIResponse[]; total: number }>(
+  const response = await client.get<{ data: UserInvitationAPIResponse[] }>(
     '/v1/invitations'
   )
 
-  return response.invitations.map(mapUserInvitationFromAPI)
+  return response.data.map(mapUserInvitationFromAPI)
 }
 
 // Backend response type for validation
