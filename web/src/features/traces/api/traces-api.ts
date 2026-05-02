@@ -139,7 +139,6 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<Paginat
   } = params
 
   const queryParams: Record<string, any> = {
-    project_id: projectId,
     page,
     limit: pageSize,
   }
@@ -171,7 +170,7 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<Paginat
   if (maxDuration !== undefined) queryParams.max_duration = maxDuration
   if (hasError !== undefined) queryParams.has_error = hasError
 
-  const response = await client.getPaginated<any>('/v1/traces', queryParams)
+  const response = await client.getPaginated<any>(`/v1/projects/${projectId}/traces`, queryParams)
 
   return {
     data: response.data.map(transformTrace),
@@ -192,9 +191,7 @@ export const getTraceById = async (
   projectId: string,
   traceId: string
 ): Promise<Trace> => {
-  const response = await client.get(`/v1/traces/${traceId}`, {
-    project_id: projectId,
-  })
+  const response = await client.get(`/v1/projects/${projectId}/traces/${traceId}`)
   return transformTraceResponse(response)
 }
 
@@ -212,9 +209,7 @@ export const getSpansForTrace = async (
   projectId: string,
   traceId: string
 ): Promise<Span[]> => {
-  const response = await client.get<any>(`/v1/traces/${traceId}/spans`, {
-    project_id: projectId,
-  })
+  const response = await client.get<any>(`/v1/projects/${projectId}/traces/${traceId}/spans`)
   // Backend returns spans array directly in response (via response.Success(c, spans))
   // The BrokleAPIClient unwraps the response, so we get the data directly
   const spansData = Array.isArray(response) ? response : []
@@ -240,9 +235,7 @@ export const getTraceWithScores = async (
   projectId: string,
   traceId: string
 ): Promise<Trace> => {
-  const response = await client.get(`/v1/traces/${traceId}/scores`, {
-    project_id: projectId,
-  })
+  const response = await client.get(`/v1/projects/${projectId}/traces/${traceId}/scores`)
   return transformTraceResponse(response)
 }
 
@@ -260,9 +253,7 @@ export const getScoresForTrace = async (
   projectId: string,
   traceId: string
 ): Promise<Score[]> => {
-  const response = await client.get<Score[]>(`/v1/traces/${traceId}/scores`, {
-    project_id: projectId,
-  })
+  const response = await client.get<Score[]>(`/v1/projects/${projectId}/traces/${traceId}/scores`)
   // Backend returns Score[] directly via response.Success(c, scores)
   return Array.isArray(response) ? response : []
 }
@@ -282,8 +273,7 @@ export const updateTrace = async (
   traceId: string,
   data: UpdateTraceData
 ): Promise<Trace> => {
-  const response = await client.put(`/v1/traces/${traceId}`, {
-    project_id: projectId,
+  const response = await client.put(`/v1/projects/${projectId}/traces/${traceId}`, {
     ...data,
   })
   return transformTraceResponse(response)
@@ -301,9 +291,7 @@ export const deleteTrace = async (
   projectId: string,
   traceId: string
 ): Promise<void> => {
-  await client.delete(`/v1/traces/${traceId}`, {
-    params: { project_id: projectId },
-  })
+  await client.delete(`/v1/projects/${projectId}/traces/${traceId}`)
 }
 
 /**
@@ -322,9 +310,8 @@ export const updateTraceTags = async (
   tags: string[]
 ): Promise<{ message: string; tags: string[] }> => {
   return client.put<{ message: string; tags: string[] }>(
-    `/v1/traces/${traceId}/tags`,
-    { tags },
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/tags`,
+    { tags }
   )
 }
 
@@ -344,9 +331,8 @@ export const updateTraceBookmark = async (
   bookmarked: boolean
 ): Promise<{ message: string; bookmarked: boolean }> => {
   return client.put<{ message: string; bookmarked: boolean }>(
-    `/v1/traces/${traceId}/bookmark`,
-    { bookmarked },
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/bookmark`,
+    { bookmarked }
   )
 }
 
@@ -412,9 +398,7 @@ export const getTraceFilterOptions = async (
     cost_range: { min: number; max: number } | null
     token_range: { min: number; max: number } | null
     duration_range: { min: number; max: number } | null
-  }>('/v1/traces/filter-options', {
-    project_id: projectId,
-  })
+  }>(`/v1/projects/${projectId}/traces/filter-options`)
 
   return {
     models: response.models || [],
@@ -455,7 +439,6 @@ export const getSpans = async (params: GetSpansParams): Promise<PaginatedRespons
   } = params
 
   const queryParams: Record<string, any> = {
-    project_id: projectId,
     page,
     limit: pageSize,
   }
@@ -467,7 +450,7 @@ export const getSpans = async (params: GetSpansParams): Promise<PaginatedRespons
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  const response = await client.getPaginated<any>('/v1/spans', queryParams)
+  const response = await client.getPaginated<any>(`/v1/projects/${projectId}/spans`, queryParams)
 
   return {
     data: response.data.map(transformSpan),
@@ -484,9 +467,7 @@ export const getSpanById = async (
   projectId: string,
   spanId: string
 ): Promise<Span> => {
-  const response = await client.get<any>(`/v1/spans/${spanId}`, {
-    project_id: projectId,
-  })
+  const response = await client.get<any>(`/v1/projects/${projectId}/spans/${spanId}`)
   return transformSpan(response)
 }
 
@@ -500,8 +481,7 @@ export const updateSpan = async (
   spanId: string,
   data: UpdateSpanData
 ): Promise<Span> => {
-  const response = await client.put<any>(`/v1/spans/${spanId}`, {
-    project_id: projectId,
+  const response = await client.put<any>(`/v1/projects/${projectId}/spans/${spanId}`, {
     ...data,
   })
   return transformSpan(response)
@@ -530,7 +510,6 @@ export const getScores = async (params: GetScoresParams): Promise<PaginatedRespo
   } = params
 
   const queryParams: Record<string, any> = {
-    project_id: projectId,
     page,
     limit: pageSize,
   }
@@ -542,7 +521,7 @@ export const getScores = async (params: GetScoresParams): Promise<PaginatedRespo
   if (source) queryParams.source = source
   if (dataType) queryParams.type = dataType
 
-  const response = await client.getPaginated<Score>('/v1/scores', queryParams)
+  const response = await client.getPaginated<Score>(`/v1/projects/${projectId}/scores`, queryParams)
 
   return {
     data: response.data.map(transformScore),
@@ -559,9 +538,7 @@ export const getScoreById = async (
   projectId: string,
   scoreId: string
 ): Promise<Score> => {
-  const response = await client.get<any>(`/v1/scores/${scoreId}`, {
-    project_id: projectId,
-  })
+  const response = await client.get<any>(`/v1/projects/${projectId}/scores/${scoreId}`)
   return transformScore(response)
 }
 
@@ -575,8 +552,7 @@ export const updateScore = async (
   scoreId: string,
   data: UpdateScoreData
 ): Promise<Score> => {
-  const response = await client.put<any>(`/v1/scores/${scoreId}`, {
-    project_id: projectId,
+  const response = await client.put<any>(`/v1/projects/${projectId}/scores/${scoreId}`, {
     ...data,
   })
   return transformScore(response)
@@ -669,7 +645,6 @@ export const getFilterPresets = async (
   includePublic: boolean = true
 ): Promise<FilterPreset[]> => {
   const queryParams: Record<string, any> = {
-    project_id: projectId,
     include_public: includePublic,
   }
   if (tableName) {
@@ -696,8 +671,7 @@ export const getFilterPresetById = async (
   presetId: string
 ): Promise<FilterPreset> => {
   return client.get<FilterPreset>(
-    `/v1/projects/${projectId}/filter-presets/${presetId}`,
-    { project_id: projectId }
+    `/v1/projects/${projectId}/filter-presets/${presetId}`
   )
 }
 
@@ -779,7 +753,5 @@ export interface AttributeDiscoveryResponse {
 export const discoverAttributes = async (
   projectId: string
 ): Promise<AttributeDiscoveryResponse> => {
-  return client.get<AttributeDiscoveryResponse>('/v1/traces/attributes', {
-    project_id: projectId,
-  })
+  return client.get<AttributeDiscoveryResponse>(`/v1/projects/${projectId}/traces/attributes`)
 }

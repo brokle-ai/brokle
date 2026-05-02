@@ -78,8 +78,7 @@ export const listComments = async (
   traceId: string
 ): Promise<ListCommentsResponse> => {
   return client.get<ListCommentsResponse>(
-    `/v1/traces/${traceId}/comments`,
-    { project_id: projectId }
+    `/v1/projects/${projectId}/traces/${traceId}/comments`
   )
 }
 
@@ -97,8 +96,7 @@ export const getCommentCount = async (
   traceId: string
 ): Promise<CommentCountResponse> => {
   return client.get<CommentCountResponse>(
-    `/v1/traces/${traceId}/comments/count`,
-    { project_id: projectId }
+    `/v1/projects/${projectId}/traces/${traceId}/comments/count`
   )
 }
 
@@ -118,9 +116,8 @@ export const createComment = async (
   data: CreateCommentRequest
 ): Promise<Comment> => {
   return client.post<Comment>(
-    `/v1/traces/${traceId}/comments`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/comments`,
+    data
   )
 }
 
@@ -142,9 +139,8 @@ export const updateComment = async (
   data: UpdateCommentRequest
 ): Promise<Comment> => {
   return client.put<Comment>(
-    `/v1/traces/${traceId}/comments/${commentId}`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/comments/${commentId}`,
+    data
   )
 }
 
@@ -163,8 +159,7 @@ export const deleteComment = async (
   commentId: string
 ): Promise<void> => {
   await client.delete(
-    `/v1/traces/${traceId}/comments/${commentId}`,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/comments/${commentId}`
   )
 }
 
@@ -186,9 +181,8 @@ export const toggleReaction = async (
   data: ToggleReactionRequest
 ): Promise<ReactionSummary[]> => {
   return client.post<ReactionSummary[]>(
-    `/v1/traces/${traceId}/comments/${commentId}/reactions`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/comments/${commentId}/reactions`,
+    data
   )
 }
 
@@ -210,8 +204,7 @@ export const createReply = async (
   data: CreateCommentRequest
 ): Promise<Comment> => {
   return client.post<Comment>(
-    `/v1/traces/${traceId}/comments/${parentId}/replies`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/comments/${parentId}/replies`,
+    data
   )
 }
