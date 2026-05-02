@@ -65,14 +65,6 @@ func fmtSscanf(s, format string, args ...any) (int, error) {
 	return n, nil
 }
 
-func newPaginationMeta(p pagination.Params, total int64) paginationMeta {
-	pages := 0
-	if p.Limit > 0 {
-		pages = int((total + int64(p.Limit) - 1) / int64(p.Limit))
-	}
-	return paginationMeta{Page: p.Page, Limit: p.Limit, Total: total, TotalPages: pages}
-}
-
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
@@ -219,7 +211,7 @@ func (h *DashboardHandler) ListTraces(w http.ResponseWriter, r *http.Request) {
 
 	response.Success(w, listTracesResponse{
 		Data:       traces,
-		Pagination: newPaginationMeta(params, total),
+		Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 
@@ -489,7 +481,7 @@ func (h *DashboardHandler) ListSpans(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, listSpansResponse{Data: spans, Pagination: newPaginationMeta(params, total)})
+	response.Success(w, listSpansResponse{Data: spans, Pagination: response.BuildPagination(params.Page, params.Limit, total)})
 }
 
 func (h *DashboardHandler) GetSpan(w http.ResponseWriter, r *http.Request) {
@@ -562,7 +554,7 @@ func (h *DashboardHandler) ListScores(w http.ResponseWriter, r *http.Request) {
 	}
 	response.Success(w, listScoresResponse{
 		Data:       toTraceScoreResponses(scores),
-		Pagination: newPaginationMeta(params, total),
+		Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 
@@ -720,7 +712,7 @@ func (h *DashboardHandler) ListSessions(w http.ResponseWriter, r *http.Request) 
 	}
 	response.Success(w, listTraceSessionsResponse{
 		Data:       sessions,
-		Pagination: newPaginationMeta(params, total),
+		Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 

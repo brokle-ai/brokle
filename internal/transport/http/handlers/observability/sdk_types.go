@@ -2,6 +2,7 @@ package observability
 
 import (
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/response"
 )
 
 // SDK-plane request/response DTOs.
@@ -15,9 +16,8 @@ type SpanQueryRequest struct {
 }
 
 type SpanQueryResponse struct {
-	Spans      []*observability.Span `json:"spans"`
-	TotalCount int64                 `json:"total_count"`
-	HasMore    bool                  `json:"has_more"`
+	Data       []*observability.Span `json:"data"`
+	Pagination *response.Pagination  `json:"pagination"`
 }
 
 type ValidateFilterRequest struct {

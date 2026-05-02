@@ -117,7 +117,6 @@ func (s *SpanQueryService) QuerySpans(
 	return &obsDomain.SpanQueryResponse{
 		Spans:      spans,
 		TotalCount: totalCount,
-		HasMore:    int64(offset+len(spans)) < totalCount,
 	}, nil
 }
 
