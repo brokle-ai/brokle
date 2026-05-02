@@ -83,7 +83,7 @@ func (r *blacklistedTokenRepository) GetBlacklistedTokensByUser(ctx context.Cont
 	}
 	defer rows.Close()
 
-	var out []*authDomain.BlacklistedToken
+	out := make([]*authDomain.BlacklistedToken, 0)
 	for rows.Next() {
 		var (
 			jti       uuid.UUID

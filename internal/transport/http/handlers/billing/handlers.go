@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
@@ -35,7 +34,7 @@ import (
 	"brokle/pkg/units"
 )
 
-type handler struct {
+type Handler struct {
 	usageSvc    *billingService.BillableUsageService
 	budgetSvc   *billingService.BudgetService
 	contractSvc *billingService.ContractService
@@ -43,55 +42,21 @@ type handler struct {
 	logger      *slog.Logger
 }
 
-// RegisterRoutes mounts the billing routes on r. Expected mount
-// context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs the billing handler.
+func New(
 	usageSvc *billingService.BillableUsageService,
 	budgetSvc *billingService.BudgetService,
 	contractSvc *billingService.ContractService,
 	pricingSvc *billingService.PricingService,
 	logger *slog.Logger,
-) {
-	h := &handler{
+) *Handler {
+	return &Handler{
 		usageSvc:    usageSvc,
 		budgetSvc:   budgetSvc,
 		contractSvc: contractSvc,
 		pricingSvc:  pricingSvc,
 		logger:      logger,
 	}
-
-	r.Route("/api/v1/organizations/{orgId}", func(r chi.Router) {
-		r.Route("/usage", func(r chi.Router) {
-			r.Get("/overview", h.getUsageOverview)
-			r.Get("/timeseries", h.getUsageTimeSeries)
-			r.Get("/by-project", h.getUsageByProject)
-			r.Get("/export", h.exportUsage)
-		})
-		r.Route("/budgets", func(r chi.Router) {
-			r.Get("/", h.listBudgets)
-			r.Post("/", h.createBudget)
-			r.Get("/alerts", h.getBudgetAlerts)
-			r.Post("/alerts/{alertId}/acknowledge", h.acknowledgeBudgetAlert)
-			r.Get("/{budgetId}", h.getBudget)
-			r.Put("/{budgetId}", h.updateBudget)
-			r.Delete("/{budgetId}", h.deleteBudget)
-		})
-	})
-
-	r.Route("/api/v1/billing", func(r chi.Router) {
-		r.Post("/contracts", h.createContract)
-		r.Get("/organizations/{orgId}/contracts", h.listContracts)
-		r.Get("/organizations/{orgId}/effective-pricing", h.getEffectivePricing)
-		r.Route("/contracts/{contractId}", func(r chi.Router) {
-			r.Get("/", h.getContract)
-			r.Put("/", h.updateContract)
-			r.Delete("/", h.cancelContract)
-			r.Put("/activate", h.activateContract)
-			r.Put("/tiers", h.updateContractTiers)
-			r.Get("/history", h.getContractHistory)
-		})
-	})
 }
 
 // ----- helpers ---------------------------------------------------------
@@ -108,26 +73,18 @@ func float64ToDecimalPtr(f *float64) *decimal.Decimal {
 // Usage
 // ============================================================================
 
-func (h *handler) getUsageOverview(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetUsageOverview(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	overview, err := h.usageSvc.GetUsageOverview(r.Context(), orgID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewInternalError("Failed to get usage overview", err))
+		response.WriteError(w, appErrors.Internal("Failed to get usage overview", err))
 		return
 	}
 	response.Success(w, overview)
 }
 
-func (h *handler) getUsageTimeSeries(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetUsageTimeSeries(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	q := r.URL.Query()
 	from, to, err := handlersShared.ParseTimeRange(
 		q.Get("from"), q.Get("to"), q.Get("time_range"),
@@ -147,18 +104,14 @@ func (h *handler) getUsageTimeSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	usage, err := h.usageSvc.GetUsageTimeSeries(r.Context(), orgID, from, to, granularity)
 	if err != nil {
-		response.WriteError(w, appErrors.NewInternalError("Failed to get usage time series", err))
+		response.WriteError(w, appErrors.Internal("Failed to get usage time series", err))
 		return
 	}
 	response.Success(w, usage)
 }
 
-func (h *handler) getUsageByProject(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetUsageByProject(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	q := r.URL.Query()
 	from, to, err := handlersShared.ParseTimeRange(
 		q.Get("from"), q.Get("to"), q.Get("time_range"),
@@ -170,18 +123,14 @@ func (h *handler) getUsageByProject(w http.ResponseWriter, r *http.Request) {
 	}
 	summaries, err := h.usageSvc.GetUsageByProject(r.Context(), orgID, from, to)
 	if err != nil {
-		response.WriteError(w, appErrors.NewInternalError("Failed to get usage by project", err))
+		response.WriteError(w, appErrors.Internal("Failed to get usage by project", err))
 		return
 	}
 	response.Success(w, summaries)
 }
 
-func (h *handler) exportUsage(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ExportUsage(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	q := r.URL.Query()
 	from, to, err := handlersShared.ParseTimeRange(
 		q.Get("from"), q.Get("to"), q.Get("time_range"),
@@ -206,7 +155,7 @@ func (h *handler) exportUsage(w http.ResponseWriter, r *http.Request) {
 
 	usage, err := h.usageSvc.GetUsageTimeSeries(r.Context(), orgID, from, to, granularity)
 	if err != nil {
-		response.WriteError(w, appErrors.NewInternalError("Failed to get usage for export", err))
+		response.WriteError(w, appErrors.Internal("Failed to get usage for export", err))
 		return
 	}
 	projectUsage, pErr := h.usageSvc.GetUsageByProject(r.Context(), orgID, from, to)
@@ -228,7 +177,7 @@ func (h *handler) exportUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		body, mErr := json.Marshal(payload)
 		if mErr != nil {
-			response.WriteError(w, appErrors.NewInternalError("Failed to encode usage export", mErr))
+			response.WriteError(w, appErrors.Internal("Failed to encode usage export", mErr))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -265,27 +214,19 @@ func (h *handler) exportUsage(w http.ResponseWriter, r *http.Request) {
 // Budgets
 // ============================================================================
 
-func (h *handler) listBudgets(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListBudgets(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	budgets, err := h.budgetSvc.GetBudgetsByOrg(r.Context(), orgID)
 	if err != nil {
 		h.logger.Error("Failed to list budgets", "error", err, "organization_id", orgID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to list budgets", err))
+		response.WriteError(w, appErrors.Internal("Failed to list budgets", err))
 		return
 	}
 	response.Success(w, budgets)
 }
 
-func (h *handler) getBudget(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetBudget(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	budgetID, err := request.URLParamUUID(r, "budgetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -293,22 +234,18 @@ func (h *handler) getBudget(w http.ResponseWriter, r *http.Request) {
 	}
 	budget, err := h.budgetSvc.GetBudget(r.Context(), budgetID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewNotFoundError("Budget not found"))
+		response.WriteError(w, appErrors.NotFound("budget", appErrors.WithMessage("Budget not found")))
 		return
 	}
 	if budget.OrganizationID != orgID {
-		response.WriteError(w, appErrors.NewForbiddenError("Access denied to this budget"))
+		response.WriteError(w, appErrors.PermissionDenied("budget", "Access denied to this budget"))
 		return
 	}
 	response.Success(w, budget)
 }
 
-func (h *handler) createBudget(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateBudget(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 
 	var body createBudgetBody
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -317,10 +254,7 @@ func (h *handler) createBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body.SpanLimit == nil && body.BytesLimit == nil && body.ScoreLimit == nil && body.CostLimit == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"At least one limit is required",
-			"Set span_limit, bytes_limit, score_limit, or cost_limit",
-		))
+		response.WriteError(w, appErrors.InvalidParam("limits", "at least one of span_limit, bytes_limit, score_limit, or cost_limit is required"))
 		return
 	}
 
@@ -344,10 +278,7 @@ func (h *handler) createBudget(w http.ResponseWriter, r *http.Request) {
 	if body.ProjectID != nil {
 		projectID, pErr := uuid.Parse(*body.ProjectID)
 		if pErr != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid project_id", "project_id must be a valid UUID",
-				appErrors.WithParam("project_id"),
-			))
+			response.WriteError(w, appErrors.InvalidParam("project_id", "must be a valid UUID"))
 			return
 		}
 		budget.ProjectID = &projectID
@@ -361,12 +292,8 @@ func (h *handler) createBudget(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, budget)
 }
 
-func (h *handler) updateBudget(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdateBudget(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	budgetID, err := request.URLParamUUID(r, "budgetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -374,11 +301,11 @@ func (h *handler) updateBudget(w http.ResponseWriter, r *http.Request) {
 	}
 	budget, err := h.budgetSvc.GetBudget(r.Context(), budgetID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewNotFoundError("Budget not found"))
+		response.WriteError(w, appErrors.NotFound("budget", appErrors.WithMessage("Budget not found")))
 		return
 	}
 	if budget.OrganizationID != orgID {
-		response.WriteError(w, appErrors.NewForbiddenError("Access denied to this budget"))
+		response.WriteError(w, appErrors.PermissionDenied("budget", "Access denied to this budget"))
 		return
 	}
 
@@ -415,18 +342,14 @@ func (h *handler) updateBudget(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.budgetSvc.UpdateBudget(r.Context(), budget); err != nil {
 		h.logger.Error("Failed to update budget", "error", err, "budget_id", budgetID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to update budget", err))
+		response.WriteError(w, appErrors.Internal("Failed to update budget", err))
 		return
 	}
 	response.Success(w, budget)
 }
 
-func (h *handler) deleteBudget(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteBudget(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	budgetID, err := request.URLParamUUID(r, "budgetId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -434,27 +357,23 @@ func (h *handler) deleteBudget(w http.ResponseWriter, r *http.Request) {
 	}
 	budget, err := h.budgetSvc.GetBudget(r.Context(), budgetID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewNotFoundError("Budget not found"))
+		response.WriteError(w, appErrors.NotFound("budget", appErrors.WithMessage("Budget not found")))
 		return
 	}
 	if budget.OrganizationID != orgID {
-		response.WriteError(w, appErrors.NewForbiddenError("Access denied to this budget"))
+		response.WriteError(w, appErrors.PermissionDenied("budget", "Access denied to this budget"))
 		return
 	}
 	if err := h.budgetSvc.DeleteBudget(r.Context(), budgetID); err != nil {
 		h.logger.Error("Failed to delete budget", "error", err, "budget_id", budgetID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to delete budget", err))
+		response.WriteError(w, appErrors.Internal("Failed to delete budget", err))
 		return
 	}
 	response.NoContent(w)
 }
 
-func (h *handler) getBudgetAlerts(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetBudgetAlerts(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	limit, err := request.QueryInt(r, "limit", 50)
 	if err != nil {
 		response.WriteError(w, err)
@@ -466,18 +385,14 @@ func (h *handler) getBudgetAlerts(w http.ResponseWriter, r *http.Request) {
 	alerts, err := h.budgetSvc.GetAlerts(r.Context(), orgID, limit)
 	if err != nil {
 		h.logger.Error("Failed to get alerts", "error", err, "organization_id", orgID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get alerts", err))
+		response.WriteError(w, appErrors.Internal("Failed to get alerts", err))
 		return
 	}
 	response.Success(w, alerts)
 }
 
-func (h *handler) acknowledgeBudgetAlert(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) AcknowledgeBudgetAlert(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	alertID, err := request.URLParamUUID(r, "alertId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -485,11 +400,11 @@ func (h *handler) acknowledgeBudgetAlert(w http.ResponseWriter, r *http.Request)
 	}
 	if err := h.budgetSvc.AcknowledgeAlert(r.Context(), orgID, alertID); err != nil {
 		h.logger.Error("Failed to acknowledge alert", "error", err, "alert_id", alertID)
-		if billingDomain.IsNotFoundError(err) {
-			response.WriteError(w, appErrors.NewNotFoundError("Alert not found"))
+		if appErrors.IsNotFound(err) {
+			response.WriteError(w, appErrors.NotFound("alert", appErrors.WithMessage("Alert not found")))
 			return
 		}
-		response.WriteError(w, appErrors.NewInternalError("Failed to acknowledge alert", err))
+		response.WriteError(w, appErrors.Internal("Failed to acknowledge alert", err))
 		return
 	}
 	response.Success(w, map[string]any{"acknowledged": true})
@@ -499,7 +414,7 @@ func (h *handler) acknowledgeBudgetAlert(w http.ResponseWriter, r *http.Request)
 // Contracts
 // ============================================================================
 
-func (h *handler) createContract(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 	var body createContractBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -507,11 +422,7 @@ func (h *handler) createContract(w http.ResponseWriter, r *http.Request) {
 	}
 	orgID, err := uuid.Parse(body.OrganizationID)
 	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid organization ID",
-			"organization_id must be a valid UUID",
-			appErrors.WithParam("organization_id"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("organization_id", "must be a valid UUID"))
 		return
 	}
 	userID := httpctx.MustGetUserID(r.Context())
@@ -578,7 +489,7 @@ func (h *handler) createContract(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, result)
 }
 
-func (h *handler) getContract(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -592,7 +503,7 @@ func (h *handler) getContract(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, contract)
 }
 
-func (h *handler) listContracts(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -601,13 +512,13 @@ func (h *handler) listContracts(w http.ResponseWriter, r *http.Request) {
 	contracts, err := h.contractSvc.GetContractsByOrg(r.Context(), orgID)
 	if err != nil {
 		h.logger.Error("Failed to get contracts", "error", err, "organization_id", orgID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get contracts", err))
+		response.WriteError(w, appErrors.Internal("Failed to get contracts", err))
 		return
 	}
 	response.Success(w, contracts)
 }
 
-func (h *handler) updateContract(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateContract(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -674,7 +585,7 @@ func (h *handler) updateContract(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, contract)
 }
 
-func (h *handler) activateContract(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ActivateContract(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -693,7 +604,7 @@ func (h *handler) activateContract(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) cancelContract(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -715,7 +626,7 @@ func (h *handler) cancelContract(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) updateContractTiers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateContractTiers(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -750,7 +661,7 @@ func (h *handler) updateContractTiers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) getContractHistory(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetContractHistory(w http.ResponseWriter, r *http.Request) {
 	contractID, err := request.URLParamUUID(r, "contractId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -759,13 +670,13 @@ func (h *handler) getContractHistory(w http.ResponseWriter, r *http.Request) {
 	history, err := h.contractSvc.GetContractHistory(r.Context(), contractID)
 	if err != nil {
 		h.logger.Error("Failed to get contract history", "error", err, "contract_id", contractID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get contract history", err))
+		response.WriteError(w, appErrors.Internal("Failed to get contract history", err))
 		return
 	}
 	response.Success(w, history)
 }
 
-func (h *handler) getEffectivePricing(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetEffectivePricing(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -774,7 +685,7 @@ func (h *handler) getEffectivePricing(w http.ResponseWriter, r *http.Request) {
 	effective, err := h.pricingSvc.GetEffectivePricing(r.Context(), orgID)
 	if err != nil {
 		h.logger.Error("Failed to get effective pricing", "error", err, "organization_id", orgID)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get effective pricing", err))
+		response.WriteError(w, appErrors.Internal("Failed to get effective pricing", err))
 		return
 	}
 	response.Success(w, effective)

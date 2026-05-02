@@ -11,6 +11,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // blacklistedTokenRepository is the pgx+sqlc implementation of
@@ -57,7 +58,7 @@ func (r *blacklistedTokenRepository) GetByJTI(ctx context.Context, jti string) (
 	row, err := r.tm.Queries(ctx).GetBlacklistedTokenByJTI(ctx, jtiUUID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get blacklisted token by JTI %s: %w", jti, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("blacklisted_token", appErrors.WithOp("repo.blacklisted_token.get_by_jti"))
 		}
 		return nil, fmt.Errorf("get blacklisted token by JTI %s: %w", jti, err)
 	}

@@ -3,31 +3,14 @@ package evaluation
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/httpctx"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-// registerScoreConfigRoutes mounts score-config CRUD under
-// /api/v1/projects/{projectId}/score-configs.
-func registerScoreConfigRoutes(r chi.Router, h *handler) {
-	r.Route("/score-configs", func(r chi.Router) {
-		r.Post("/", h.createScoreConfig)
-		r.Get("/", h.listScoreConfigs)
-		r.Get("/{configId}", h.getScoreConfig)
-		r.Put("/{configId}", h.updateScoreConfig)
-		r.Delete("/{configId}", h.deleteScoreConfig)
-	})
-}
-
-func (h *handler) createScoreConfig(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body CreateScoreConfigRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -50,12 +33,8 @@ func (h *handler) createScoreConfig(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, cfg.ToResponse())
 }
 
-func (h *handler) listScoreConfigs(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListScoreConfigs(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	page, limit, err := readPagination(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -75,12 +54,8 @@ func (h *handler) listScoreConfigs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) getScoreConfig(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -94,12 +69,8 @@ func (h *handler) getScoreConfig(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, cfg.ToResponse())
 }
 
-func (h *handler) updateScoreConfig(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdateScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -133,12 +104,8 @@ func (h *handler) updateScoreConfig(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, cfg.ToResponse())
 }
 
-func (h *handler) deleteScoreConfig(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteScoreConfig(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	configID, err := request.URLParamUUID(r, "configId")
 	if err != nil {
 		response.WriteError(w, err)

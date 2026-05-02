@@ -10,28 +10,58 @@ import (
 	userService "brokle/internal/core/services/user"
 )
 
-// handler bundles every service a dashboard-plane auth operation needs.
-// Package-private; the only public surface is RegisterPublicRoutes /
-// RegisterProtectedRoutes. SDK-plane operations have their own lighter-
-// weight sdkHandler.
-type handler struct {
+// Handler bundles every service a dashboard-plane auth operation needs.
+// SDK-plane operations have their own lighter-weight SDKHandler.
+type Handler struct {
 	authSvc       *authService.AuthService
 	userSvc       *userService.UserService
 	profileSvc    *userService.ProfileService
 	regSvc        *registration.RegistrationService
 	sessionSvc    *authService.SessionService
 	oauthProvider *authService.OAuthProviderService
+	apiKeySvc     *authService.APIKeyService
 	cfg           *config.Config
 	logger        *slog.Logger
 }
 
-// sdkHandler is a lightweight handler bundling only what SDK-plane
+// New constructs a Handler with all services any auth Register* function
+// might need (Public, Protected, SDK).
+func New(
+	authSvc *authService.AuthService,
+	userSvc *userService.UserService,
+	profileSvc *userService.ProfileService,
+	regSvc *registration.RegistrationService,
+	sessionSvc *authService.SessionService,
+	oauthProvider *authService.OAuthProviderService,
+	apiKeySvc *authService.APIKeyService,
+	cfg *config.Config,
+	logger *slog.Logger,
+) *Handler {
+	return &Handler{
+		authSvc:       authSvc,
+		userSvc:       userSvc,
+		profileSvc:    profileSvc,
+		regSvc:        regSvc,
+		sessionSvc:    sessionSvc,
+		oauthProvider: oauthProvider,
+		apiKeySvc:     apiKeySvc,
+		cfg:           cfg,
+		logger:        logger,
+	}
+}
+
+// SDKHandler is a lightweight handler bundling only what SDK-plane
 // auth operations need (API key validation). Distinct from the
-// dashboard-plane `handler` so we don't pollute the SDK surface with
+// dashboard-plane Handler so we don't pollute the SDK surface with
 // services it shouldn't be able to reach.
-type sdkHandler struct {
+type SDKHandler struct {
 	apiKeySvc *authService.APIKeyService
 	logger    *slog.Logger
+}
+
+// NewSDK constructs an SDKHandler.
+func NewSDK(apiKeySvc *authService.APIKeyService, logger *slog.Logger) *SDKHandler {
+	return &SDKHandler{apiKeySvc: apiKeySvc, logger: logger}
 }
 
 // ---- request bodies -------------------------------------------------

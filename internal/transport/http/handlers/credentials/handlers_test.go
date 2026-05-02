@@ -22,6 +22,7 @@ import (
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	handler "brokle/internal/transport/http/handlers/credentials"
 	"brokle/internal/transport/http/httpctx"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 )
 
@@ -73,8 +74,10 @@ func (fakeModelCatalogService) GetAvailableModels(ctx context.Context, orgID uui
 
 // newTestRouter mounts the credentials handler on a bare chi router
 // with a user-context injector standing in for the production
-// RequireAuth middleware. No other middleware — tests focus on
-// handler behaviour, not the middleware chain.
+// RequireAuth middleware. The handler now uses relative paths and
+// expects to be mounted under /api/v1/organizations/{orgId} with
+// RequireOrganizationAccess upstream — we simulate that by parsing
+// the URL param and pinning orgID via httpctx.
 func newTestRouter(t *testing.T, svc handler.CredentialService) (*chi.Mux, uuid.UUID) {
 	t.Helper()
 	userID := uuid.New()
@@ -86,7 +89,32 @@ func newTestRouter(t *testing.T, svc handler.CredentialService) (*chi.Mux, uuid.
 			next.ServeHTTP(w, req.WithContext(ctx))
 		})
 	})
-	handler.RegisterRoutes(r, svc, fakeModelCatalogService{}, slog.Default())
+	r.Route("/api/v1/organizations/{orgId}", func(r chi.Router) {
+		// Stand-in for RequireOrganizationAccess: parse orgId, pin via httpctx.
+		// Returns 422 on bad UUID (matches production middleware envelope).
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				raw := chi.URLParam(req, "orgId")
+				orgID, err := uuid.Parse(raw)
+				if err != nil {
+					response.WriteError(w, appErrors.InvalidParam("orgId", "must be a valid UUID"))
+					return
+				}
+				ctx := httpctx.WithOrganizationID(req.Context(), orgID)
+				next.ServeHTTP(w, req.WithContext(ctx))
+			})
+		})
+		h := handler.New(svc, fakeModelCatalogService{}, slog.Default())
+		// Mirror routes from internal/server/routes.go credentials group.
+		// Test URLs omit the trailing slash; register both forms for parity.
+		r.Post("/credentials/ai", h.Create)
+		r.Get("/credentials/ai", h.List)
+		r.Get("/credentials/ai/{credentialId}", h.Get)
+		r.Patch("/credentials/ai/{credentialId}", h.Update)
+		r.Delete("/credentials/ai/{credentialId}", h.Delete)
+		r.Post("/credentials/ai/test", h.TestConnection)
+		r.Get("/credentials/ai/models", h.GetAvailableModels)
+	})
 	return r, userID
 }
 
@@ -141,7 +169,7 @@ func TestListCredentials_InvalidOrgID_EmitsErrorEnvelope(t *testing.T) {
 	require.NotNil(t, env.Error, "ErrorResponse.error must be populated on error paths")
 	assert.Equal(t, "validation_error", env.Error.Type)
 	assert.Equal(t, "orgId", env.Error.Param)
-	assert.Contains(t, env.Error.Message, "Invalid orgId")
+	assert.Contains(t, env.Error.Message, "must be a valid UUID")
 }
 
 // Request-body validation: missing required fields + out-of-range

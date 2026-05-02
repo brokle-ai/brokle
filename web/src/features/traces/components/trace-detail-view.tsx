@@ -211,7 +211,7 @@ function SpansTabContent({ projectId, traceId, spanCount }: SpansTabContentProps
     isLoading,
     error,
   } = useQuery({
-    queryKey: traceQueryKeys.spans(projectId, traceId),
+    queryKey: traceQueryKeys.traceSpans(projectId, traceId),
     queryFn: () => getSpansForTrace(projectId, traceId),
     enabled: !!projectId && !!traceId,
     staleTime: 30_000,

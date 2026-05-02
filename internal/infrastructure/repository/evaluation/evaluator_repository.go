@@ -76,9 +76,9 @@ func (r *evaluatorRepository) Create(ctx context.Context, e *evalDomain.Evaluato
 		CreatedBy:       parseCreatedByUUID(e.CreatedBy),
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrEvaluatorExists
+			return appErrors.AlreadyExists("evaluator", appErrors.WithOp("repo.evaluator.create"))
 		}
-		return err
+		return appErrors.Internal("create evaluator", err, appErrors.WithOp("repo.evaluator.create"))
 	}
 	return nil
 }
@@ -90,9 +90,9 @@ func (r *evaluatorRepository) GetByID(ctx context.Context, id, projectID uuid.UU
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrEvaluatorNotFound
+			return nil, appErrors.NotFound("evaluator", appErrors.WithOp("repo.evaluator.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get evaluator", err, appErrors.WithOp("repo.evaluator.get_by_id"))
 	}
 	return evaluatorFromRow(&row)
 }
@@ -194,12 +194,12 @@ func (r *evaluatorRepository) Update(ctx context.Context, e *evalDomain.Evaluato
 	})
 	if err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrEvaluatorExists
+			return appErrors.AlreadyExists("evaluator", appErrors.WithOp("repo.evaluator.update"))
 		}
-		return err
+		return appErrors.Internal("update evaluator", err, appErrors.WithOp("repo.evaluator.update"))
 	}
 	if n == 0 {
-		return evalDomain.ErrEvaluatorNotFound
+		return appErrors.NotFound("evaluator", appErrors.WithOp("repo.evaluator.update"))
 	}
 	return nil
 }
@@ -210,10 +210,10 @@ func (r *evaluatorRepository) Delete(ctx context.Context, id, projectID uuid.UUI
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete evaluator", err, appErrors.WithOp("repo.evaluator.delete"))
 	}
 	if n == 0 {
-		return evalDomain.ErrEvaluatorNotFound
+		return appErrors.NotFound("evaluator", appErrors.WithOp("repo.evaluator.delete"))
 	}
 	return nil
 }

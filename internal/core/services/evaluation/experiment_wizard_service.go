@@ -3,7 +3,6 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -66,33 +65,33 @@ func (s *ExperimentWizardService) CreateFromWizard(
 	// Verify prompt exists AND belongs to this project
 	p, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
-		if errors.Is(err, prompt.ErrPromptNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", req.PromptID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("prompt %s", req.PromptID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify prompt", err)
+		return nil, appErrors.Internal("failed to verify prompt", err)
 	}
 	if p.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", req.PromptID))
+		return nil, appErrors.NotFound(fmt.Sprintf("prompt %s", req.PromptID))
 	}
 
 	// Verify prompt version exists AND belongs to this prompt
 	v, err := s.versionRepo.GetByID(ctx, promptVersionID)
 	if err != nil {
-		if errors.Is(err, prompt.ErrVersionNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt version %s", req.PromptVersionID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("prompt version %s", req.PromptVersionID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify prompt version", err)
+		return nil, appErrors.Internal("failed to verify prompt version", err)
 	}
 	if v.PromptID != promptID {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt version %s", req.PromptVersionID))
+		return nil, appErrors.NotFound(fmt.Sprintf("prompt version %s", req.PromptVersionID))
 	}
 
 	// Verify dataset exists
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", req.DatasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", req.DatasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	// Optional dataset version ID
@@ -102,10 +101,10 @@ func (s *ExperimentWizardService) CreateFromWizard(
 
 		// Verify dataset version exists AND belongs to this dataset
 		if _, err := s.datasetVersionRepo.GetByID(ctx, *datasetVersionID, datasetID); err != nil {
-			if errors.Is(err, evaluation.ErrDatasetVersionNotFound) {
-				return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset version %s", *req.DatasetVersionID))
+			if appErrors.IsNotFound(err) {
+				return nil, appErrors.NotFound(fmt.Sprintf("dataset version %s", *req.DatasetVersionID))
 			}
-			return nil, appErrors.NewInternalError("failed to verify dataset version", err)
+			return nil, appErrors.Internal("failed to verify dataset version", err)
 		}
 	}
 
@@ -115,7 +114,7 @@ func (s *ExperimentWizardService) CreateFromWizard(
 	experiment.DatasetID = &datasetID
 
 	if validationErrors := experiment.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	// Create experiment config
@@ -126,7 +125,7 @@ func (s *ExperimentWizardService) CreateFromWizard(
 	config.Evaluators = req.Evaluators
 
 	if validationErrors := config.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	// Create both in a transaction with proper FK ordering:
@@ -153,7 +152,7 @@ func (s *ExperimentWizardService) CreateFromWizard(
 		return nil
 	})
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to create experiment", err)
+		return nil, appErrors.Internal("failed to create experiment", err)
 	}
 
 	// Load the config into the experiment for the response
@@ -213,7 +212,7 @@ func (s *ExperimentWizardService) ValidateStep(
 		// This would typically validate the complete configuration
 		response.IsValid = true
 	default:
-		return nil, appErrors.NewValidationError("step", "must be between 1 and 4")
+		return nil, appErrors.InvalidParam("step", "must be between 1 and 4")
 	}
 
 	response.IsValid = len(response.Errors) == 0
@@ -441,16 +440,16 @@ func (s *ExperimentWizardService) EstimateCost(
 
 	// Validate dataset belongs to this project (security: prevent cross-project information disclosure)
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", req.DatasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", req.DatasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	// Get dataset item count
 	itemCount, err := s.datasetItemRepo.CountByDataset(ctx, datasetID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to count dataset items", err)
+		return nil, appErrors.Internal("failed to count dataset items", err)
 	}
 
 	// Estimate tokens per item (rough estimate)
@@ -508,16 +507,16 @@ func (s *ExperimentWizardService) GetDatasetFields(
 ) (*evaluation.DatasetFieldsResponse, error) {
 	// Verify dataset exists
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to get dataset", err)
+		return nil, appErrors.Internal("failed to get dataset", err)
 	}
 
 	// Get a single sample item to infer schema (limit=1 for performance)
 	items, _, err := s.datasetItemRepo.List(ctx, datasetID, 1, 0)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list dataset items", err)
+		return nil, appErrors.Internal("failed to list dataset items", err)
 	}
 
 	response := &evaluation.DatasetFieldsResponse{
@@ -557,24 +556,24 @@ func (s *ExperimentWizardService) GetExperimentConfig(
 	// First verify experiment exists and belongs to project
 	experiment, err := s.experimentRepo.GetByID(ctx, experimentID, projectID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("experiment %s", experimentID))
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment", err)
+		return nil, appErrors.Internal("failed to get experiment", err)
 	}
 
 	// Check if experiment has a config
 	if experiment.ConfigID == nil {
-		return nil, appErrors.NewNotFoundError("experiment config")
+		return nil, appErrors.NotFound("experiment config")
 	}
 
 	// Get the config
 	config, err := s.configRepo.GetByExperimentID(ctx, experimentID)
 	if err != nil {
-		if errors.Is(err, evaluation.ErrExperimentConfigNotFound) {
-			return nil, appErrors.NewNotFoundError("experiment config")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("experiment config")
 		}
-		return nil, appErrors.NewInternalError("failed to get experiment config", err)
+		return nil, appErrors.Internal("failed to get experiment config", err)
 	}
 
 	return config, nil

@@ -110,7 +110,7 @@ const (
 	ErrCodeNestedTooDeep       = "NESTED_TOO_DEEP"
 	ErrCodeUnknownFilter       = "UNKNOWN_FILTER"
 	ErrCodeUnknownBlock        = "UNKNOWN_BLOCK"
-	// Note: ErrCodeTemplateTooLarge is defined in errors.go
+	ErrCodeTemplateTooLarge    = "TEMPLATE_TOO_LARGE"
 )
 
 // Warning codes for syntax validation

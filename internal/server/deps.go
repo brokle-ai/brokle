@@ -49,10 +49,11 @@ type Deps struct {
 
 	// Auth/identity services consumed by RequireAuth, RequireSDKAuth,
 	// RequireProjectAccess, and RequirePermission middleware.
-	JWT       *authService.JWTService
-	Blacklist *authService.BlacklistedTokenService
-	OrgMember *authService.OrganizationMemberService
-	APIKey    *authService.APIKeyService
+	JWT           *authService.JWTService
+	Blacklist     *authService.BlacklistedTokenService
+	OrgMember     *authService.OrganizationMemberService
+	ProjectMember *authService.ProjectMemberService
+	APIKey        *authService.APIKeyService
 
 	// Project service used by RequireProjectAccess and the project
 	// handler domain.
@@ -126,7 +127,6 @@ type Deps struct {
 	// (JWT / Blacklist / OrgMember) already above.
 	Role       *authService.RoleService
 	Permission *authService.PermissionService
-	Scope      *authService.ScopeService
 
 	// Organization: invitations + settings. The OrganizationService +
 	// MemberService (OrgMemberOrg) are already declared above.
@@ -157,6 +157,12 @@ type Deps struct {
 	// both handler-plane services and the OTLP plain-chi mount draw
 	// from the same registry.
 	Observability *observabilityService.ServiceRegistry
+
+	// Handlers bundles every per-package handler instance. Populated
+	// inside server.New() via NewHandlers(deps) right before addRoutes
+	// runs — addRoutes references handler methods uniformly through
+	// d.Handlers.X.Method.
+	Handlers Handlers
 }
 
 // authMiddlewareDeps assembles the middleware.AuthDeps struct from
@@ -164,11 +170,12 @@ type Deps struct {
 // addRoutes doesn't repeat the field mapping.
 func (d Deps) authMiddlewareDeps() middleware.AuthDeps {
 	return middleware.AuthDeps{
-		JWT:       d.JWT,
-		Blacklist: d.Blacklist,
-		OrgMember: d.OrgMember,
-		Project:   d.Project,
-		Logger:    d.Logger,
+		JWT:           d.JWT,
+		Blacklist:     d.Blacklist,
+		OrgMember:     d.OrgMember,
+		ProjectMember: d.ProjectMember,
+		Project:       d.Project,
+		Logger:        d.Logger,
 	}
 }
 

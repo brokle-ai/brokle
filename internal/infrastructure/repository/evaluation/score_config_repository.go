@@ -62,9 +62,9 @@ func (r *scoreConfigRepository) Create(ctx context.Context, c *evalDomain.ScoreC
 		Metadata:    meta,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrScoreConfigExists
+			return appErrors.AlreadyExists("score_config", appErrors.WithOp("repo.score_config.create"))
 		}
-		return err
+		return appErrors.Internal("create score config", err, appErrors.WithOp("repo.score_config.create"))
 	}
 	return nil
 }
@@ -76,9 +76,9 @@ func (r *scoreConfigRepository) GetByID(ctx context.Context, id, projectID uuid.
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrScoreConfigNotFound
+			return nil, appErrors.NotFound("score_config", appErrors.WithOp("repo.score_config.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get score config", err, appErrors.WithOp("repo.score_config.get_by_id"))
 	}
 	return scoreConfigFromRow(&row)
 }
@@ -143,12 +143,12 @@ func (r *scoreConfigRepository) Update(ctx context.Context, c *evalDomain.ScoreC
 	})
 	if err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrScoreConfigExists
+			return appErrors.AlreadyExists("score_config", appErrors.WithOp("repo.score_config.update"))
 		}
-		return err
+		return appErrors.Internal("update score config", err, appErrors.WithOp("repo.score_config.update"))
 	}
 	if n == 0 {
-		return evalDomain.ErrScoreConfigNotFound
+		return appErrors.NotFound("score_config", appErrors.WithOp("repo.score_config.update"))
 	}
 	return nil
 }
@@ -159,10 +159,10 @@ func (r *scoreConfigRepository) Delete(ctx context.Context, id, projectID uuid.U
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete score config", err, appErrors.WithOp("repo.score_config.delete"))
 	}
 	if n == 0 {
-		return evalDomain.ErrScoreConfigNotFound
+		return appErrors.NotFound("score_config", appErrors.WithOp("repo.score_config.delete"))
 	}
 	return nil
 }

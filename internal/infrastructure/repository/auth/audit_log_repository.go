@@ -9,6 +9,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // auditLogRepository is the pgx+sqlc implementation of
@@ -50,7 +51,7 @@ func (r *auditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*authDo
 	row, err := r.tm.Queries(ctx).GetAuditLogByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get audit_log by ID %s: %w", id, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("audit_log", appErrors.WithOp("repo.audit_log.get_by_id"))
 		}
 		return nil, fmt.Errorf("get audit_log by ID %s: %w", id, err)
 	}

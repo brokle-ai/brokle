@@ -23,7 +23,13 @@ export interface UserProfileData {
 
 /**
  * Backend project summary response
- * Matches: internal/transport/http/handlers/user/user.go ProjectSummary
+ * Matches: internal/transport/http/handlers/user/types.go projectSummary
+ *
+ * `role` and `scopes` are part of the Langfuse-style session-bootstrap
+ * payload — the user's OVERRIDE-resolved project role and resolved
+ * project-tier permission set, computed server-side once per /users/me
+ * fetch. The frontend's useHasProjectAccess reads `scopes` directly,
+ * eliminating per-render /scopes/check round trips.
  */
 export interface BackendProjectSummary {
   id: string
@@ -32,13 +38,18 @@ export interface BackendProjectSummary {
   description: string
   organization_id: string
   status: string
+  role: string
+  scopes: string[]
   created_at: string
   updated_at: string
 }
 
 /**
  * Backend organization with projects response
- * Matches: internal/transport/http/handlers/user/user.go OrganizationWithProjects
+ * Matches: internal/transport/http/handlers/user/types.go organizationWithProjects
+ *
+ * `scopes` is the user's resolved org-tier permission set for this
+ * organization. See BackendProjectSummary for rationale.
  */
 export interface BackendOrganizationWithProjects {
   id: string
@@ -46,6 +57,7 @@ export interface BackendOrganizationWithProjects {
   composite_slug: string
   plan: string
   role: string
+  scopes: string[]
   created_at: string
   updated_at: string
   projects: BackendProjectSummary[]

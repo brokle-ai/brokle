@@ -50,7 +50,7 @@ func (s *ContractService) CreateContract(ctx context.Context, contract *billing.
 	// Validate organization exists
 	_, err := s.billingRepo.GetByOrgID(ctx, contract.OrganizationID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("Organization %s not found", contract.OrganizationID))
+		return appErrors.NotFound("organization", appErrors.WithMessage(fmt.Sprintf("Organization %s not found", contract.OrganizationID)))
 	}
 
 	// No normalization - use timestamps as provided
@@ -58,10 +58,7 @@ func (s *ContractService) CreateContract(ctx context.Context, contract *billing.
 	if contract.EndDate != nil {
 		minEndDate := contract.StartDate.AddDate(0, 0, 1) // +1 day
 		if contract.EndDate.Before(minEndDate) {
-			return appErrors.NewValidationError(
-				"end_date must be at least 1 day after start_date",
-				"Minimum contract duration is 1 day",
-			)
+			return appErrors.InvalidParam("end_date", "must be at least 1 day after start_date", appErrors.WithDetails("Minimum contract duration is 1 day"))
 		}
 	}
 
@@ -77,7 +74,7 @@ func (s *ContractService) CreateContract(ctx context.Context, contract *billing.
 
 	// Create contract
 	if err := s.contractRepo.Create(ctx, contract); err != nil {
-		return appErrors.NewInternalError("failed to create contract", err)
+		return appErrors.Internal("failed to create contract", err)
 	}
 
 	// Log to audit trail
@@ -100,11 +97,11 @@ func (s *ContractService) GetContract(ctx context.Context, contractID uuid.UUID)
 	contract, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
 		// Check if it's a "not found" error vs database error
-		if billing.IsNotFoundError(err) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 		}
 		// Wrap real database errors as internal errors
-		return nil, appErrors.NewInternalError("failed to get contract", err)
+		return nil, appErrors.Internal("failed to get contract", err)
 	}
 	return contract, nil
 }
@@ -129,7 +126,7 @@ func (s *ContractService) UpdateContract(
 	// Verify contract exists
 	existing, err := s.contractRepo.GetByID(ctx, contract.ID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contract.ID))
+		return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contract.ID)))
 	}
 
 	// No normalization - use timestamps as provided
@@ -137,10 +134,7 @@ func (s *ContractService) UpdateContract(
 	if contract.EndDate != nil {
 		minEndDate := contract.StartDate.AddDate(0, 0, 1) // +1 day
 		if contract.EndDate.Before(minEndDate) {
-			return appErrors.NewValidationError(
-				"end_date must be at least 1 day after start_date",
-				"Minimum contract duration is 1 day",
-			)
+			return appErrors.InvalidParam("end_date", "must be at least 1 day after start_date", appErrors.WithDetails("Minimum contract duration is 1 day"))
 		}
 	}
 
@@ -149,7 +143,7 @@ func (s *ContractService) UpdateContract(
 
 	// Update contract
 	if err := s.contractRepo.Update(ctx, contract); err != nil {
-		return appErrors.NewInternalError("failed to update contract", err)
+		return appErrors.Internal("failed to update contract", err)
 	}
 
 	// Log to audit trail if there are changes
@@ -171,15 +165,12 @@ func (s *ContractService) ActivateContract(ctx context.Context, contractID uuid.
 		// 1. Get contract to activate
 		contract, err := s.contractRepo.GetByID(ctx, contractID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+			return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 		}
 
 		// 2. Validate contract is in draft status
 		if contract.Status != billing.ContractStatusDraft {
-			return appErrors.NewValidationError(
-				"Only draft contracts can be activated",
-				fmt.Sprintf("Contract status is %s, expected draft", contract.Status),
-			)
+			return appErrors.InvalidParam("status", fmt.Sprintf("Only draft contracts can be activated: Contract status is %s, expected draft", contract.Status))
 		}
 
 		// 3. Deactivate any existing active contract (within transaction)
@@ -190,7 +181,7 @@ func (s *ContractService) ActivateContract(ctx context.Context, contractID uuid.
 			existingContract.UpdatedAt = time.Now()
 
 			if err := s.contractRepo.Update(ctx, existingContract); err != nil {
-				return appErrors.NewInternalError("failed to expire existing contract", err)
+				return appErrors.Internal("failed to expire existing contract", err)
 			}
 
 			// Log expiration of old contract
@@ -214,9 +205,9 @@ func (s *ContractService) ActivateContract(ctx context.Context, contractID uuid.
 		if err := s.contractRepo.Update(ctx, contract); err != nil {
 			// Check for unique constraint violation (race condition caught by database)
 			if appErrors.IsUniqueViolation(err) {
-				return appErrors.NewConflictError("another contract was activated concurrently for this organization")
+				return appErrors.Conflict("", "another contract was activated concurrently for this organization")
 			}
-			return appErrors.NewInternalError("failed to activate contract", err)
+			return appErrors.Internal("failed to activate contract", err)
 		}
 
 		// 6. Log activation to audit trail
@@ -239,15 +230,15 @@ func (s *ContractService) ActivateContract(ctx context.Context, contractID uuid.
 func (s *ContractService) CancelContract(ctx context.Context, contractID uuid.UUID, reason string, userID uuid.UUID) error {
 	contract, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 	}
 
 	if contract.Status == billing.ContractStatusCancelled {
-		return appErrors.NewValidationError("contract is already cancelled", "status")
+		return appErrors.InvalidParam("contract", "is already cancelled", appErrors.WithDetails("status"))
 	}
 
 	if err := s.contractRepo.Cancel(ctx, contractID); err != nil {
-		return appErrors.NewInternalError("failed to cancel contract", err)
+		return appErrors.Internal("failed to cancel contract", err)
 	}
 
 	s.logContractAction(ctx, contractID, billing.ContractActionCancelled, userID.String(), map[string]any{
@@ -267,22 +258,19 @@ func (s *ContractService) ExpireContract(ctx context.Context, contractID uuid.UU
 	// Fetch contract to validate state
 	contract, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
-		if billing.IsNotFoundError(err) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 		}
-		return appErrors.NewInternalError("failed to get contract for expiration", err)
+		return appErrors.Internal("failed to get contract for expiration", err)
 	}
 
 	// Validate state transition: only active contracts can expire
 	if contract.Status != billing.ContractStatusActive {
-		return appErrors.NewValidationError(
-			"Only active contracts can be expired",
-			fmt.Sprintf("Contract status is %s, expected active", contract.Status),
-		)
+		return appErrors.InvalidParam("status", fmt.Sprintf("Only active contracts can be expired: Contract status is %s, expected active", contract.Status))
 	}
 
 	if err := s.contractRepo.Expire(ctx, contractID); err != nil {
-		return appErrors.NewInternalError("failed to expire contract", err)
+		return appErrors.Internal("failed to expire contract", err)
 	}
 
 	s.logContractAction(ctx, contractID, billing.ContractActionExpired, "system", map[string]any{
@@ -300,7 +288,7 @@ func (s *ContractService) AddVolumeTiers(ctx context.Context, contractID uuid.UU
 	// 1. Verify contract exists
 	_, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 	}
 
 	// 2. Validate tier configuration BEFORE transaction
@@ -320,7 +308,7 @@ func (s *ContractService) AddVolumeTiers(ctx context.Context, contractID uuid.UU
 
 		// Create tiers (within transaction)
 		if err := s.tierRepo.CreateBatch(ctx, tiers); err != nil {
-			return appErrors.NewInternalError("failed to create volume tiers", err)
+			return appErrors.Internal("failed to create volume tiers", err)
 		}
 
 		// Log to audit trail (within transaction)
@@ -348,7 +336,7 @@ func (s *ContractService) UpdateVolumeTiers(ctx context.Context, contractID uuid
 	// 1. Verify contract exists
 	_, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		return appErrors.NotFound("contract", appErrors.WithMessage(fmt.Sprintf("Contract %s not found", contractID)))
 	}
 
 	// 2. Validate tier configuration BEFORE transaction
@@ -360,7 +348,7 @@ func (s *ContractService) UpdateVolumeTiers(ctx context.Context, contractID uuid
 	return s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 		// Delete existing tiers (within transaction)
 		if err := s.tierRepo.DeleteByContractID(ctx, contractID); err != nil {
-			return appErrors.NewInternalError("failed to delete existing tiers", err)
+			return appErrors.Internal("failed to delete existing tiers", err)
 		}
 
 		// Create new tiers (within transaction)
@@ -373,7 +361,7 @@ func (s *ContractService) UpdateVolumeTiers(ctx context.Context, contractID uuid
 			}
 
 			if err := s.tierRepo.CreateBatch(ctx, tiers); err != nil {
-				return appErrors.NewInternalError("failed to create volume tiers", err)
+				return appErrors.Internal("failed to create volume tiers", err)
 			}
 		}
 
@@ -520,10 +508,7 @@ func validateDimensionTiers(dimension billing.TierDimension, tiers []*billing.Vo
 
 	// Rule 1: First tier must start at 0
 	if tiers[0].TierMin != 0 {
-		return appErrors.NewValidationError(
-			fmt.Sprintf("First tier for dimension %s must have TierMin=0, got %d", dimension, tiers[0].TierMin),
-			"tier_min_must_be_zero",
-		)
+		return appErrors.InvalidParam("tiers", fmt.Sprintf("First tier for dimension %s must have TierMin=0, got %d: tier_min_must_be_zero", dimension, tiers[0].TierMin))
 	}
 
 	// Rule 2: Tiers must be contiguous
@@ -532,29 +517,20 @@ func validateDimensionTiers(dimension billing.TierDimension, tiers []*billing.Vo
 		currentTier := tiers[i]
 
 		if prevTier.TierMax == nil {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("Tier %d for dimension %s has unlimited TierMax but tier %d follows it", i-1, dimension, i),
-				"unlimited_tier_not_last",
-			)
+			return appErrors.InvalidParam("tiers", fmt.Sprintf("Tier %d for dimension %s has unlimited TierMax but tier %d follows it: unlimited_tier_not_last", i-1, dimension, i))
 		}
 
 		if currentTier.TierMin != *prevTier.TierMax {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("Gap detected in dimension %s: tier %d ends at %d, tier %d starts at %d",
-					dimension, i-1, *prevTier.TierMax, i, currentTier.TierMin),
-				"tier_gap_detected",
-			)
+			return appErrors.InvalidParam("tiers", fmt.Sprintf("Gap detected in dimension %s: tier %d ends at %d, tier %d starts at %d: tier_gap_detected",
+				dimension, i-1, *prevTier.TierMax, i, currentTier.TierMin))
 		}
 	}
 
 	// Rule 3: Validate tier ranges
 	for i, tier := range tiers {
 		if tier.TierMax != nil && *tier.TierMax <= tier.TierMin {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("Tier %d for dimension %s has invalid range: TierMax (%d) <= TierMin (%d)",
-					i, dimension, *tier.TierMax, tier.TierMin),
-				"invalid_tier_range",
-			)
+			return appErrors.InvalidParam("tiers", fmt.Sprintf("Tier %d for dimension %s has invalid range: TierMax (%d) <= TierMin (%d): invalid_tier_range",
+				i, dimension, *tier.TierMax, tier.TierMin))
 		}
 	}
 
@@ -584,7 +560,7 @@ func (s *ContractService) logContractActionTx(
 	}
 
 	if err := historyRepo.Log(ctx, history); err != nil {
-		return appErrors.NewInternalError("failed to log contract history", err)
+		return appErrors.Internal("failed to log contract history", err)
 	}
 
 	return nil

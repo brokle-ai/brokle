@@ -34,11 +34,11 @@ func postJSON(t *testing.T, raw string) *http.Request {
 	return req
 }
 
-func mustAppErr(t *testing.T, err error) *appErrors.AppError {
+func mustAppErr(t *testing.T, err error) *appErrors.Error {
 	t.Helper()
-	appErr := appErrors.AsAppError(err)
+	appErr := appErrors.As(err)
 	if appErr == nil {
-		t.Fatalf("error is not *appErrors.AppError: %T %v", err, err)
+		t.Fatalf("error is not *appErrors.Error: %T %v", err, err)
 	}
 	return appErr
 }
@@ -59,8 +59,8 @@ func TestDecodeJSON_EmptyBody(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(req, &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeInvalidRequest {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeInvalidRequest)
+	if appErr.Reason != appErrors.ReasonBadRequest {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonBadRequest)
 	}
 }
 
@@ -69,8 +69,8 @@ func TestDecodeJSON_Malformed(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(postJSON(t, raw), &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeInvalidRequest {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeInvalidRequest)
+	if appErr.Reason != appErrors.ReasonBadRequest {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonBadRequest)
 	}
 }
 
@@ -79,8 +79,8 @@ func TestDecodeJSON_UnknownField(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(postJSON(t, raw), &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeValidation {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeValidation)
+	if appErr.Reason != appErrors.ReasonInvalidInput {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonInvalidInput)
 	}
 	if appErr.Param != "surprise" {
 		t.Errorf("Param = %q, want %q", appErr.Param, "surprise")
@@ -92,8 +92,8 @@ func TestDecodeJSON_WrongType(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(postJSON(t, raw), &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeValidation {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeValidation)
+	if appErr.Reason != appErrors.ReasonInvalidInput {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonInvalidInput)
 	}
 	if appErr.Param != "count" {
 		t.Errorf("Param = %q, want %q", appErr.Param, "count")
@@ -107,8 +107,8 @@ func TestDecodeJSON_TrailingData(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(postJSON(t, raw), &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeInvalidRequest {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeInvalidRequest)
+	if appErr.Reason != appErrors.ReasonBadRequest {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonBadRequest)
 	}
 }
 
@@ -117,8 +117,8 @@ func TestDecodeJSON_ValidationErrors(t *testing.T) {
 	var b body
 	err := request.DecodeJSON(postJSON(t, raw), &b)
 	appErr := mustAppErr(t, err)
-	if appErr.Type != appErrors.TypeValidation {
-		t.Fatalf("Type = %q, want %q", appErr.Type, appErrors.TypeValidation)
+	if appErr.Reason != appErrors.ReasonInvalidInput {
+		t.Fatalf("Type = %q, want %q", appErr.Reason, appErrors.ReasonInvalidInput)
 	}
 	if len(appErr.Errors) < 3 {
 		t.Fatalf("expected >= 3 per-field errors, got %d: %+v", len(appErr.Errors), appErr.Errors)
@@ -176,8 +176,8 @@ func TestURLParamUUID(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/o/not-a-uuid", nil)
 	r.ServeHTTP(httptest.NewRecorder(), req)
 	appErr := mustAppErr(t, gotErr)
-	if appErr.Type != appErrors.TypeValidation {
-		t.Errorf("Type = %q, want %q", appErr.Type, appErrors.TypeValidation)
+	if appErr.Reason != appErrors.ReasonInvalidInput {
+		t.Errorf("Type = %q, want %q", appErr.Reason, appErrors.ReasonInvalidInput)
 	}
 	if appErr.Param != "orgId" {
 		t.Errorf("Param = %q, want %q", appErr.Param, "orgId")

@@ -425,6 +425,8 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 		s.logger.Info("Seeding permissions", "count", len(permissionSeeds))
 	}
 
+	var created, updated, unchanged int
+
 	for _, permSeed := range permissionSeeds {
 		// Parse resource and action from name (format: "resource:action")
 		parts := strings.SplitN(permSeed.Name, ":", 2)
@@ -435,54 +437,117 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 		resource := parts[0]
 		action := parts[1]
 
-		// Check if permission already exists (idempotent)
+		// Compute desired fields from YAML BEFORE the existence check so
+		// the same derivation feeds both the create branch (new row) and
+		// the reconcile branch (update existing row in-place).
+		//
+		// Scope level is data-driven: read from YAML's `scope` field.
+		// The build-time test in internal/seeder/floor_scope_test.go
+		// asserts the YAML scope matches the routes.go derivation, so
+		// drift between routes.go and seeds/permissions.yaml is caught
+		// at `go test` time.
+		desiredScope := auth.ScopeLevelOrganization
+		switch permSeed.Scope {
+		case "project":
+			desiredScope = auth.ScopeLevelProject
+		case "organization", "":
+			// "" tolerated for backward compatibility during
+			// rollout; build-time test fails if any entry omits
+			// the field, so this branch is unreachable in practice.
+			desiredScope = auth.ScopeLevelOrganization
+		default:
+			s.logger.Warn("Unknown permission scope, defaulting to organization",
+				"name", permSeed.Name, "scope", permSeed.Scope)
+		}
+
+		desiredCategory := resource
+		if desiredScope == auth.ScopeLevelProject {
+			if resource == "traces" || resource == "analytics" || resource == "costs" {
+				desiredCategory = "observability"
+			} else {
+				desiredCategory = "gateway"
+			}
+		}
+
+		// Reconcile-on-exists: pre-existing rows are updated in-place to
+		// match the YAML state on every reseed (Mastodon / Cal.com /
+		// Discourse SeedFu pattern — 100% of surveyed peers update in-
+		// place by natural key for FK-referenced reference data).
+		// Update preserves the UUID so role_permissions FK references
+		// stay intact. The previous skip-on-exists path was a bug:
+		// once permissions.scope_level became authoritative for
+		// RoleService.autoInjectFloorScope and the frontend codegen,
+		// stale rows on upgraded DBs broke runtime authz.
+		// See CLAUDE.md 2026-04-30 (project-rbac).
 		existing, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 		if err == nil && existing != nil {
-			if verbose {
-				s.logger.Info("Permission already exists, skipping", "name", permSeed.Name)
+			drift := !equalStringPtr(existing.Description, ptrIfNotEmpty(permSeed.Description)) ||
+				!equalStringPtr(existing.Category, &desiredCategory) ||
+				existing.ScopeLevel != desiredScope
+
+			if drift {
+				existing.Description = ptrIfNotEmpty(permSeed.Description)
+				existing.ScopeLevel = desiredScope
+				existing.Category = &desiredCategory
+				if err := s.permissionRepo.Update(ctx, existing); err != nil {
+					return fmt.Errorf("failed to reconcile permission %s: %w", permSeed.Name, err)
+				}
+				updated++
+				if verbose {
+					s.logger.Info("Reconciled permission to match YAML",
+						"name", permSeed.Name, "scope_level", desiredScope, "category", desiredCategory)
+				}
+			} else {
+				unchanged++
 			}
 			entityMaps.Permissions[permSeed.Name] = existing.ID
 			continue
 		}
 
-		// Determine scope level from resource name
-		scopeLevel := auth.ScopeLevelOrganization
-		category := resource
-
-		projectResources := map[string]bool{
-			"traces":          true,
-			"analytics":       true,
-			"provider_models": true,
-			"providers":       true,
-			"costs":           true,
-			"prompts":         true,
-		}
-
-		if projectResources[resource] {
-			scopeLevel = auth.ScopeLevelProject
-
-			if resource == "traces" || resource == "analytics" || resource == "costs" {
-				category = "observability"
-			} else {
-				category = "gateway"
-			}
-		}
-
 		// Create new permission with scope level
-		permission := auth.NewPermissionWithScope(resource, action, permSeed.Description, scopeLevel, category)
+		permission := auth.NewPermissionWithScope(resource, action, permSeed.Description, desiredScope, desiredCategory)
 
 		if err := s.permissionRepo.Create(ctx, permission); err != nil {
 			return fmt.Errorf("failed to create permission %s: %w", permSeed.Name, err)
 		}
 
 		entityMaps.Permissions[permSeed.Name] = permission.ID
+		created++
 
 		if verbose {
 			s.logger.Info("Created permission", "name", permSeed.Name)
 		}
 	}
 
+	s.logger.Info("Reconciled permissions catalog",
+		"total", len(permissionSeeds),
+		"created", created,
+		"updated", updated,
+		"unchanged", unchanged)
+
 	return nil
+}
+
+// ptrIfNotEmpty returns a pointer to s, or nil if s is empty. Used for
+// reconciling YAML-loaded fields against nullable DB columns where ""
+// and NULL are equivalent for the seeder's purposes.
+func ptrIfNotEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// equalStringPtr returns true if both pointers represent the same logical
+// value (both nil, or both non-nil with equal contents).
+func equalStringPtr(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps *EntityMaps, verbose bool) error {
@@ -491,7 +556,17 @@ func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps
 	}
 
 	for _, roleSeed := range roleSeeds {
-		// Check if template role already exists
+		// Check if template role already exists.
+		//
+		// IMPORTANT: GetByNameAndScope's underlying SQL filters
+		// `scope_id IS NULL` (see queries/role.sql GetRoleByNameAndScopeType),
+		// so this lookup ONLY matches system templates — custom org-scoped
+		// roles (created via RoleService.CreateCustomRole, which sets
+		// scope_id to the org UUID) are structurally invisible. The seeder
+		// therefore cannot accidentally overwrite a customer's custom role
+		// even if it shares a name with a template. Do NOT change this
+		// lookup to scope_id-agnostic without revisiting the boot-time
+		// reseed safety contract (CLAUDE.md gotcha #39).
 		existing, err := s.roleRepo.GetByNameAndScope(ctx, roleSeed.Name, roleSeed.ScopeType)
 		if err == nil && existing != nil {
 			// Role exists - sync permissions to match YAML definition

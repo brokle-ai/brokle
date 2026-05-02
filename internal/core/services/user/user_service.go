@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -53,10 +52,10 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*userDo
 func (s *UserService) UpdateUser(ctx context.Context, userID uuid.UUID, req *userDomain.UpdateUserRequest) (*userDomain.User, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, userDomain.ErrNotFound) {
-			return nil, appErrors.NewNotFoundError("user not found")
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("user")
 		}
-		return nil, appErrors.NewInternalError("user lookup failed", err)
+		return nil, appErrors.Internal("user lookup failed", err)
 	}
 
 	if req.FirstName != nil {
@@ -74,7 +73,7 @@ func (s *UserService) UpdateUser(ctx context.Context, userID uuid.UUID, req *use
 	user.UpdatedAt = time.Now()
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		return nil, appErrors.NewInternalError("failed to update user", err)
+		return nil, appErrors.Internal("failed to update user", err)
 	}
 	return user, nil
 }
@@ -84,27 +83,27 @@ func (s *UserService) UpdateUser(ctx context.Context, userID uuid.UUID, req *use
 func (s *UserService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("user not found")
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("user")
 		}
-		return appErrors.NewInternalError("user lookup failed", err)
+		return appErrors.Internal("user lookup failed", err)
 	}
 
 	if !user.HasPassword() {
-		return appErrors.NewUnauthorizedError("user has no password set")
+		return appErrors.Unauthenticated("user has no password set")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(currentPassword)); err != nil {
-		return appErrors.NewUnauthorizedError("current password is incorrect")
+		return appErrors.Unauthenticated("current password is incorrect")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return appErrors.NewInternalError("failed to hash password", err)
+		return appErrors.Internal("failed to hash password", err)
 	}
 	user.SetPassword(string(hashedPassword))
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		return appErrors.NewInternalError("failed to update password", err)
+		return appErrors.Internal("failed to update password", err)
 	}
 	return nil
 }
@@ -125,10 +124,10 @@ func (s *UserService) ResetPassword(ctx context.Context, token, newPassword stri
 func (s *UserService) UpdateLastLogin(ctx context.Context, userID uuid.UUID) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("user not found")
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("user")
 		}
-		return appErrors.NewInternalError("user lookup failed", err)
+		return appErrors.Internal("user lookup failed", err)
 	}
 
 	now := time.Now()
@@ -144,10 +143,10 @@ func (s *UserService) UpdateLastLogin(ctx context.Context, userID uuid.UUID) err
 func (s *UserService) SetDefaultOrganization(ctx context.Context, userID, orgID uuid.UUID) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, userDomain.ErrNotFound) {
-			return appErrors.NewNotFoundError("user not found")
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("user")
 		}
-		return appErrors.NewInternalError("user lookup failed", err)
+		return appErrors.Internal("user lookup failed", err)
 	}
 
 	user.DefaultOrganizationID = &orgID

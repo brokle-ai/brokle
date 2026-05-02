@@ -6,34 +6,26 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"brokle/internal/core/domain/analytics"
 	analyticsService "brokle/internal/core/services/analytics"
 	"brokle/internal/transport/http/handlers/shared"
+	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
-	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	svc    *analyticsService.OverviewService
 	logger *slog.Logger
 }
 
-// RegisterRoutes mounts the overview route on r. Expected mount
-// context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, svc *analyticsService.OverviewService, logger *slog.Logger) {
-	h := &handler{svc: svc, logger: logger}
-	r.Get("/api/v1/projects/{projectId}/overview", h.getOverview)
+// New constructs a Handler with all required services.
+func New(svc *analyticsService.OverviewService, logger *slog.Logger) *Handler {
+	return &Handler{svc: svc, logger: logger}
 }
 
-func (h *handler) getOverview(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetOverview(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 
 	q := r.URL.Query()
 	fromTime, toTime, err := shared.ParseTimeRange(
@@ -53,7 +45,7 @@ func (h *handler) getOverview(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "overview: fetch failed",
 			"project_id", projectID, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to get project overview", err))
+		response.WriteError(w, appErrors.Internal("Failed to get project overview", err))
 		return
 	}
 

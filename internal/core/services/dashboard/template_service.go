@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -31,43 +30,29 @@ func NewTemplateService(
 }
 
 func (s *TemplateService) ListTemplates(ctx context.Context) ([]*dashboardDomain.Template, error) {
-	templates, err := s.templateRepo.List(ctx, nil)
-	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list templates", err)
-	}
-	return templates, nil
+	return s.templateRepo.List(ctx, nil)
 }
 
 func (s *TemplateService) GetTemplate(ctx context.Context, id uuid.UUID) (*dashboardDomain.Template, error) {
-	template, err := s.templateRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, dashboardDomain.ErrTemplateNotFound) {
-			return nil, appErrors.NewNotFoundError("template")
-		}
-		return nil, appErrors.NewInternalError("failed to get template", err)
-	}
-	return template, nil
+	return s.templateRepo.GetByID(ctx, id)
 }
 
 func (s *TemplateService) CreateFromTemplate(ctx context.Context, projectID uuid.UUID, userID *uuid.UUID, req *dashboardDomain.CreateFromTemplateRequest) (*dashboardDomain.Dashboard, error) {
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name", "dashboard name is required")
+		return nil, appErrors.InvalidParam("name", "dashboard name is required")
 	}
 
 	template, err := s.templateRepo.GetByID(ctx, req.TemplateID)
 	if err != nil {
-		if errors.Is(err, dashboardDomain.ErrTemplateNotFound) {
-			return nil, appErrors.NewNotFoundError("template")
-		}
-		return nil, appErrors.NewInternalError("failed to get template", err)
+		return nil, err
 	}
 
 	existing, err := s.dashboardRepo.GetByNameAndProject(ctx, projectID, req.Name)
-	if err != nil && !errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-		return nil, appErrors.NewInternalError("failed to check existing dashboard", err)
+	if err != nil && !appErrors.IsNotFound(err) {
+		return nil, err
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError("dashboard with this name already exists")
+		return nil, appErrors.Conflict("", "dashboard with this name already exists")
 	}
 
 	config := s.copyConfig(template.Config)
@@ -98,7 +83,7 @@ func (s *TemplateService) CreateFromTemplate(ctx context.Context, projectID uuid
 	}
 
 	if err := s.dashboardRepo.Create(ctx, dashboard); err != nil {
-		return nil, appErrors.NewInternalError("failed to create dashboard from template", err)
+		return nil, err
 	}
 
 	s.logger.Info("dashboard created from template",

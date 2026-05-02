@@ -139,7 +139,7 @@ func (r *scoreAnalyticsRepository) GetTimeSeries(ctx context.Context, filter *ob
 	}
 	defer rows.Close()
 
-	var points []observability.TraceTimeSeriesPoint
+	points := make([]observability.TraceTimeSeriesPoint, 0)
 	for rows.Next() {
 		var point observability.TraceTimeSeriesPoint
 		if err := rows.Scan(&point.Timestamp, &point.AvgValue, &point.Count); err != nil {
@@ -349,7 +349,7 @@ func (r *scoreAnalyticsRepository) GetHeatmap(ctx context.Context, filter *obser
 	}
 	defer rows.Close()
 
-	var cells []observability.HeatmapCell
+	cells := make([]observability.HeatmapCell, 0)
 	for rows.Next() {
 		var bin1, bin2 int64
 		var count uint64
@@ -516,7 +516,7 @@ func (r *scoreAnalyticsRepository) GetDistinctScoreNames(ctx context.Context, pr
 	}
 	defer rows.Close()
 
-	var names []string
+	names := make([]string, 0)
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {

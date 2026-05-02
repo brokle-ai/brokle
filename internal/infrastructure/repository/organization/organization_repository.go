@@ -36,7 +36,7 @@ func (r *organizationRepository) Create(ctx context.Context, org *orgDomain.Orga
 		UpdatedAt:          org.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create organization: %w", orgDomain.ErrAlreadyExists)
+			return appErrors.AlreadyExists("organization", appErrors.WithOp("repo.organization.create"))
 		}
 		return fmt.Errorf("create organization: %w", err)
 	}
@@ -47,7 +47,7 @@ func (r *organizationRepository) GetByID(ctx context.Context, id uuid.UUID) (*or
 	row, err := r.tm.Queries(ctx).GetOrganizationByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get organization by ID %s: %w", id, orgDomain.ErrNotFound)
+			return nil, appErrors.NotFound("organization", appErrors.WithOp("repo.organization.get_by_id"))
 		}
 		return nil, fmt.Errorf("get organization by ID %s: %w", id, err)
 	}
@@ -56,10 +56,10 @@ func (r *organizationRepository) GetByID(ctx context.Context, id uuid.UUID) (*or
 
 // GetBySlug is kept on the interface but the slug column was dropped in
 // migration 20251101020000_refactor_onboarding_to_signup. Returning
-// ErrNotFound preserves the caller contract while making the deprecation
+// NotFound preserves the caller contract while making the deprecation
 // visible.
 func (r *organizationRepository) GetBySlug(ctx context.Context, slug string) (*orgDomain.Organization, error) {
-	return nil, fmt.Errorf("get organization by slug %s: %w", slug, orgDomain.ErrNotFound)
+	return nil, appErrors.NotFound("organization", appErrors.WithOp("repo.organization.get_by_slug"))
 }
 
 func (r *organizationRepository) Update(ctx context.Context, org *orgDomain.Organization) error {

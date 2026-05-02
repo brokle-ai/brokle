@@ -64,7 +64,7 @@ func (r *billableUsageRepository) GetUsage(ctx context.Context, filter *billing.
 	}
 	defer rows.Close()
 
-	var result []*billing.BillableUsage
+	result := make([]*billing.BillableUsage, 0)
 	for rows.Next() {
 		var orgID, projectID string
 		var bucketTime time.Time
@@ -176,7 +176,7 @@ func (r *billableUsageRepository) GetUsageByProject(ctx context.Context, orgID u
 	}
 	defer rows.Close()
 
-	var result []*billing.BillableUsageSummary
+	result := make([]*billing.BillableUsageSummary, 0)
 	for rows.Next() {
 		var projectID string
 		var totalSpans, totalBytes, totalScores uint64

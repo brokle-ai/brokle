@@ -173,7 +173,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 			for _, span := range scopeSpan.Spans {
 				obsEvent, err := s.createSpanEvent(ctx, span, resourceAttrs, scopeAttrs, resourceSpan.Resource, scopeSpan.Scope, projectID)
 				if err != nil {
-					return nil, appErrors.NewInternalError("failed to create span event", err)
+					return nil, appErrors.Internal("failed to create span event", err)
 				}
 				internalEvents = append(internalEvents, obsEvent)
 			}

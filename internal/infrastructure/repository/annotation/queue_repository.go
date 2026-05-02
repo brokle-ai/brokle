@@ -10,9 +10,9 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
-	appErrors "brokle/pkg/errors"
 )
 
 type queueRepository struct {
@@ -44,9 +44,9 @@ func (r *queueRepository) Create(ctx context.Context, q *annotationDomain.Annota
 		CreatedBy:      q.CreatedBy,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return annotationDomain.ErrQueueExists
+			return appErrors.AlreadyExists("annotation_queue", appErrors.WithOp("repo.annotation.queue.create"), appErrors.WithCause(err))
 		}
-		return err
+		return appErrors.Internal("create annotation queue", err, appErrors.WithOp("repo.annotation.queue.create"))
 	}
 	return nil
 }
@@ -58,9 +58,9 @@ func (r *queueRepository) GetByID(ctx context.Context, id, projectID uuid.UUID) 
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, annotationDomain.ErrQueueNotFound
+			return nil, appErrors.NotFound("annotation_queue", appErrors.WithOp("repo.annotation.queue.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get annotation queue", err, appErrors.WithOp("repo.annotation.queue.get_by_id"))
 	}
 	return queueFromRow(&row)
 }
@@ -147,12 +147,12 @@ func (r *queueRepository) Update(ctx context.Context, q *annotationDomain.Annota
 	})
 	if err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return annotationDomain.ErrQueueExists
+			return appErrors.AlreadyExists("annotation_queue", appErrors.WithOp("repo.annotation.queue.update"), appErrors.WithCause(err))
 		}
-		return err
+		return appErrors.Internal("update annotation queue", err, appErrors.WithOp("repo.annotation.queue.update"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrQueueNotFound
+		return appErrors.NotFound("annotation_queue", appErrors.WithOp("repo.annotation.queue.update"))
 	}
 	return nil
 }
@@ -163,10 +163,10 @@ func (r *queueRepository) Delete(ctx context.Context, id, projectID uuid.UUID) e
 		ProjectID: projectID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete annotation queue", err, appErrors.WithOp("repo.annotation.queue.delete"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrQueueNotFound
+		return appErrors.NotFound("annotation_queue", appErrors.WithOp("repo.annotation.queue.delete"))
 	}
 	return nil
 }

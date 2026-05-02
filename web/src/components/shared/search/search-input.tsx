@@ -29,7 +29,7 @@ export function SearchInput({
   ...props
 }: SearchInputProps) {
   const [internalValue, setInternalValue] = React.useState(value)
-  const debounceRef = React.useRef<NodeJS.Timeout>()
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // Sync external value changes
   React.useEffect(() => {

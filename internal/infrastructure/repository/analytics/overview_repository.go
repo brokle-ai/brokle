@@ -164,7 +164,7 @@ func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analyti
 	}
 	defer rows.Close()
 
-	var result []analytics.OverviewTimeSeriesPoint
+	result := make([]analytics.OverviewTimeSeriesPoint, 0)
 	for rows.Next() {
 		var ts time.Time
 		var count uint64
@@ -208,7 +208,7 @@ func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *anal
 	}
 	defer rows.Close()
 
-	var result []analytics.OverviewTimeSeriesPoint
+	result := make([]analytics.OverviewTimeSeriesPoint, 0)
 	for rows.Next() {
 		var ts time.Time
 		var cost float64
@@ -252,7 +252,7 @@ func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *ana
 	}
 	defer rows.Close()
 
-	var result []analytics.OverviewTimeSeriesPoint
+	result := make([]analytics.OverviewTimeSeriesPoint, 0)
 	for rows.Next() {
 		var ts time.Time
 		var tokens uint64
@@ -296,7 +296,7 @@ func (r *overviewRepository) GetErrorTimeSeries(ctx context.Context, filter *ana
 	}
 	defer rows.Close()
 
-	var result []analytics.OverviewTimeSeriesPoint
+	result := make([]analytics.OverviewTimeSeriesPoint, 0)
 	for rows.Next() {
 		var ts time.Time
 		var errCount uint64
@@ -342,7 +342,7 @@ func (r *overviewRepository) GetCostByModel(ctx context.Context, filter *analyti
 	}
 	defer rows.Close()
 
-	var result []analytics.CostByModel
+	result := make([]analytics.CostByModel, 0)
 	for rows.Next() {
 		var model string
 		var cost float64
@@ -392,7 +392,7 @@ func (r *overviewRepository) GetRecentTraces(ctx context.Context, filter *analyt
 	}
 	defer rows.Close()
 
-	var result []analytics.RecentTrace
+	result := make([]analytics.RecentTrace, 0)
 	for rows.Next() {
 		var traceID, name string
 		var latencyMs float64
@@ -449,7 +449,7 @@ func (r *overviewRepository) GetTopErrors(ctx context.Context, filter *analytics
 	}
 	defer rows.Close()
 
-	var result []analytics.TopError
+	result := make([]analytics.TopError, 0)
 	for rows.Next() {
 		var message string
 		var count uint64
@@ -506,7 +506,7 @@ func (r *overviewRepository) GetScoresSummary(ctx context.Context, filter *analy
 		name     string
 		avgValue float64
 	}
-	var topScores []scoreInfo
+	topScores := make([]scoreInfo, 0)
 
 	for rows.Next() {
 		var name string
@@ -568,7 +568,7 @@ func (r *overviewRepository) GetScoresSummary(ctx context.Context, filter *analy
 	}
 
 	// Get sparkline data for each score
-	var result []analytics.ScoreSummary
+	result := make([]analytics.ScoreSummary, 0)
 	for _, score := range topScores {
 		sparklineQuery := `
 			SELECT
@@ -593,7 +593,7 @@ func (r *overviewRepository) GetScoresSummary(ctx context.Context, filter *analy
 			return nil, fmt.Errorf("query sparkline for %s: %w", score.name, err)
 		}
 
-		var sparkline []analytics.OverviewTimeSeriesPoint
+		sparkline := make([]analytics.OverviewTimeSeriesPoint, 0)
 		for sparklineRows.Next() {
 			var ts time.Time
 			var value float64

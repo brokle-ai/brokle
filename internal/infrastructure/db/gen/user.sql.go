@@ -208,7 +208,12 @@ func (q *Queries) CreateUserProfile(ctx context.Context, arg CreateUserProfilePa
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, first_name, last_name, password, is_active, is_email_verified, email_verified_at, timezone, language, last_login_at, login_count, default_organization_id, created_at, updated_at, deleted_at, role, referral_source, auth_method, oauth_provider, oauth_provider_id FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE email = $1 AND deleted_at IS NULL
 LIMIT 1
 `
@@ -243,7 +248,12 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, first_name, last_name, password, is_active, is_email_verified, email_verified_at, timezone, language, last_login_at, login_count, default_organization_id, created_at, updated_at, deleted_at, role, referral_source, auth_method, oauth_provider, oauth_provider_id FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE id = $1 AND deleted_at IS NULL
 LIMIT 1
 `
@@ -291,7 +301,14 @@ func (q *Queries) GetUserDefaultOrganization(ctx context.Context, id uuid.UUID) 
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT user_id, bio, location, website, twitter_url, linkedin_url, github_url, timezone, language, theme, created_at, updated_at, avatar_url, phone, email_notifications, push_notifications, marketing_emails, weekly_reports, monthly_reports, security_alerts, billing_alerts, usage_threshold_percent FROM user_profiles
+SELECT user_id, bio, location, website,
+       twitter_url, linkedin_url, github_url,
+       timezone, language, theme,
+       created_at, updated_at, avatar_url, phone,
+       email_notifications, push_notifications, marketing_emails,
+       weekly_reports, monthly_reports, security_alerts, billing_alerts,
+       usage_threshold_percent
+FROM user_profiles
 WHERE user_id = $1
 LIMIT 1
 `
@@ -327,7 +344,12 @@ func (q *Queries) GetUserProfile(ctx context.Context, userID uuid.UUID) (UserPro
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, first_name, last_name, password, is_active, is_email_verified, email_verified_at, timezone, language, last_login_at, login_count, default_organization_id, created_at, updated_at, deleted_at, role, referral_source, auth_method, oauth_provider, oauth_provider_id FROM users
+SELECT id, email, first_name, last_name, password,
+       is_active, is_email_verified, email_verified_at,
+       timezone, language, last_login_at, login_count,
+       default_organization_id, created_at, updated_at, deleted_at,
+       role, referral_source, auth_method, oauth_provider, oauth_provider_id
+FROM users
 WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL
 `
 
@@ -374,7 +396,12 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]U
 }
 
 const listUsersByOrganization = `-- name: ListUsersByOrganization :many
-SELECT u.id, u.email, u.first_name, u.last_name, u.password, u.is_active, u.is_email_verified, u.email_verified_at, u.timezone, u.language, u.last_login_at, u.login_count, u.default_organization_id, u.created_at, u.updated_at, u.deleted_at, u.role, u.referral_source, u.auth_method, u.oauth_provider, u.oauth_provider_id FROM users u
+SELECT u.id, u.email, u.first_name, u.last_name, u.password,
+       u.is_active, u.is_email_verified, u.email_verified_at,
+       u.timezone, u.language, u.last_login_at, u.login_count,
+       u.default_organization_id, u.created_at, u.updated_at, u.deleted_at,
+       u.role, u.referral_source, u.auth_method, u.oauth_provider, u.oauth_provider_id
+FROM users u
 JOIN organization_members om
   ON om.user_id = u.id
  AND om.deleted_at IS NULL

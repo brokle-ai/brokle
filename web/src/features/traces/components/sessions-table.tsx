@@ -12,8 +12,8 @@ import {
 } from '@tanstack/react-table'
 import { formatDistanceToNow, differenceInMinutes } from 'date-fns'
 import { Copy, ChevronRight, ChevronDown, MessageSquare, User } from 'lucide-react'
+import { useRouter, useParams } from 'next/navigation'
 import { useProjectSessions, type Session } from '../hooks/use-project-sessions'
-import { useTabState } from '../hooks/use-tab-state'
 import { useTracesTableState } from '../hooks/use-traces-table-state'
 import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTablePagination } from '@/components/data-table'
@@ -191,7 +191,9 @@ const sessionsColumns: ColumnDef<Session>[] = [
  */
 function SessionTracesSubRow({ row }: { row: Row<Session> }) {
   const traces = row.original.traces
-  const { setTab } = useTabState()
+  const router = useRouter()
+  const params = useParams()
+  const projectSlug = params?.projectSlug as string | undefined
   const tracesTableState = useTracesTableState()
 
   const handleViewInTraces = (sessionId: string) => {
@@ -204,7 +206,9 @@ function SessionTracesSubRow({ row }: { row: Row<Session> }) {
         value: sessionId,
       },
     ])
-    setTab('traces')
+    if (projectSlug) {
+      router.push(`/projects/${projectSlug}/traces`)
+    }
   }
 
   return (

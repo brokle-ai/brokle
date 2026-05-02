@@ -40,13 +40,16 @@ export function FormField({
       )}
 
       <div className='relative'>
-        {React.cloneElement(children as React.ReactElement, {
-          id: fieldId,
-          className: cn(
-            error && 'border-destructive focus-visible:ring-destructive',
-            (children as React.ReactElement).props.className
-          ),
-        })}
+        {(() => {
+          const child = children as React.ReactElement<{ id?: string; className?: string }>
+          return React.cloneElement(child, {
+            id: fieldId,
+            className: cn(
+              error && 'border-destructive focus-visible:ring-destructive',
+              child.props.className
+            ),
+          })
+        })()}
       </div>
 
       {error && (

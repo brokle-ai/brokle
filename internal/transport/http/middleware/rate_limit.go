@@ -141,7 +141,7 @@ func rateLimitHandler(logger *slog.Logger, bucket string) http.HandlerFunc {
 			}
 		}
 		_ = retryAfter
-		response.WriteError(w, appErrors.NewRateLimitError("Rate limit exceeded. Please try again later."))
+		response.WriteError(w, appErrors.RateLimit("Rate limit exceeded. Please try again later."))
 	}
 }
 

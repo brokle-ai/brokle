@@ -320,16 +320,16 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		}
 
 		experimentRepo.On("GetByID", ctx, experimentID, projectID).Return(experiment, nil)
-		datasetItemRepo.On("GetByID", ctx, differentDatasetItemID, datasetID).Return(nil, evaluation.ErrDatasetItemNotFound)
+		datasetItemRepo.On("GetByID", ctx, differentDatasetItemID, datasetID).Return(nil, appErrors.NotFound("dataset_item"))
 
 		count, err := service.CreateBatch(ctx, experimentID, projectID, req)
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeValidation, appErr.Type)
-		assert.Contains(t, appErr.Details, "not found in experiment's dataset")
+		assert.Equal(t, appErrors.ReasonInvalidInput, appErr.Reason)
+		assert.Contains(t, appErr.Message, "not found in experiment's dataset")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertExpectations(t)
 		itemRepo.AssertNotCalled(t, "CreateBatch")
@@ -367,10 +367,10 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeValidation, appErr.Type)
-		assert.Contains(t, appErr.Details, "cannot reference dataset items when experiment has no dataset")
+		assert.Equal(t, appErrors.ReasonInvalidInput, appErr.Reason)
+		assert.Contains(t, appErr.Message, "cannot reference dataset items when experiment has no dataset")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertNotCalled(t, "GetByID")
 		itemRepo.AssertNotCalled(t, "CreateBatch")
@@ -478,16 +478,16 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		}
 
 		experimentRepo.On("GetByID", ctx, experimentID, projectID).Return(experiment, nil)
-		datasetItemRepo.On("GetByID", ctx, nonExistentItemID, datasetID).Return(nil, evaluation.ErrDatasetItemNotFound)
+		datasetItemRepo.On("GetByID", ctx, nonExistentItemID, datasetID).Return(nil, appErrors.NotFound("dataset_item"))
 
 		count, err := service.CreateBatch(ctx, experimentID, projectID, req)
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeValidation, appErr.Type)
-		assert.Contains(t, appErr.Details, "not found in experiment's dataset")
+		assert.Equal(t, appErrors.ReasonInvalidInput, appErr.Reason)
+		assert.Contains(t, appErr.Message, "not found in experiment's dataset")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertExpectations(t)
 		itemRepo.AssertNotCalled(t, "CreateBatch")
@@ -525,10 +525,10 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeValidation, appErr.Type)
-		assert.Contains(t, appErr.Details, "must be a valid UUID")
+		assert.Equal(t, appErrors.ReasonInvalidInput, appErr.Reason)
+		assert.Contains(t, appErr.Message, "must be a valid UUID")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertNotCalled(t, "GetByID")
 		itemRepo.AssertNotCalled(t, "CreateBatch")
@@ -550,16 +550,16 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 			},
 		}
 
-		experimentRepo.On("GetByID", ctx, experimentID, projectID).Return(nil, evaluation.ErrExperimentNotFound)
+		experimentRepo.On("GetByID", ctx, experimentID, projectID).Return(nil, appErrors.NotFound("experiment"))
 
 		count, err := service.CreateBatch(ctx, experimentID, projectID, req)
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeNotFound, appErr.Type)
-		assert.Contains(t, appErr.Message, "experiment")
+		assert.Equal(t, appErrors.ReasonNotFound, appErr.Reason)
+		assert.Contains(t, appErr.Resource, "experiment")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertNotCalled(t, "GetByID")
 		itemRepo.AssertNotCalled(t, "CreateBatch")
@@ -591,10 +591,10 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		var appErr *appErrors.AppError
+		var appErr *appErrors.Error
 		require.ErrorAs(t, err, &appErr)
-		assert.Equal(t, appErrors.TypeValidation, appErr.Type)
-		assert.Contains(t, appErr.Details, "items array cannot be empty")
+		assert.Equal(t, appErrors.ReasonInvalidInput, appErr.Reason)
+		assert.Contains(t, appErr.Message, "items array cannot be empty")
 		experimentRepo.AssertExpectations(t)
 		datasetItemRepo.AssertNotCalled(t, "GetByID")
 		itemRepo.AssertNotCalled(t, "CreateBatch")

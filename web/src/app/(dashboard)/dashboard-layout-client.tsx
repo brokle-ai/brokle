@@ -103,7 +103,6 @@ function pickDefaultOrganization(
     name: chosen.name,
     plan: chosen.plan,
     members: [],
-    apiKeys: [],
     usage: {
       traces_this_month: 0,
       observed_cost_this_month: 0,

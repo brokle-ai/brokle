@@ -34,9 +34,9 @@ func (r *datasetVersionRepository) Create(ctx context.Context, v *evalDomain.Dat
 		CreatedBy:   v.CreatedBy,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return evalDomain.ErrDatasetVersionExists
+			return appErrors.AlreadyExists("dataset_version", appErrors.WithOp("repo.dataset_version.create"))
 		}
-		return err
+		return appErrors.Internal("create dataset version", err, appErrors.WithOp("repo.dataset_version.create"))
 	}
 	return nil
 }
@@ -48,9 +48,9 @@ func (r *datasetVersionRepository) GetByID(ctx context.Context, id, datasetID uu
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrDatasetVersionNotFound
+			return nil, appErrors.NotFound("dataset_version", appErrors.WithOp("repo.dataset_version.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get dataset version", err, appErrors.WithOp("repo.dataset_version.get_by_id"))
 	}
 	return datasetVersionFromRow(&row)
 }
@@ -59,9 +59,9 @@ func (r *datasetVersionRepository) GetLatest(ctx context.Context, datasetID uuid
 	row, err := r.tm.Queries(ctx).GetLatestDatasetVersion(ctx, datasetID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrDatasetVersionNotFound
+			return nil, appErrors.NotFound("dataset_version", appErrors.WithOp("repo.dataset_version.get_latest"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get latest dataset version", err, appErrors.WithOp("repo.dataset_version.get_latest"))
 	}
 	return datasetVersionFromRow(&row)
 }

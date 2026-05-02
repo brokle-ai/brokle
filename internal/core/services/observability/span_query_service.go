@@ -34,7 +34,7 @@ func (s *SpanQueryService) QuerySpans(
 	req *obsDomain.SpanQueryRequest,
 ) (*obsDomain.SpanQueryResponse, error) {
 	if errs := obsDomain.ValidateSpanQueryRequest(req); len(errs) > 0 {
-		return nil, appErrors.NewValidationError("invalid span query request", errs[0].Message)
+		return nil, appErrors.InvalidParam("query", errs[0].Message)
 	}
 
 	obsDomain.NormalizeSpanQueryRequest(req)
@@ -48,7 +48,7 @@ func (s *SpanQueryService) QuerySpans(
 			"filter", req.Filter,
 			"error", err,
 		)
-		return nil, appErrors.NewValidationError("invalid filter expression", err.Error())
+		return nil, appErrors.InvalidParam("filter", err.Error())
 	}
 
 	// Calculate offset from page (page is 1-indexed)
@@ -71,7 +71,7 @@ func (s *SpanQueryService) QuerySpans(
 			"filter", req.Filter,
 			"error", err,
 		)
-		return nil, appErrors.NewInternalError("failed to build query", err)
+		return nil, appErrors.Internal("failed to build query", err)
 	}
 
 	countResult, err := queryBuilder.BuildCountQuery(
@@ -86,7 +86,7 @@ func (s *SpanQueryService) QuerySpans(
 			"filter", req.Filter,
 			"error", err,
 		)
-		return nil, appErrors.NewInternalError("failed to build count query", err)
+		return nil, appErrors.Internal("failed to build count query", err)
 	}
 
 	spans, err := s.traceRepo.QuerySpansByExpression(ctx, queryResult.Query, queryResult.Args)
@@ -95,7 +95,7 @@ func (s *SpanQueryService) QuerySpans(
 			"project_id", projectID,
 			"error", err,
 		)
-		return nil, appErrors.NewInternalError("query execution failed", err)
+		return nil, appErrors.Internal("query execution failed", err)
 	}
 
 	totalCount, err := s.traceRepo.CountSpansByExpression(ctx, countResult.Query, countResult.Args)
@@ -104,7 +104,7 @@ func (s *SpanQueryService) QuerySpans(
 			"project_id", projectID,
 			"error", err,
 		)
-		return nil, appErrors.NewInternalError("count query failed", err)
+		return nil, appErrors.Internal("count query failed", err)
 	}
 
 	s.logger.Debug("span query executed",
@@ -131,11 +131,7 @@ func (s *SpanQueryService) ValidateFilter(filter string) error {
 		// wire envelope. SDKs discriminate filter-syntax 422s from
 		// generic input-validation 422s (invalid limit, page, etc.) on
 		// that code, matching the Stripe/OpenAI/JSON:API convention.
-		return appErrors.NewValidationError(
-			"invalid filter expression",
-			err.Error(),
-			appErrors.WithCode(appErrors.CodeInvalidFilterExpression),
-		)
+		return appErrors.InvalidParam("filter", err.Error())
 	}
 	return nil
 }

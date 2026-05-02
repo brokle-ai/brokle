@@ -52,6 +52,9 @@ export function mapEnhancedUserProfile(
       compositeSlug: org.composite_slug,
       plan: org.plan as SubscriptionPlan,
       role: org.role as OrganizationRole,
+      // Backend always emits a non-null array; coalesce defensively in
+      // case an older endpoint shape leaks through during the cutover.
+      scopes: org.scopes ?? [],
       createdAt: org.created_at,
       updatedAt: org.updated_at,
       projects: (org.projects || []).map((proj: BackendProjectSummary) => ({
@@ -61,6 +64,8 @@ export function mapEnhancedUserProfile(
         description: proj.description || '',
         organizationId: proj.organization_id,
         status: proj.status as ProjectStatus,
+        role: proj.role,
+        scopes: proj.scopes ?? [],
         createdAt: proj.created_at,
         updatedAt: proj.updated_at,
         metrics: {

@@ -8,6 +8,7 @@ import (
 	evalDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type datasetItemRepository struct {
@@ -69,9 +70,9 @@ func (r *datasetItemRepository) GetByID(ctx context.Context, id, datasetID uuid.
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrDatasetItemNotFound
+			return nil, appErrors.NotFound("dataset_item", appErrors.WithOp("repo.dataset_item.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get dataset item", err, appErrors.WithOp("repo.dataset_item.get_by_id"))
 	}
 	return datasetItemFromRow(&row)
 }
@@ -98,10 +99,10 @@ func (r *datasetItemRepository) Delete(ctx context.Context, id, datasetID uuid.U
 		DatasetID: datasetID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete dataset item", err, appErrors.WithOp("repo.dataset_item.delete"))
 	}
 	if n == 0 {
-		return evalDomain.ErrDatasetItemNotFound
+		return appErrors.NotFound("dataset_item", appErrors.WithOp("repo.dataset_item.delete"))
 	}
 	return nil
 }

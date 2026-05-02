@@ -12,6 +12,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // userSessionRepository is the pgx+sqlc implementation of
@@ -40,7 +41,7 @@ func (r *userSessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*aut
 	row, err := r.tm.Queries(ctx).GetUserSessionByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get user session by ID %s: %w", id, authDomain.ErrSessionNotFound)
+			return nil, appErrors.NotFound("session", appErrors.WithOp("repo.user_session.get_by_id"))
 		}
 		return nil, fmt.Errorf("get user session by ID %s: %w", id, err)
 	}
@@ -55,7 +56,7 @@ func (r *userSessionRepository) GetByJTI(ctx context.Context, jti string) (*auth
 	row, err := r.tm.Queries(ctx).GetUserSessionByJTI(ctx, jtiUUID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get user session by JTI %s: %w", jti, authDomain.ErrSessionNotFound)
+			return nil, appErrors.NotFound("session", appErrors.WithOp("repo.user_session.get_by_jti"))
 		}
 		return nil, fmt.Errorf("get user session by JTI %s: %w", jti, err)
 	}
@@ -66,7 +67,7 @@ func (r *userSessionRepository) GetByRefreshTokenHash(ctx context.Context, refre
 	row, err := r.tm.Queries(ctx).GetUserSessionByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get user session by refresh token hash: %w", authDomain.ErrSessionNotFound)
+			return nil, appErrors.NotFound("session", appErrors.WithOp("repo.user_session.get_by_refresh_token_hash"))
 		}
 		return nil, fmt.Errorf("get user session by refresh token hash: %w", err)
 	}

@@ -1,4 +1,4 @@
-export { ComparisonViewToggle } from './comparison-view-toggle'
+export { ComparisonViewToggle, type ComparisonViewMode } from './comparison-view-toggle'
 export { ComparisonTable } from './comparison-table'
 export { ComparisonSummary } from './comparison-summary'
 export { ScoreProgressBar } from './score-progress-bar'

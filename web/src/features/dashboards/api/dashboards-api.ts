@@ -1,7 +1,7 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Dashboard,
-  DashboardListResponse,
   CreateDashboardRequest,
   UpdateDashboardRequest,
   DashboardFilter,
@@ -14,17 +14,20 @@ const client = new BrokleAPIClient('/api')
 
 export const getDashboards = async (
   projectId: string,
-  filter?: DashboardFilter
-): Promise<DashboardListResponse> => {
+  filter?: DashboardFilter,
+): Promise<PaginatedResponse<Dashboard>> => {
+  // Backend mounts the list at /api/v1/projects/{projectId}/dashboards
+  // and returns the canonical {data, pagination} envelope. Mirrors
+  // getOrganizationMembers (members-api.ts).
   const queryParams: Record<string, string | number | boolean> = {}
 
   if (filter?.name) queryParams.name = filter.name
   if (filter?.limit) queryParams.limit = filter.limit
   if (filter?.offset !== undefined) queryParams.offset = filter.offset
 
-  return client.get<DashboardListResponse>(
+  return client.getPaginated<Dashboard>(
     `/v1/projects/${projectId}/dashboards`,
-    queryParams
+    queryParams,
   )
 }
 

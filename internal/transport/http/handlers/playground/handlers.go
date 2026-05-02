@@ -17,9 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	playgroundDomain "brokle/internal/core/domain/playground"
@@ -31,108 +29,46 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	svc            *playgroundService.PlaygroundService
 	projectService *organizationService.ProjectService
 	logger         *slog.Logger
 }
 
-// RegisterRoutes mounts the dashboard-plane playground routes on r.
-// Expected mount context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs a Handler with all services any playground Register*
+// function might need (dashboard + SDK).
+func New(
 	svc *playgroundService.PlaygroundService,
 	projectService *organizationService.ProjectService,
 	logger *slog.Logger,
-) {
-	h := &handler{svc: svc, projectService: projectService, logger: logger}
-
-	r.Post("/api/v1/playground/execute", h.execute)
-	r.Post("/api/v1/playground/stream", h.stream)
-
-	r.Route("/api/v1/projects/{projectId}/playground/sessions", func(r chi.Router) {
-		r.Post("/", h.createSession)
-		r.Get("/", h.listSessions)
-		r.Get("/{sessionId}", h.getSession)
-		r.Put("/{sessionId}", h.updateSession)
-		r.Delete("/{sessionId}", h.deleteSession)
-	})
-}
-
-// RegisterSDKRoutes mounts the SDK-plane playground route on r.
-// Expected mount context: the SDK-authed chi group. Project ID is
-// taken from the authenticated API key, not the request body.
-func RegisterSDKRoutes(
-	r chi.Router,
-	svc *playgroundService.PlaygroundService,
-	logger *slog.Logger,
-) {
-	h := &handler{svc: svc, logger: logger}
-	r.Post("/v1/playground/execute", h.sdkExecute)
+) *Handler {
+	return &Handler{svc: svc, projectService: projectService, logger: logger}
 }
 
 // ---- shared helpers ---------------------------------------------------
 
-// validateProjectAccess verifies the caller may use the given project's
-// credentials. Required on execute + stream because those endpoints
-// take project_id from the request body.
-func (h *handler) validateProjectAccess(ctx context.Context, projectIDStr *string) (uuid.UUID, error) {
-	if projectIDStr == nil {
-		return uuid.Nil, appErrors.NewValidationError(
-			"project_id is required",
-			"playground execution requires project_id",
-			appErrors.WithParam("project_id"),
-		)
-	}
-	projectID, err := uuid.Parse(*projectIDStr)
-	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError(
-			"Invalid project_id",
-			"project_id must be a valid UUID",
-			appErrors.WithParam("project_id"),
-		)
-	}
-	userID := httpctx.MustGetUserID(ctx)
-	if err := h.projectService.ValidateProjectAccess(ctx, userID, projectID); err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return uuid.Nil, appErrors.NewNotFoundError("Project not found")
-		}
-		h.logger.Warn("User attempted to access project credentials without permission",
-			"user_id", userID.String(),
-			"project_id", projectID.String(),
-			"error", err,
-		)
-		return uuid.Nil, appErrors.NewForbiddenError("You don't have access to this project")
-	}
-	return projectID, nil
-}
-
-// validateSessionAccess verifies the caller may update the given session.
-// Returns the parsed session ID, or nil if no session_id was supplied.
-func (h *handler) validateSessionAccess(ctx context.Context, sessionIDStr *string) (*uuid.UUID, error) {
+// validateSessionAccess verifies the supplied session_id belongs to the
+// pinned projectID from context. Returns the parsed session ID, or nil
+// if no session_id was supplied.
+func (h *Handler) validateSessionAccess(ctx context.Context, sessionIDStr *string, projectID uuid.UUID) (*uuid.UUID, error) {
 	if sessionIDStr == nil {
 		return nil, nil
 	}
 	sessionID, err := uuid.Parse(*sessionIDStr)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			"Invalid session_id",
-			"session_id must be a valid UUID",
-			appErrors.WithParam("session_id"),
-		)
+		return nil, appErrors.InvalidParam("session_id", "must be a valid UUID")
 	}
 	session, err := h.svc.GetSession(ctx, sessionID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("Session not found")
+		return nil, appErrors.NotFound("session")
 	}
-	userID := httpctx.MustGetUserID(ctx)
-	if err := h.projectService.ValidateProjectAccess(ctx, userID, session.ProjectID); err != nil {
-		h.logger.Warn("User attempted to access session without project permission",
-			"user_id", userID.String(),
+	if session.ProjectID != projectID {
+		h.logger.Warn("Session does not belong to pinned project",
 			"session_id", sessionID.String(),
-			"project_id", session.ProjectID.String(),
+			"session_project", session.ProjectID.String(),
+			"pinned_project", projectID.String(),
 		)
-		return nil, appErrors.NewForbiddenError("You don't have access to this session")
+		return nil, appErrors.PermissionDenied("session", "You don't have access to this session")
 	}
 	return &sessionID, nil
 }
@@ -141,19 +77,15 @@ func (h *handler) validateSessionAccess(ctx context.Context, sessionIDStr *strin
 // Execute (dashboard)
 // ==============================================================
 
-func (h *handler) execute(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 	var body executePlaygroundBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
 		return
 	}
 
-	projectID, err := h.validateProjectAccess(r.Context(), body.ProjectID)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	sessionID, err := h.validateSessionAccess(r.Context(), body.SessionID)
+	projectID := httpctx.MustGetProjectID(r.Context())
+	sessionID, err := h.validateSessionAccess(r.Context(), body.SessionID, projectID)
 	if err != nil {
 		response.WriteError(w, err)
 		return
@@ -191,10 +123,10 @@ func (h *handler) execute(w http.ResponseWriter, r *http.Request) {
 // the stream has started, further failures arrive as inline
 // `error`-typed StreamChunk events since we can't switch wire shapes
 // mid-response.
-func (h *handler) stream(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		response.WriteError(w, appErrors.NewInternalError(
+		response.WriteError(w, appErrors.Internal(
 			"Streaming unsupported", fmt.Errorf("ResponseWriter does not implement http.Flusher"),
 		))
 		return
@@ -206,12 +138,8 @@ func (h *handler) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectID, err := h.validateProjectAccess(r.Context(), body.ProjectID)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	sessionID, err := h.validateSessionAccess(r.Context(), body.SessionID)
+	projectID := httpctx.MustGetProjectID(r.Context())
+	sessionID, err := h.validateSessionAccess(r.Context(), body.SessionID, projectID)
 	if err != nil {
 		response.WriteError(w, err)
 		return
@@ -296,12 +224,8 @@ func (h *handler) stream(w http.ResponseWriter, r *http.Request) {
 // Sessions (dashboard)
 // ==============================================================
 
-func (h *handler) createSession(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body createSessionBody
@@ -327,12 +251,8 @@ func (h *handler) createSession(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, session)
 }
 
-func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 
 	limit, err := request.QueryInt(r, "limit", 20)
 	if err != nil {
@@ -360,12 +280,8 @@ func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, sessions)
 }
 
-func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "sessionId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -383,12 +299,8 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, session)
 }
 
-func (h *handler) updateSession(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "sessionId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -421,12 +333,8 @@ func (h *handler) updateSession(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, session)
 }
 
-func (h *handler) deleteSession(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "sessionId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -447,7 +355,7 @@ func (h *handler) deleteSession(w http.ResponseWriter, r *http.Request) {
 // SDK execute
 // ==============================================================
 
-func (h *handler) sdkExecute(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkExecute(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 
 	var body sdkExecuteBody

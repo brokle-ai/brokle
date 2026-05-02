@@ -50,7 +50,7 @@ func (r *providerCredentialRepository) Create(ctx context.Context, c *credential
 		UpdatedAt:      c.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create credential: %w", credentialsDomain.ErrCredentialExists)
+			return appErrors.AlreadyExists("credential", appErrors.WithOp("repo.credentials.create"))
 		}
 		return fmt.Errorf("create credential: %w", err)
 	}
@@ -64,7 +64,7 @@ func (r *providerCredentialRepository) GetByID(ctx context.Context, id, orgID uu
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get credential by ID %s: %w", id, credentialsDomain.ErrCredentialNotFound)
+			return nil, appErrors.NotFound("credential", appErrors.WithOp("repo.credentials.get_by_id"))
 		}
 		return nil, fmt.Errorf("get credential by ID: %w", err)
 	}
@@ -114,12 +114,12 @@ func (r *providerCredentialRepository) Update(ctx context.Context, c *credential
 	})
 	if err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("update credential: %w", credentialsDomain.ErrCredentialExists)
+			return appErrors.AlreadyExists("credential", appErrors.WithOp("repo.credentials.update"))
 		}
 		return fmt.Errorf("update credential: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("update credential: %w", credentialsDomain.ErrCredentialNotFound)
+		return appErrors.NotFound("credential", appErrors.WithOp("repo.credentials.update"))
 	}
 	return nil
 }
@@ -133,7 +133,7 @@ func (r *providerCredentialRepository) Delete(ctx context.Context, id, orgID uui
 		return fmt.Errorf("delete credential: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("delete credential %s: %w", id, credentialsDomain.ErrCredentialNotFound)
+		return appErrors.NotFound("credential", appErrors.WithOp("repo.credentials.delete"))
 	}
 	return nil
 }

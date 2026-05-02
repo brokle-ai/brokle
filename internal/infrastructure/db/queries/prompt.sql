@@ -183,12 +183,14 @@ INSERT INTO prompt_protected_labels (
 DELETE FROM prompt_protected_labels WHERE id = $1;
 
 -- name: GetProtectedPromptLabelByProjectAndLabel :one
-SELECT * FROM prompt_protected_labels
+SELECT id, project_id, label_name, created_by, created_at
+FROM prompt_protected_labels
 WHERE project_id = $1 AND label_name = $2
 LIMIT 1;
 
 -- name: ListProtectedPromptLabelsByProject :many
-SELECT * FROM prompt_protected_labels
+SELECT id, project_id, label_name, created_by, created_at
+FROM prompt_protected_labels
 WHERE project_id = $1
 ORDER BY label_name ASC;
 

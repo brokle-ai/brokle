@@ -168,6 +168,7 @@ type AuthRepositories struct {
 	APIKey             authDomain.APIKeyRepository
 	Role               authDomain.RoleRepository
 	OrganizationMember authDomain.OrganizationMemberRepository
+	ProjectMember      authDomain.ProjectMemberRepository
 	Permission         authDomain.PermissionRepository
 	RolePermission     authDomain.RolePermissionRepository
 	AuditLog           authDomain.AuditLogRepository
@@ -273,8 +274,8 @@ type AuthServices struct {
 	Role                *authService.RoleService
 	Permission          *authService.PermissionService
 	OrganizationMembers *authService.OrganizationMemberService
+	ProjectMembers      *authService.ProjectMemberService
 	BlacklistedTokens   *authService.BlacklistedTokenService
-	Scope               *authService.ScopeService
 	OAuthProvider       *authService.OAuthProviderService
 }
 

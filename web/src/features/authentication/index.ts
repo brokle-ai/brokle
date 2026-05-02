@@ -50,13 +50,11 @@ export type {
   OrganizationMember,
   OrganizationWithProjects,
   Project,
-  ApiKey,
   SubscriptionPlan,
   LoginResponse,
   UserResponse,
   RefreshTokenRequest,
   InvitationDetails,
-  Permission,
   // Re-exported from organizations/types (canonical source)
   ProjectSummary,
   ProjectMetrics,

@@ -69,7 +69,7 @@ func Recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 // and the recoverer must stay functional even if pkg/response has
 // itself panicked. Shape matches pkg/errors.AppError.MarshalJSON for
 // type=api_error: a top-level "error" object, no envelope wrapper.
-const internalErrorBody = `{"error":{"type":"api_error","code":"api_error","message":"Internal server error"}}`
+const internalErrorBody = `{"error":{"type":"api_error","message":"Internal server error"}}`
 
 // writePanicResponse emits the canonical 500 envelope.
 func writePanicResponse(w http.ResponseWriter, _ *http.Request) {

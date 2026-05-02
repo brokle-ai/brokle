@@ -1,0 +1,36 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Vite / Rolldown
+.vite
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Test + build outputs
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.auth
+
+# Generated — routeTree (TanStack Router plugin)
+src/routeTree.gen.ts
+# Generated OpenAPI types; real files emitted by `pnpm gen:api`. Stubs
+# `dashboard.d.ts` and `sdk.d.ts` are committed as a compilation anchor
+# so the client compiles before the first generation run; they are
+# overwritten on generation.
+!src/lib/api/generated/
+!src/lib/api/generated/dashboard.d.ts
+!src/lib/api/generated/sdk.d.ts
+src/lib/api/generated/*.json
+
+# Env
+.env
+.env.*
+!.env.example

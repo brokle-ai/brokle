@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -44,12 +43,12 @@ func (s *BudgetService) CreateBudget(ctx context.Context, budget *billing.UsageB
 	if budget.ProjectID != nil && *budget.ProjectID != uuid.Nil {
 		project, err := s.projectRepo.GetByID(ctx, *budget.ProjectID)
 		if err != nil {
-			if errors.Is(err, orgDomain.ErrProjectNotFound) {
+			if appErrors.IsNotFound(err) {
 				s.logger.Warn("budget creation failed: project not found",
 					"project_id", budget.ProjectID,
 					"organization_id", budget.OrganizationID,
 				)
-				return appErrors.NewNotFoundError(fmt.Sprintf("project %s", *budget.ProjectID))
+				return appErrors.NotFound("project", appErrors.WithMessage(fmt.Sprintf("project %s", *budget.ProjectID)))
 			}
 			// Database/infrastructure error - return 500
 			s.logger.Error("budget creation failed: project lookup error",
@@ -57,7 +56,7 @@ func (s *BudgetService) CreateBudget(ctx context.Context, budget *billing.UsageB
 				"organization_id", budget.OrganizationID,
 				"error", err,
 			)
-			return appErrors.NewInternalError("failed to validate project", err)
+			return appErrors.Internal("failed to validate project", err)
 		}
 
 		// Verify project belongs to the same organization
@@ -67,7 +66,7 @@ func (s *BudgetService) CreateBudget(ctx context.Context, budget *billing.UsageB
 				"project_org_id", project.OrganizationID,
 				"budget_org_id", budget.OrganizationID,
 			)
-			return appErrors.NewNotFoundError(fmt.Sprintf("project %s", *budget.ProjectID))
+			return appErrors.NotFound("project", appErrors.WithMessage(fmt.Sprintf("project %s", *budget.ProjectID)))
 		}
 	}
 
@@ -265,10 +264,10 @@ func (s *BudgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uui
 			"error", err,
 			"alert_id", alertID,
 		)
-		if errors.Is(err, billing.ErrAlertNotFound) {
-			return appErrors.NewNotFoundError("alert", appErrors.WithParam(alertID.String()))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("alert")
 		}
-		return appErrors.NewInternalError("failed to get alert", err)
+		return appErrors.Internal("failed to get alert", err)
 	}
 
 	// Security: verify alert belongs to the requesting organization.
@@ -279,7 +278,7 @@ func (s *BudgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uui
 			"alert_org_id", alert.OrganizationID,
 			"requested_org_id", orgID,
 		)
-		return appErrors.NewNotFoundError("alert", appErrors.WithParam(alertID.String()))
+		return appErrors.NotFound("alert")
 	}
 
 	if err := s.alertRepo.Acknowledge(ctx, alertID); err != nil {
@@ -287,7 +286,7 @@ func (s *BudgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uui
 			"error", err,
 			"alert_id", alertID,
 		)
-		return appErrors.NewInternalError("failed to acknowledge alert", err)
+		return appErrors.Internal("failed to acknowledge alert", err)
 	}
 
 	s.logger.Info("alert acknowledged",

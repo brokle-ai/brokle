@@ -29,13 +29,18 @@ type Organization struct {
 }
 
 // Member represents the many-to-many relationship between users and organizations.
+//
+// Lifecycle is single-axis via DeletedAt (soft-delete). The legacy
+// `status` flag (active/suspended) was retired on 2026-04-30 — it
+// had no callers and conflated with deleted_at in admin listings and
+// the orphan-cleanup migration. See OrganizationMember docstring in
+// internal/core/domain/auth/auth.go for the full context.
 type Member struct {
 	JoinedAt       time.Time  `json:"joined_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	InvitedBy      *uuid.UUID `json:"invited_by,omitempty"`
 	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
-	Status         string     `json:"status"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
 	UserID         uuid.UUID  `json:"user_id"`
 	RoleID         uuid.UUID  `json:"role_id"`
@@ -188,7 +193,6 @@ func NewMember(orgID, userID, roleID uuid.UUID) *Member {
 		OrganizationID: orgID,
 		UserID:         userID,
 		RoleID:         roleID,
-		Status:         "active",
 		JoinedAt:       now,
 		CreatedAt:      now,
 		UpdatedAt:      now,

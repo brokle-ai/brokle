@@ -66,7 +66,7 @@ func (r *userRepository) Create(ctx context.Context, u *userDomain.User) error {
 		UpdatedAt:             u.UpdatedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create user %s: %w", u.Email, userDomain.ErrAlreadyExists)
+			return appErrors.AlreadyExists("user", appErrors.WithOp("repo.user.create"), appErrors.WithCause(err))
 		}
 		return fmt.Errorf("create user %s: %w", u.Email, err)
 	}
@@ -77,7 +77,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*userDomain
 	row, err := r.tm.Queries(ctx).GetUserByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get user %s: %w", id, userDomain.ErrNotFound)
+			return nil, appErrors.NotFound("user", appErrors.WithOp("repo.user.get_by_id"))
 		}
 		return nil, fmt.Errorf("get user %s: %w", id, err)
 	}
@@ -88,7 +88,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*userDom
 	row, err := r.tm.Queries(ctx).GetUserByEmail(ctx, email)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get user by email %s: %w", email, userDomain.ErrNotFound)
+			return nil, appErrors.NotFound("user", appErrors.WithOp("repo.user.get_by_email"))
 		}
 		return nil, fmt.Errorf("get user by email %s: %w", email, err)
 	}
@@ -125,7 +125,7 @@ func (r *userRepository) Update(ctx context.Context, u *userDomain.User) error {
 		OauthProviderID:       u.OAuthProviderID,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("update user %s: %w", u.ID, userDomain.ErrAlreadyExists)
+			return appErrors.AlreadyExists("user", appErrors.WithOp("repo.user.update"), appErrors.WithCause(err))
 		}
 		return fmt.Errorf("update user %s: %w", u.ID, err)
 	}
@@ -243,7 +243,7 @@ func (r *userRepository) GetProfile(ctx context.Context, userID uuid.UUID) (*use
 	row, err := r.tm.Queries(ctx).GetUserProfile(ctx, userID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get profile for user %s: %w", userID, userDomain.ErrNotFound)
+			return nil, appErrors.NotFound("user_profile", appErrors.WithOp("repo.user.get_profile"))
 		}
 		return nil, fmt.Errorf("get profile for user %s: %w", userID, err)
 	}

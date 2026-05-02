@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -32,7 +31,7 @@ func NewFilterPresetService(
 // Create creates a new filter preset.
 func (s *FilterPresetService) Create(ctx context.Context, projectID, userID uuid.UUID, req *observability.CreateFilterPresetRequest) (*observability.FilterPreset, error) {
 	if validationErrs := observability.ValidateCreateFilterPresetRequest(req); len(validationErrs) > 0 {
-		return nil, appErrors.NewValidationError(validationErrs[0].Field, validationErrs[0].Message)
+		return nil, appErrors.InvalidParam(validationErrs[0].Field, validationErrs[0].Message)
 	}
 
 	exists, err := s.repo.ExistsByName(ctx, projectID, req.Name, nil)
@@ -42,10 +41,10 @@ func (s *FilterPresetService) Create(ctx context.Context, projectID, userID uuid
 			"project_id", projectID,
 			"name", req.Name,
 		)
-		return nil, appErrors.NewInternalError("failed to check preset name", err)
+		return nil, appErrors.Internal("failed to check preset name", err)
 	}
 	if exists {
-		return nil, appErrors.NewConflictError("a filter preset with this name already exists")
+		return nil, appErrors.Conflict("", "a filter preset with this name already exists")
 	}
 
 	preset := &observability.FilterPreset{
@@ -69,7 +68,7 @@ func (s *FilterPresetService) Create(ctx context.Context, projectID, userID uuid
 			"project_id", projectID,
 			"name", req.Name,
 		)
-		return nil, appErrors.NewInternalError("failed to create filter preset", err)
+		return nil, appErrors.Internal("failed to create filter preset", err)
 	}
 
 	s.logger.Info("filter preset created",
@@ -85,20 +84,20 @@ func (s *FilterPresetService) Create(ctx context.Context, projectID, userID uuid
 func (s *FilterPresetService) GetByID(ctx context.Context, projectID, id, userID uuid.UUID) (*observability.FilterPreset, error) {
 	preset, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, observability.ErrFilterPresetNotFound) {
-			return nil, appErrors.NewNotFoundError("filter preset " + id.String())
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 		}
-		return nil, appErrors.NewInternalError("failed to get filter preset", err)
+		return nil, appErrors.Internal("failed to get filter preset", err)
 	}
 
 	// Verify project scoping - return 404 to avoid information leakage
 	if preset.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError("filter preset " + id.String())
+		return nil, appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 	}
 
 	// Check access: user can access their own presets or public presets
 	if !preset.IsPublic && (preset.CreatedBy == nil || *preset.CreatedBy != userID) {
-		return nil, appErrors.NewForbiddenError("access to filter preset denied")
+		return nil, appErrors.PermissionDenied("", "access to filter preset denied")
 	}
 
 	return preset, nil
@@ -108,30 +107,30 @@ func (s *FilterPresetService) GetByID(ctx context.Context, projectID, id, userID
 func (s *FilterPresetService) Update(ctx context.Context, projectID, id, userID uuid.UUID, req *observability.UpdateFilterPresetRequest) (*observability.FilterPreset, error) {
 	preset, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, observability.ErrFilterPresetNotFound) {
-			return nil, appErrors.NewNotFoundError("filter preset " + id.String())
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 		}
-		return nil, appErrors.NewInternalError("failed to get filter preset", err)
+		return nil, appErrors.Internal("failed to get filter preset", err)
 	}
 
 	// Verify project scoping - return 404 to avoid information leakage
 	if preset.ProjectID != projectID {
-		return nil, appErrors.NewNotFoundError("filter preset " + id.String())
+		return nil, appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 	}
 
 	// Check ownership
 	if preset.CreatedBy == nil || *preset.CreatedBy != userID {
-		return nil, appErrors.NewForbiddenError("only the owner can update this preset")
+		return nil, appErrors.PermissionDenied("", "only the owner can update this preset")
 	}
 
 	// Check for duplicate name if name is being changed
 	if req.Name != nil && *req.Name != preset.Name {
 		exists, err := s.repo.ExistsByName(ctx, preset.ProjectID, *req.Name, &id)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check preset name", err)
+			return nil, appErrors.Internal("failed to check preset name", err)
 		}
 		if exists {
-			return nil, appErrors.NewConflictError("a filter preset with this name already exists")
+			return nil, appErrors.Conflict("", "a filter preset with this name already exists")
 		}
 		preset.Name = *req.Name
 	}
@@ -164,7 +163,7 @@ func (s *FilterPresetService) Update(ctx context.Context, projectID, id, userID 
 			"error", err,
 			"preset_id", id,
 		)
-		return nil, appErrors.NewInternalError("failed to update filter preset", err)
+		return nil, appErrors.Internal("failed to update filter preset", err)
 	}
 
 	s.logger.Info("filter preset updated",
@@ -179,20 +178,20 @@ func (s *FilterPresetService) Update(ctx context.Context, projectID, id, userID 
 func (s *FilterPresetService) Delete(ctx context.Context, projectID, id, userID uuid.UUID) error {
 	preset, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, observability.ErrFilterPresetNotFound) {
-			return appErrors.NewNotFoundError("filter preset " + id.String())
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 		}
-		return appErrors.NewInternalError("failed to get filter preset", err)
+		return appErrors.Internal("failed to get filter preset", err)
 	}
 
 	// Verify project scoping - return 404 to avoid information leakage
 	if preset.ProjectID != projectID {
-		return appErrors.NewNotFoundError("filter preset " + id.String())
+		return appErrors.NotFound("filter_preset", appErrors.WithMessage("filter preset "+id.String()+" not found"))
 	}
 
 	// Check ownership
 	if preset.CreatedBy == nil || *preset.CreatedBy != userID {
-		return appErrors.NewForbiddenError("only the owner can delete this preset")
+		return appErrors.PermissionDenied("", "only the owner can delete this preset")
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
@@ -200,7 +199,7 @@ func (s *FilterPresetService) Delete(ctx context.Context, projectID, id, userID 
 			"error", err,
 			"preset_id", id,
 		)
-		return appErrors.NewInternalError("failed to delete filter preset", err)
+		return appErrors.Internal("failed to delete filter preset", err)
 	}
 
 	s.logger.Info("filter preset deleted",
@@ -228,7 +227,7 @@ func (s *FilterPresetService) List(ctx context.Context, projectID, userID uuid.U
 			"error", err,
 			"project_id", projectID,
 		)
-		return nil, appErrors.NewInternalError("failed to list filter presets", err)
+		return nil, appErrors.Internal("failed to list filter presets", err)
 	}
 
 	return presets, nil

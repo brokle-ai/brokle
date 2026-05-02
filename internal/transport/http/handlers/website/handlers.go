@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"brokle/internal/core/domain/website"
 	websiteService "brokle/internal/core/services/website"
 	"brokle/internal/transport/http/httpctx"
@@ -16,16 +14,14 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	svc    *websiteService.WebsiteService
 	logger *slog.Logger
 }
 
-// RegisterRoutes mounts the public website routes on r. Expected
-// mount context: the unauthenticated dashPublic chi group (LimitByIP).
-func RegisterRoutes(r chi.Router, svc *websiteService.WebsiteService, logger *slog.Logger) {
-	h := &handler{svc: svc, logger: logger}
-	r.Post("/api/v1/website/contact", h.submitContact)
+// New constructs a Handler with all required services.
+func New(svc *websiteService.WebsiteService, logger *slog.Logger) *Handler {
+	return &Handler{svc: svc, logger: logger}
 }
 
 // submitContact accepts a marketing contact submission, logs
@@ -37,7 +33,7 @@ func RegisterRoutes(r chi.Router, svc *websiteService.WebsiteService, logger *sl
 // middleware did not run (direct handler tests without the full
 // chain) both return "" and the submission records empty values
 // rather than crashing.
-func (h *handler) submitContact(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SubmitContact(w http.ResponseWriter, r *http.Request) {
 	var body submitContactBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)

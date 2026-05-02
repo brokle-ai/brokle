@@ -13,6 +13,7 @@ import (
 
 	"brokle/internal/core/domain/common"
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 )
 
 const (
@@ -40,7 +41,7 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (*promptDomain.Ca
 	data, err := r.db.Get(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, promptDomain.ErrCacheNotFound
+			return nil, appErrors.NotFound("prompt_cache", appErrors.WithOp("repo.prompt_cache.get"))
 		}
 		return nil, fmt.Errorf("failed to get prompt from cache: %w", err)
 	}
@@ -51,7 +52,7 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (*promptDomain.Ca
 	}
 
 	if cached.IsExpired() {
-		return nil, promptDomain.ErrCacheExpired
+		return nil, appErrors.Conflict("prompt_cache", "cache expired", appErrors.WithOp("repo.prompt_cache.get"))
 	}
 
 	return &cached, nil
@@ -90,10 +91,10 @@ func (r *cacheRepository) Delete(ctx context.Context, key string) error {
 func (r *cacheRepository) DeleteByPattern(ctx context.Context, pattern string) error {
 	// Use SCAN to find matching keys (safer than KEYS for production)
 	var cursor uint64
-	var keysToDelete []string
+	keysToDelete := make([]string, 0)
 
 	for {
-		var keys []string
+		keys := make([]string, 0)
 		var err error
 		keys, cursor, err = r.db.Scan(ctx, cursor, pattern, 100)
 		if err != nil {
@@ -174,7 +175,7 @@ func (r *cacheRepository) GetStale(ctx context.Context, key string) (*promptDoma
 	data, err := r.db.Get(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, promptDomain.ErrCacheNotFound
+			return nil, appErrors.NotFound("prompt_cache", appErrors.WithOp("repo.prompt_cache.get_stale"))
 		}
 		return nil, fmt.Errorf("failed to get stale prompt from cache: %w", err)
 	}

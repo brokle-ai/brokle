@@ -23,7 +23,7 @@ interface PieChartProps {
   showLabels?: boolean
   innerRadius?: number
   outerRadius?: number
-  formatTooltip?: (value: any, name: string) => [string, string]
+  formatTooltip?: (value: unknown, name: string | undefined) => [string, string]
   onDataPointClick?: (data: DataPoint) => void
 }
 
@@ -62,7 +62,7 @@ export function PieChart({
             cx="50%"
             cy="50%"
             labelLine={false}
-            label={showLabels ? ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%` : false}
+            label={showLabels ? ({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%` : false}
             outerRadius={outerRadius}
             innerRadius={innerRadius}
             fill="#8884d8"

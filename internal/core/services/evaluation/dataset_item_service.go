@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -39,10 +38,10 @@ func NewDatasetItemService(
 
 func (s *DatasetItemService) Create(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemRequest) (*evaluation.DatasetItem, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	item := evaluation.NewDatasetItem(datasetID, req.Input)
@@ -55,11 +54,11 @@ func (s *DatasetItemService) Create(ctx context.Context, datasetID uuid.UUID, pr
 	item.ContentHash = &hash
 
 	if validationErrors := item.Validate(); len(validationErrors) > 0 {
-		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+		return nil, appErrors.InvalidParam(validationErrors[0].Field, validationErrors[0].Message)
 	}
 
 	if err := s.itemRepo.Create(ctx, item); err != nil {
-		return nil, appErrors.NewInternalError("failed to create dataset item", err)
+		return nil, appErrors.Internal("failed to create dataset item", err)
 	}
 
 	s.logger.Info("dataset item created",
@@ -72,14 +71,14 @@ func (s *DatasetItemService) Create(ctx context.Context, datasetID uuid.UUID, pr
 
 func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsBatchRequest) (int, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return 0, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return 0, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return 0, appErrors.NewInternalError("failed to verify dataset", err)
+		return 0, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if len(req.Items) == 0 {
-		return 0, appErrors.NewValidationError("items", "items array cannot be empty")
+		return 0, appErrors.InvalidParam("items", "items array cannot be empty")
 	}
 
 	// First pass: compute content hashes and validate all items
@@ -94,10 +93,7 @@ func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUI
 			item.Metadata = itemReq.Metadata
 		}
 		if validationErrors := item.Validate(); len(validationErrors) > 0 {
-			return 0, appErrors.NewValidationError(
-				fmt.Sprintf("items[%d].%s", i, validationErrors[0].Field),
-				validationErrors[0].Message,
-			)
+			return 0, appErrors.InvalidParam(fmt.Sprintf("items[%d].%s", i, validationErrors[0].Field), validationErrors[0].Message)
 		}
 	}
 
@@ -107,7 +103,7 @@ func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUI
 		var err error
 		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
 		if err != nil {
-			return 0, appErrors.NewInternalError("failed to check for duplicates", err)
+			return 0, appErrors.Internal("failed to check for duplicates", err)
 		}
 	}
 
@@ -145,7 +141,7 @@ func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUI
 	// Only create if there are items to create
 	if len(items) > 0 {
 		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-			return 0, appErrors.NewInternalError("failed to create dataset items", err)
+			return 0, appErrors.Internal("failed to create dataset items", err)
 		}
 	}
 
@@ -160,32 +156,32 @@ func (s *DatasetItemService) CreateBatch(ctx context.Context, datasetID uuid.UUI
 
 func (s *DatasetItemService) List(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, limit, offset int) ([]*evaluation.DatasetItem, int64, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, 0, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, 0, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, 0, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, 0, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	items, total, err := s.itemRepo.List(ctx, datasetID, limit, offset)
 	if err != nil {
-		return nil, 0, appErrors.NewInternalError("failed to list dataset items", err)
+		return nil, 0, appErrors.Internal("failed to list dataset items", err)
 	}
 	return items, total, nil
 }
 
 func (s *DatasetItemService) Delete(ctx context.Context, id uuid.UUID, datasetID uuid.UUID, projectID uuid.UUID) error {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return appErrors.NewInternalError("failed to verify dataset", err)
+		return appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if err := s.itemRepo.Delete(ctx, id, datasetID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetItemNotFound) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("dataset item %s", id))
+		if appErrors.IsNotFound(err) {
+			return appErrors.NotFound(fmt.Sprintf("dataset item %s", id))
 		}
-		return appErrors.NewInternalError("failed to delete dataset item", err)
+		return appErrors.Internal("failed to delete dataset item", err)
 	}
 
 	s.logger.Info("dataset item deleted",
@@ -199,19 +195,19 @@ func (s *DatasetItemService) Delete(ctx context.Context, id uuid.UUID, datasetID
 // ImportFromJSON imports dataset items from a JSON array with optional field mapping and deduplication.
 func (s *DatasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromJSONRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if len(req.Items) == 0 {
-		return nil, appErrors.NewValidationError("items", "items array cannot be empty")
+		return nil, appErrors.InvalidParam("items", "items array cannot be empty")
 	}
 
 	// Validate source if provided
 	if req.Source != "" && !req.Source.IsValid() {
-		return nil, appErrors.NewValidationError("source", "must be one of: manual, trace, span, csv, json, sdk")
+		return nil, appErrors.InvalidParam("source", "must be one of: manual, trace, span, csv, json, sdk")
 	}
 
 	result := &evaluation.BulkImportResult{}
@@ -231,7 +227,7 @@ func (s *DatasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.
 		var err error
 		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check for duplicates", err)
+			return nil, appErrors.Internal("failed to check for duplicates", err)
 		}
 	}
 
@@ -275,7 +271,7 @@ func (s *DatasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.
 
 	if len(items) > 0 {
 		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-			return nil, appErrors.NewInternalError("failed to create dataset items", err)
+			return nil, appErrors.Internal("failed to create dataset items", err)
 		}
 	}
 
@@ -294,35 +290,35 @@ func (s *DatasetItemService) ImportFromJSON(ctx context.Context, datasetID uuid.
 // ImportFromCSV imports dataset items from CSV content with column mapping.
 func (s *DatasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.ImportDatasetItemsFromCSVRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if req.Content == "" {
-		return nil, appErrors.NewValidationError("content", "content cannot be empty")
+		return nil, appErrors.InvalidParam("content", "content cannot be empty")
 	}
 
 	if req.ColumnMapping.InputColumn == "" {
-		return nil, appErrors.NewValidationError("column_mapping.input_column", "input column is required")
+		return nil, appErrors.InvalidParam("column_mapping.input_column", "input column is required")
 	}
 
 	reader := csv.NewReader(strings.NewReader(req.Content))
 	records, err := reader.ReadAll()
 	if err != nil {
-		return nil, appErrors.NewValidationError("content", fmt.Sprintf("invalid CSV format: %v", err))
+		return nil, appErrors.InvalidParam("content", fmt.Sprintf("invalid CSV format: %v", err))
 	}
 
 	if len(records) == 0 {
-		return nil, appErrors.NewValidationError("content", "CSV content is empty")
+		return nil, appErrors.InvalidParam("content", "CSV content is empty")
 	}
 
 	var headers []string
 	startRow := 0
 	if req.HasHeader {
 		if len(records) < 2 {
-			return nil, appErrors.NewValidationError("content", "CSV must have at least one data row after header")
+			return nil, appErrors.InvalidParam("content", "CSV must have at least one data row after header")
 		}
 		headers = records[0]
 		startRow = 1
@@ -342,16 +338,16 @@ func (s *DatasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.U
 	}
 
 	if _, ok := columnIndex[req.ColumnMapping.InputColumn]; !ok {
-		return nil, appErrors.NewValidationError("column_mapping.input_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.InputColumn))
+		return nil, appErrors.InvalidParam("column_mapping.input_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.InputColumn))
 	}
 	if req.ColumnMapping.ExpectedColumn != "" {
 		if _, ok := columnIndex[req.ColumnMapping.ExpectedColumn]; !ok {
-			return nil, appErrors.NewValidationError("column_mapping.expected_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.ExpectedColumn))
+			return nil, appErrors.InvalidParam("column_mapping.expected_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.ExpectedColumn))
 		}
 	}
 	for _, col := range req.ColumnMapping.MetadataColumns {
 		if _, ok := columnIndex[col]; !ok {
-			return nil, appErrors.NewValidationError("column_mapping.metadata_columns", fmt.Sprintf("column '%s' not found in CSV", col))
+			return nil, appErrors.InvalidParam("column_mapping.metadata_columns", fmt.Sprintf("column '%s' not found in CSV", col))
 		}
 	}
 
@@ -416,7 +412,7 @@ func (s *DatasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.U
 		var err error
 		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check for duplicates", err)
+			return nil, appErrors.Internal("failed to check for duplicates", err)
 		}
 	}
 
@@ -456,7 +452,7 @@ func (s *DatasetItemService) ImportFromCSV(ctx context.Context, datasetID uuid.U
 
 	if len(items) > 0 {
 		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-			return nil, appErrors.NewInternalError("failed to create dataset items", err)
+			return nil, appErrors.Internal("failed to create dataset items", err)
 		}
 	}
 
@@ -488,14 +484,14 @@ func (s *DatasetItemService) parseCSVValue(value string) any {
 // CreateFromTraces creates dataset items from existing trace data (OTEL-native import).
 func (s *DatasetItemService) CreateFromTraces(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromTracesRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if len(req.TraceIDs) == 0 {
-		return nil, appErrors.NewValidationError("trace_ids", "trace_ids array cannot be empty")
+		return nil, appErrors.InvalidParam("trace_ids", "trace_ids array cannot be empty")
 	}
 
 	result := &evaluation.BulkImportResult{}
@@ -531,7 +527,7 @@ func (s *DatasetItemService) CreateFromTraces(ctx context.Context, datasetID uui
 		var err error
 		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check for duplicates", err)
+			return nil, appErrors.Internal("failed to check for duplicates", err)
 		}
 	}
 
@@ -573,7 +569,7 @@ func (s *DatasetItemService) CreateFromTraces(ctx context.Context, datasetID uui
 
 	if len(items) > 0 {
 		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-			return nil, appErrors.NewInternalError("failed to create dataset items", err)
+			return nil, appErrors.Internal("failed to create dataset items", err)
 		}
 	}
 
@@ -592,14 +588,14 @@ func (s *DatasetItemService) CreateFromTraces(ctx context.Context, datasetID uui
 // CreateFromSpans creates dataset items from existing span data.
 func (s *DatasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID, req *evaluation.CreateDatasetItemsFromSpansRequest) (*evaluation.BulkImportResult, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	if len(req.SpanIDs) == 0 {
-		return nil, appErrors.NewValidationError("span_ids", "span_ids array cannot be empty")
+		return nil, appErrors.InvalidParam("span_ids", "span_ids array cannot be empty")
 	}
 
 	result := &evaluation.BulkImportResult{}
@@ -636,7 +632,7 @@ func (s *DatasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid
 		var err error
 		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
 		if err != nil {
-			return nil, appErrors.NewInternalError("failed to check for duplicates", err)
+			return nil, appErrors.Internal("failed to check for duplicates", err)
 		}
 	}
 
@@ -679,7 +675,7 @@ func (s *DatasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid
 
 	if len(items) > 0 {
 		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-			return nil, appErrors.NewInternalError("failed to create dataset items", err)
+			return nil, appErrors.Internal("failed to create dataset items", err)
 		}
 	}
 
@@ -698,15 +694,15 @@ func (s *DatasetItemService) CreateFromSpans(ctx context.Context, datasetID uuid
 // ExportItems exports all dataset items for a dataset.
 func (s *DatasetItemService) ExportItems(ctx context.Context, datasetID uuid.UUID, projectID uuid.UUID) ([]*evaluation.DatasetItem, error) {
 	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
-		if errors.Is(err, evaluation.ErrDatasetNotFound) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		if appErrors.IsNotFound(err) {
+			return nil, appErrors.NotFound(fmt.Sprintf("dataset %s", datasetID))
 		}
-		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+		return nil, appErrors.Internal("failed to verify dataset", err)
 	}
 
 	items, err := s.itemRepo.ListAll(ctx, datasetID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to export dataset items", err)
+		return nil, appErrors.Internal("failed to export dataset items", err)
 	}
 
 	s.logger.Info("dataset items exported",

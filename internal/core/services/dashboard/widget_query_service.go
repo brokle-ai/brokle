@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -280,14 +279,11 @@ func (s *WidgetQueryService) ExecuteDashboardQueries(
 ) (*dashboardDomain.DashboardQueryResults, error) {
 	dashboard, err := s.dashboardRepo.GetByID(ctx, req.DashboardID)
 	if err != nil {
-		if errors.Is(err, dashboardDomain.ErrDashboardNotFound) {
-			return nil, appErrors.NewNotFoundError("dashboard")
-		}
-		return nil, appErrors.NewInternalError("failed to get dashboard", err)
+		return nil, err
 	}
 
 	if dashboard.ProjectID != req.ProjectID {
-		return nil, appErrors.NewNotFoundError("dashboard")
+		return nil, appErrors.NotFound("dashboard", appErrors.WithOp("service.widget_query.execute_dashboard_queries"))
 	}
 
 	results := &dashboardDomain.DashboardQueryResults{
@@ -306,7 +302,7 @@ func (s *WidgetQueryService) ExecuteDashboardQueries(
 			}
 		}
 		if len(widgets) == 0 || widgets[0].ID != *req.WidgetID {
-			return nil, appErrors.NewNotFoundError("widget")
+			return nil, appErrors.NotFound("widget")
 		}
 	}
 
@@ -414,7 +410,7 @@ func (s *WidgetQueryService) GetVariableOptions(
 ) (*dashboardDomain.VariableOptionsResponse, error) {
 	viewDef := dashboardDomain.GetViewDefinition(dashboardDomain.ViewType(req.View))
 	if viewDef == nil {
-		return nil, appErrors.NewValidationError("view", "invalid view type: "+string(req.View))
+		return nil, appErrors.InvalidParam("view", "invalid view type: "+string(req.View))
 	}
 
 	var dimension *dashboardDomain.DimensionConfig
@@ -426,7 +422,7 @@ func (s *WidgetQueryService) GetVariableOptions(
 		}
 	}
 	if dimension == nil {
-		return nil, appErrors.NewValidationError("dimension", "invalid dimension for view: "+req.Dimension)
+		return nil, appErrors.InvalidParam("dimension", "invalid dimension for view: "+req.Dimension)
 	}
 
 	limit := req.Limit
@@ -444,7 +440,7 @@ func (s *WidgetQueryService) GetVariableOptions(
 		limit,
 	)
 	if queryResult == nil {
-		return nil, appErrors.NewInternalError("failed to build variable options query", nil)
+		return nil, appErrors.Internal("failed to build variable options query", nil)
 	}
 
 	s.logger.Debug("executing variable options query",
@@ -460,7 +456,7 @@ func (s *WidgetQueryService) GetVariableOptions(
 			"dimension", req.Dimension,
 			"error", err,
 		)
-		return nil, appErrors.NewInternalError("failed to fetch variable options", err)
+		return nil, appErrors.Internal("failed to fetch variable options", err)
 	}
 
 	values := make([]string, 0, len(data))

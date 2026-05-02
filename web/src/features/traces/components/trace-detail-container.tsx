@@ -103,7 +103,7 @@ export function TraceDetailContainer() {
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: traceQueryKeys.spans(projectId!, traceId!),
+    queryKey: traceQueryKeys.traceSpans(projectId!, traceId!),
     queryFn: () => getSpansForTrace(projectId!, traceId!),
     enabled: !!projectId && !!traceId && !!trace,
     staleTime: 30_000,

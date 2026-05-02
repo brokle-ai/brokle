@@ -56,13 +56,13 @@ func (s *ProviderPricingService) GetProviderPricingSnapshot(
 	// Lookup provider model with temporal versioning
 	model, err := s.modelRepo.GetProviderModelAtTime(ctx, projectID, modelName, atTime)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get provider model", err)
+		return nil, appErrors.Internal("failed to get provider model", err)
 	}
 
 	// Lookup provider prices for this model (project-specific override takes precedence)
 	prices, err := s.modelRepo.GetProviderPrices(ctx, model.ID, projectID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get provider prices", err)
+		return nil, appErrors.Internal("failed to get provider prices", err)
 	}
 
 	// Build pricing snapshot

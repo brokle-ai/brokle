@@ -76,7 +76,10 @@ func (q *Queries) DeleteFilterPreset(ctx context.Context, id uuid.UUID) (int64, 
 }
 
 const getFilterPresetByID = `-- name: GetFilterPresetByID :one
-SELECT id, project_id, name, description, table_name, filters, column_order, column_visibility, search_query, search_types, is_public, created_by, created_at, updated_at FROM filter_presets
+SELECT id, project_id, name, description, table_name, filters,
+       column_order, column_visibility, search_query, search_types,
+       is_public, created_by, created_at, updated_at
+FROM filter_presets
 WHERE id = $1
 LIMIT 1
 `

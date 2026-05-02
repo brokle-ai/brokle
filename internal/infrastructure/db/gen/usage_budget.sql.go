@@ -91,7 +91,8 @@ func (q *Queries) DeactivateUsageBudget(ctx context.Context, id uuid.UUID) error
 }
 
 const getUsageBudgetByID = `-- name: GetUsageBudgetByID :one
-SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE id = $1
 LIMIT 1
 `
@@ -122,7 +123,8 @@ func (q *Queries) GetUsageBudgetByID(ctx context.Context, id uuid.UUID) (UsageBu
 }
 
 const listActiveUsageBudgetsByOrg = `-- name: ListActiveUsageBudgetsByOrg :many
-SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE organization_id = $1 AND is_active = TRUE
 ORDER BY created_at DESC
 `
@@ -166,7 +168,8 @@ func (q *Queries) ListActiveUsageBudgetsByOrg(ctx context.Context, organizationI
 }
 
 const listUsageBudgetsByOrg = `-- name: ListUsageBudgetsByOrg :many
-SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE organization_id = $1
 ORDER BY created_at DESC
 `
@@ -210,7 +213,8 @@ func (q *Queries) ListUsageBudgetsByOrg(ctx context.Context, organizationID uuid
 }
 
 const listUsageBudgetsByProject = `-- name: ListUsageBudgetsByProject :many
-SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE project_id = $1
 ORDER BY created_at DESC
 `

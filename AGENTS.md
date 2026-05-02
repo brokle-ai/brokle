@@ -130,3 +130,20 @@ Frontend direct commands (inside `web/`): `pnpm test`, `pnpm test:coverage`, `pn
 
 ## Compatibility Notes
 - Backward compatibility is not required yet; there is no production data because the product has not been released.
+
+## Pre-Production Review Charter
+
+External code reviewers (Codex, Claude) default to production-grade hardening — rollback safety, backward compat, defensive layering, migration immutability. In pre-prod Brokle most of those concerns are speculative cost. Apply this charter when invoking reviewers AND when triaging their output.
+
+**Constraints to state up-front in review prompts:**
+- Pre-production: no users, no production data, dev DBs are resettable.
+- No backward-compatibility requirement on wire shape, schema, or APIs.
+- Prefer **schema edits** over forward+down migration pairs; prefer **deletion** over deprecation; prefer **structural fixes** (lint guards, invariants) over discipline-based recipes.
+- Defensive-shape suggestions (StripSlashes, body-side request_id, wrap-everything error types, double-check membership in handler) require 5+ production-peer precedent before adoption — see the "Research before re-architect" rule.
+
+**Triage by severity, not by count:**
+- Act on **P1** correctness/security/data-loss only.
+- Defer **P2/P3** unless the fix is cheap AND structural (e.g., adds a lint guard that prevents the bug class).
+- If three review rounds attack the same file, **stop fixing the file and ask whether the file should exist** (2026-04-30 status-column lesson).
+
+**Generalisable rule:** an in-house pre-prod consumer base means most defensive-shape arguments are speculative; resist the migration cost until a real workflow demands it. Reviewer feedback in tight loops on the same file is a category-error smell — the file probably shouldn't exist in the shape the review keeps attacking.

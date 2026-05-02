@@ -11,6 +11,7 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // usageBudgetRepository is the pgx+sqlc implementation of
@@ -29,7 +30,7 @@ func (r *usageBudgetRepository) GetByID(ctx context.Context, id uuid.UUID) (*bil
 	row, err := r.tm.Queries(ctx).GetUsageBudgetByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewBudgetNotFoundError(id.String())
+			return nil, appErrors.NotFound("budget", appErrors.WithOp("repo.billing.budget.get_by_id"))
 		}
 		return nil, fmt.Errorf("get budget %s: %w", id, err)
 	}

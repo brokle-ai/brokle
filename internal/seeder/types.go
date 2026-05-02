@@ -22,6 +22,14 @@ type SeedData struct {
 type PermissionSeed struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+	// Scope is the source of truth for the permission's scope level
+	// (`project` or `organization`). Drives `permissions.scope_level`
+	// at seed time and the floor-scope auto-injection in
+	// internal/core/services/auth/role_service.go. Single source of
+	// truth — every permission's scope MUST match its routes.go
+	// decoration; build-time test in internal/seeder/floor_scope_test.go
+	// enforces the invariant.
+	Scope string `yaml:"scope"`
 }
 
 type RoleSeed struct {

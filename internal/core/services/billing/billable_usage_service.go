@@ -216,7 +216,7 @@ func (s *BillableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 			"error", err,
 			"organization_id", orgID,
 		)
-		return appErrors.NewInternalError("failed to get default pricing plan", err)
+		return appErrors.Internal("failed to get default pricing plan", err)
 	}
 
 	now := time.Now()
@@ -243,7 +243,7 @@ func (s *BillableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 			s.logger.Info("billing record already exists", "organization_id", orgID)
 			return nil // Success - already provisioned
 		}
-		return appErrors.NewInternalError("failed to create billing record", err)
+		return appErrors.Internal("failed to create billing record", err)
 	}
 
 	s.logger.Info("provisioned billing",

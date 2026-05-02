@@ -1,0 +1,180 @@
+/* Dashboard Grid Styles */
+
+.dashboard-grid {
+  position: relative;
+  width: 100%;
+}
+
+/* Grid items */
+.dashboard-grid__item {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.dashboard-grid__item > * {
+  height: 100%;
+}
+
+/* Edit mode styles */
+.dashboard-grid--edit-mode .dashboard-grid__item {
+  border: 2px dashed hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-grid--edit-mode .dashboard-grid__item:hover {
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.1);
+}
+
+/* Drag handle */
+.widget-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--muted) / 0.8),
+    transparent
+  );
+  cursor: grab;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.widget-drag-handle::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 4px;
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 2px;
+}
+
+.dashboard-grid--edit-mode .dashboard-grid__item:hover .widget-drag-handle {
+  opacity: 1;
+}
+
+.widget-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* React-grid-layout overrides */
+.react-grid-layout {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+  box-shadow: 0 8px 24px hsl(var(--foreground) / 0.15);
+}
+
+/* Resize handles */
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid hsl(var(--muted-foreground) / 0.4);
+  border-bottom: 2px solid hsl(var(--muted-foreground) / 0.4);
+}
+
+.dashboard-grid--edit-mode .react-grid-item > .react-resizable-handle::after {
+  border-color: hsl(var(--primary) / 0.6);
+}
+
+.react-grid-item > .react-resizable-handle:hover::after {
+  border-color: hsl(var(--primary));
+}
+
+/* Placeholder during drag/resize */
+.react-grid-placeholder {
+  background: hsl(var(--primary) / 0.2) !important;
+  border: 2px dashed hsl(var(--primary)) !important;
+  border-radius: var(--radius);
+  opacity: 1 !important;
+  transition-duration: 100ms;
+  z-index: 2;
+}
+
+/* Dark mode adjustments */
+.dark .react-grid-item.react-draggable-dragging {
+  box-shadow: 0 8px 24px hsl(var(--foreground) / 0.25);
+}
+
+.dark .widget-drag-handle::before {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Animation for items entering */
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dashboard-grid__item {
+  animation: widget-enter 0.2s ease-out;
+}
+
+/* Edit overlay - ensure pointer events work correctly */
+.dashboard-grid__item .opacity-0 {
+  pointer-events: none;
+}
+
+.dashboard-grid__item:hover .opacity-0 {
+  pointer-events: auto;
+}
+
+/* Locked state indicator */
+.dashboard-grid--locked .dashboard-grid__item {
+  cursor: not-allowed;
+}
+
+.dashboard-grid--locked .dashboard-grid__item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: hsl(var(--background) / 0.1);
+  pointer-events: none;
+  z-index: 5;
+}

@@ -105,38 +105,22 @@ func NewCustomRole(name, scopeType, description string, scopeID uuid.UUID) *Role
 
 // ----- Membership ---------------------------------------------------
 
-// Membership status discriminators.
-const (
-	MemberStatusActive    = "active"
-	MemberStatusInvited   = "invited"
-	MemberStatusSuspended = "suspended"
-)
-
 // OrganizationMember represents user membership in an organization with a single role.
+//
+// Lifecycle is single-axis via the soft-delete `deleted_at` column on
+// the `organization_members` row (set by RemoveMember, restored on
+// re-invite). The legacy per-member `status` flag (active/suspended)
+// was deleted on 2026-04-30 — it had no callers in any HTTP route or
+// CLI flow, and production peers (GitHub/GitLab/Slack/Auth0/WorkOS/
+// Clerk) all do suspension at the user level rather than per-org.
 type OrganizationMember struct {
 	JoinedAt       time.Time  `json:"joined_at"`
 	InvitedBy      *uuid.UUID `json:"invited_by,omitempty"`
 	Role           *Role      `json:"role,omitempty"`
-	Status         string     `json:"status"`
 	UserID         uuid.UUID  `json:"user_id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
 	RoleID         uuid.UUID  `json:"role_id"`
 }
-
-// IsActive reports whether the member's status is "active".
-func (m *OrganizationMember) IsActive() bool { return m.Status == MemberStatusActive }
-
-// IsInvited reports whether the member has been invited but not joined.
-func (m *OrganizationMember) IsInvited() bool { return m.Status == MemberStatusInvited }
-
-// IsSuspended reports whether the member is currently suspended.
-func (m *OrganizationMember) IsSuspended() bool { return m.Status == MemberStatusSuspended }
-
-// Activate transitions the member to active.
-func (m *OrganizationMember) Activate() { m.Status = MemberStatusActive }
-
-// Suspend transitions the member to suspended.
-func (m *OrganizationMember) Suspend() { m.Status = MemberStatusSuspended }
 
 // NewOrganizationMember constructs an active membership record.
 func NewOrganizationMember(userID, organizationID, roleID uuid.UUID, invitedBy *uuid.UUID) *OrganizationMember {
@@ -144,28 +128,24 @@ func NewOrganizationMember(userID, organizationID, roleID uuid.UUID, invitedBy *
 		UserID:         userID,
 		OrganizationID: organizationID,
 		RoleID:         roleID,
-		Status:         MemberStatusActive,
 		JoinedAt:       time.Now(),
 		InvitedBy:      invitedBy,
 	}
 }
 
-// ProjectMember represents user membership in a project with a single
-// role (future feature — schema in place, no active surface today).
+// ProjectMember represents user membership in a project with a single role.
+// Lifecycle is single-axis via the soft-delete `deleted_at` column on
+// the parent `organization_members` row (see OrganizationMember). The
+// project_members table itself has no lifecycle column — rows are
+// hard-deleted by ProjectMemberRepository.DeleteAllInOrgForUser when
+// the parent org membership is removed.
 type ProjectMember struct {
 	JoinedAt  time.Time `json:"joined_at"`
 	Role      *Role     `json:"role,omitempty"`
-	Status    string    `json:"status"`
 	UserID    uuid.UUID `json:"user_id"`
 	ProjectID uuid.UUID `json:"project_id"`
 	RoleID    uuid.UUID `json:"role_id"`
 }
-
-// IsActive reports whether the project member's status is "active".
-func (m *ProjectMember) IsActive() bool { return m.Status == MemberStatusActive }
-
-// Activate transitions the project member to active.
-func (m *ProjectMember) Activate() { m.Status = MemberStatusActive }
 
 // NewProjectMember constructs an active project-membership record.
 func NewProjectMember(userID, projectID, roleID uuid.UUID) *ProjectMember {
@@ -173,7 +153,6 @@ func NewProjectMember(userID, projectID, roleID uuid.UUID) *ProjectMember {
 		UserID:    userID,
 		ProjectID: projectID,
 		RoleID:    roleID,
-		Status:    MemberStatusActive,
 		JoinedAt:  time.Now(),
 	}
 }

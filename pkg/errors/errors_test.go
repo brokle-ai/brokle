@@ -8,120 +8,137 @@ import (
 	"testing"
 )
 
-// TestEveryErrorTypeHasStatus locks in the invariant that every value
-// listed in the ErrorType const block has a typeToStatus row. The
-// const block IS the source of truth for the closed enum; missing a
-// row would silently fall back to 500 in production. Catching that at
-// build time is what keeps the closed-enum guarantee real.
-func TestEveryErrorTypeHasStatus(t *testing.T) {
-	declared := []ErrorType{
-		TypeInvalidRequest,
-		TypeValidation,
-		TypeAuthentication,
-		TypePermission,
-		TypeNotFound,
-		TypeConflict,
-		TypePaymentRequired,
-		TypeRateLimit,
-		TypeUpstreamProvider,
-		TypeServiceUnavailable,
-		TypeNotImplemented,
-		TypeAPIError,
+// TestEveryReasonHasStatus locks in the invariant that every Reason
+// constant has both a non-zero HTTP status mapping AND a non-empty
+// HTTPType wire value. The const block IS the source of truth for the
+// closed enum; missing a row would silently fall back to 500 / api_error
+// in production. Catching that at build time is what keeps the
+// closed-enum guarantee real.
+func TestEveryReasonHasStatus(t *testing.T) {
+	declared := []Reason{
+		ReasonInternal,
+		ReasonNotFound,
+		ReasonAlreadyExists,
+		ReasonInvalidInput,
+		ReasonBadRequest,
+		ReasonUnauthenticated,
+		ReasonPermissionDenied,
+		ReasonConflict,
+		ReasonRateLimit,
+		ReasonPaymentRequired,
+		ReasonUpstream,
+		ReasonUnavailable,
+		ReasonNotImplemented,
 	}
-	for _, tt := range declared {
-		if _, ok := typeToStatus[tt]; !ok {
-			t.Errorf("ErrorType %q has no typeToStatus row — add it to the map in errors.go", tt)
+	for _, r := range declared {
+		if r.HTTPStatus() == 0 {
+			t.Errorf("Reason %q has no HTTPStatus mapping", r)
 		}
-	}
-	if len(declared) != len(typeToStatus) {
-		t.Errorf("declared types (%d) != typeToStatus entries (%d) — exhaustive list out of sync",
-			len(declared), len(typeToStatus))
+		if r.HTTPType() == "" {
+			t.Errorf("Reason %q has no HTTPType mapping", r)
+		}
 	}
 }
 
 // TestFromHTTPStatusClassFallback is the regression test for the
-// original bug: framework-emitted 4xx statuses (405, 406, 408, 413,
-// 415, 416, 417, 451) used to fall through to INTERNAL_ERROR. The
-// class fallback in typeFromStatus must keep them in TypeInvalidRequest
-// (or a more specific 4xx Type), never let them leak to TypeAPIError.
+// original framework-boundary bug: 4xx statuses (405, 406, 408, 413,
+// 415, 416, 417, 451) used to fall through to ReasonInternal. The
+// class fallback in reasonFromStatus must keep them in ReasonBadRequest
+// (or a more specific 4xx Reason), never let them leak to ReasonInternal.
 func TestFromHTTPStatusClassFallback(t *testing.T) {
-	// Statuses commonly emitted at the framework boundary (chi/net-http
-	// 405, request-decode 413/415/422, content negotiation 406), plus a
-	// fronting CDN's 520 (Cloudflare).
-	cases := map[int]ErrorType{
-		http.StatusMethodNotAllowed:           TypeInvalidRequest,
-		http.StatusNotAcceptable:              TypeInvalidRequest,
-		http.StatusRequestTimeout:             TypeInvalidRequest,
-		http.StatusRequestEntityTooLarge:      TypeInvalidRequest,
-		http.StatusUnsupportedMediaType:       TypeInvalidRequest,
-		http.StatusRequestedRangeNotSatisfiable: TypeInvalidRequest,
-		http.StatusExpectationFailed:          TypeInvalidRequest,
-		http.StatusUnavailableForLegalReasons: TypeInvalidRequest,
-		418:                                   TypeInvalidRequest, // I'm a teapot — class fallback
-		520:                                   TypeAPIError,       // Cloudflare unknown — 5xx fallback
-		599:                                   TypeAPIError,       // far end of 5xx — fallback
-		http.StatusGatewayTimeout:             TypeServiceUnavailable,
-		http.StatusBadGateway:                 TypeUpstreamProvider,
+	cases := map[int]Reason{
+		http.StatusMethodNotAllowed:             ReasonBadRequest,
+		http.StatusNotAcceptable:                ReasonBadRequest,
+		http.StatusRequestTimeout:               ReasonBadRequest,
+		http.StatusRequestEntityTooLarge:        ReasonBadRequest,
+		http.StatusUnsupportedMediaType:         ReasonBadRequest,
+		http.StatusRequestedRangeNotSatisfiable: ReasonBadRequest,
+		http.StatusExpectationFailed:            ReasonBadRequest,
+		http.StatusUnavailableForLegalReasons:   ReasonBadRequest,
+		418: ReasonBadRequest, // I'm a teapot — class fallback
+		520: ReasonInternal,   // Cloudflare unknown — 5xx fallback
+		599: ReasonInternal,   // far end of 5xx — fallback
+		http.StatusGatewayTimeout: ReasonUnavailable,
+		http.StatusBadGateway:     ReasonUpstream,
 	}
 	for status, want := range cases {
-		got := typeFromStatus(status)
+		got := reasonFromStatus(status)
 		if got != want {
-			t.Errorf("typeFromStatus(%d) = %q, want %q", status, got, want)
+			t.Errorf("reasonFromStatus(%d) = %q, want %q", status, got, want)
 		}
-		if want != TypeAPIError && got == TypeAPIError {
-			t.Errorf("MISCLASSIFICATION REGRESSION: status %d (4xx) leaked to TypeAPIError", status)
+		if want != ReasonInternal && got == ReasonInternal {
+			t.Errorf("MISCLASSIFICATION REGRESSION: status %d (4xx) leaked to ReasonInternal", status)
 		}
 	}
 }
 
-// TestAppErrorIs locks in the (Type, Code) matching contract used by
-// errors.Is — type-only matching is a common pattern and must not
-// regress to require code equality.
-func TestAppErrorIs(t *testing.T) {
-	err := NewNotFoundError("project", WithCode("project_not_found"))
+// TestErrorIs locks in the (Reason, Resource, Code) matching contract
+// used by errors.Is — Reason-only matching is the common pattern and
+// must not regress to require Resource or Code equality.
+func TestErrorIs(t *testing.T) {
+	err := NotFound("project", WithCode("project_not_found"))
 
-	if !stderrors.Is(err, &AppError{Type: TypeNotFound}) {
-		t.Error("type-only matching against TypeNotFound should succeed")
+	if !stderrors.Is(err, &Error{Reason: ReasonNotFound}) {
+		t.Error("Reason-only matching against ReasonNotFound should succeed")
 	}
-	if !stderrors.Is(err, &AppError{Type: TypeNotFound, Code: "project_not_found"}) {
-		t.Error("type+code matching against same code should succeed")
+	if !stderrors.Is(err, &Error{Reason: ReasonNotFound, Code: "project_not_found"}) {
+		t.Error("Reason+Code matching against same code should succeed")
 	}
-	if stderrors.Is(err, &AppError{Type: TypeNotFound, Code: "user_not_found"}) {
-		t.Error("type+code matching against different code should fail")
+	if stderrors.Is(err, &Error{Reason: ReasonNotFound, Code: "user_not_found"}) {
+		t.Error("Reason+Code matching against different code should fail")
 	}
-	if stderrors.Is(err, &AppError{Type: TypeValidation}) {
-		t.Error("type-only matching against different type should fail")
+	if stderrors.Is(err, &Error{Reason: ReasonInvalidInput}) {
+		t.Error("Reason-only matching against different Reason should fail")
+	}
+	if !stderrors.Is(err, &Error{Reason: ReasonNotFound, Resource: "project"}) {
+		t.Error("Reason+Resource matching against same resource should succeed")
+	}
+	if stderrors.Is(err, &Error{Reason: ReasonNotFound, Resource: "user"}) {
+		t.Error("Reason+Resource matching against different resource should fail")
 	}
 }
 
-// TestCodeOrTypeFallback verifies the wire-format invariant: the
-// `code` field is never empty in the rendered envelope. When Code is
-// unset, CodeOrType falls back to string(Type).
-func TestCodeOrTypeFallback(t *testing.T) {
-	bare := New(TypeRateLimit, "slow down")
-	if bare.CodeOrType() != string(TypeRateLimit) {
-		t.Errorf("CodeOrType() with empty Code = %q, want %q", bare.CodeOrType(), TypeRateLimit)
-	}
+// TestErrorIs_NoSentinelCollision is the regression guard for the
+// 2026-04-29 review finding: when ReasonInternal was iota=0 the `Is`
+// method's "wildcard" branch (`t.Reason == ReasonInternal &&
+// t.Resource == "" && t.Code == ""`) made errors.Is treat any *Error
+// as Internal. Reserving iota=0 as ReasonUnspecified + deleting the
+// wildcard branch makes the collision structurally impossible.
+func TestErrorIs_NoSentinelCollision(t *testing.T) {
+	internalErr := Internal("oops", stderrors.New("boom"))
+	notFoundErr := NotFound("project")
 
-	withCode := New(TypeRateLimit, "slow down", WithCode("quota_exceeded"))
-	if withCode.CodeOrType() != "quota_exceeded" {
-		t.Errorf("CodeOrType() with Code = %q, want %q", withCode.CodeOrType(), "quota_exceeded")
+	if !stderrors.Is(internalErr, &Error{Reason: ReasonInternal}) {
+		t.Error("internal error should match &Error{Reason: ReasonInternal}")
+	}
+	if stderrors.Is(notFoundErr, &Error{Reason: ReasonInternal}) {
+		t.Error("not-found error must NOT match &Error{Reason: ReasonInternal} (sentinel collision regression)")
+	}
+	// ReasonUnspecified is iota=0; ensure no constructor produces it.
+	// If a constructor ever returns Reason=ReasonUnspecified, the wire
+	// envelope falls through to "api_error" / 500 and the iota
+	// reservation is broken.
+	if internalErr.Reason == ReasonUnspecified {
+		t.Error("Internal() must produce Reason=ReasonInternal, not the iota=0 placeholder")
+	}
+	if notFoundErr.Reason == ReasonUnspecified {
+		t.Error("NotFound() must produce Reason=ReasonNotFound, not the iota=0 placeholder")
 	}
 }
 
 // TestFunctionalOptions sanity-checks the variadic-options pattern —
 // each option must mutate only its own field, options must compose,
-// and the typed constructors must default Type / Code consistently.
+// and the typed constructors must default Reason consistently.
 func TestFunctionalOptions(t *testing.T) {
 	cause := stderrors.New("underlying boom")
-	err := NewValidationError("Invalid project ID", "projectId must be a valid UUID",
+	err := InvalidParam("projectId", "Invalid project ID",
+		WithDetails("projectId must be a valid UUID"),
 		WithCode("invalid_project_id"),
-		WithParam("projectId"),
 		WithCause(cause),
 	)
 
-	if err.Type != TypeValidation {
-		t.Errorf("Type = %q, want %q", err.Type, TypeValidation)
+	if err.Reason != ReasonInvalidInput {
+		t.Errorf("Reason = %q, want %q", err.Reason, ReasonInvalidInput)
 	}
 	if err.Code != "invalid_project_id" {
 		t.Errorf("Code = %q, want %q", err.Code, "invalid_project_id")
@@ -136,19 +153,16 @@ func TestFunctionalOptions(t *testing.T) {
 		t.Error("WithCause should make errors.Is(err, cause) succeed via Unwrap")
 	}
 	if err.HTTPStatus() != http.StatusUnprocessableEntity {
-		t.Errorf("HTTPStatus() = %d, want %d (TypeValidation → 422)",
+		t.Errorf("HTTPStatus() = %d, want %d (ReasonInvalidInput → 422)",
 			err.HTTPStatus(), http.StatusUnprocessableEntity)
 	}
 }
 
-// TestAppError_MarshalJSON_ProducesCanonicalEnvelope locks the wire
+// TestError_MarshalJSON_ProducesCanonicalEnvelope locks the wire
 // contract: Stripe/OpenAI-style `{"error": {...}}` with NO top-level
 // `success` field (HTTP status is the success signal per RFC 9110).
-// Regression guard for (a) the prior bug where AppError marshalled as
-// raw Go struct with capitalised keys, and (b) any future drift back
-// toward the envelope-style `{success: false, error: ...}` shape.
-func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
-	err := NewUnauthorizedError("Invalid email or password")
+func TestError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
+	err := Unauthenticated("Invalid email or password")
 
 	raw, jerr := json.Marshal(err)
 	if jerr != nil {
@@ -160,10 +174,8 @@ func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
 		t.Fatalf("unmarshal wire bytes: %v", uerr)
 	}
 
-	// Exactly one top-level key: "error". No `success`, no envelope.
 	if _, exists := parsed["success"]; exists {
-		t.Errorf("envelope must NOT contain top-level `success` key "+
-			"(Stripe/OpenAI-style shape); got %v", parsed)
+		t.Errorf("envelope must NOT contain top-level `success` key; got %v", parsed)
 	}
 	if len(parsed) != 1 {
 		t.Errorf("envelope must have exactly one top-level key (\"error\"); got %v", parsed)
@@ -173,11 +185,14 @@ func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
 	if !ok {
 		t.Fatalf("envelope.error missing or not an object: %v", parsed["error"])
 	}
-	if inner["type"] != string(TypeAuthentication) {
-		t.Errorf("error.type = %q, want %q", inner["type"], TypeAuthentication)
+	if inner["type"] != "authentication_error" {
+		t.Errorf("error.type = %q, want %q", inner["type"], "authentication_error")
 	}
-	if inner["code"] != string(TypeAuthentication) {
-		t.Errorf("error.code = %q, want %q (CodeOrType fallback)", inner["code"], TypeAuthentication)
+	// `code` is OPTIONAL — Stripe behaviour. The constructor used here
+	// did not set Code, so the wire envelope must OMIT the field rather
+	// than echo Type.
+	if _, exists := inner["code"]; exists {
+		t.Errorf("error.code must be omitted when unset; got %v", inner["code"])
 	}
 	if inner["message"] != "Invalid email or password" {
 		t.Errorf("error.message = %q, want %q", inner["message"], "Invalid email or password")
@@ -189,8 +204,8 @@ func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
 		t.Errorf("error.param should be omitted when empty, got %v", inner["param"])
 	}
 
-	// No capitalised leaks from the old raw-struct marshalling path.
-	for _, leaked := range []string{"Type", "Code", "Message", "Details", "Param", "Err"} {
+	// No capitalised leaks from a raw-struct marshalling regression.
+	for _, leaked := range []string{"Reason", "Resource", "Code", "Message", "Details", "Param", "Op", "Cause"} {
 		if _, exists := parsed[leaked]; exists {
 			t.Errorf("envelope contains capitalised key %q — raw-struct path regressed", leaked)
 		}
@@ -200,15 +215,13 @@ func TestAppError_MarshalJSON_ProducesCanonicalEnvelope(t *testing.T) {
 	}
 }
 
-// TestAppError_MarshalJSON_OmitsErrField guarantees wrapped causes
+// TestError_MarshalJSON_OmitsCauseField guarantees wrapped causes
 // (database driver errors, upstream provider failures, etc.) never
 // reach the HTTP client. The cause remains on the Go struct for
 // errors.As / Unwrap / slog emission; only MarshalJSON must scrub it.
-// Before this fix, `"Err":null` was leaking on every response and a
-// real wrapped cause would have leaked as `"Err":"...cause..."`.
-func TestAppError_MarshalJSON_OmitsErrField(t *testing.T) {
+func TestError_MarshalJSON_OmitsCauseField(t *testing.T) {
 	cause := stderrors.New("internal upstream failure secret-token=abc123")
-	err := NewInternalError("Something went wrong", cause)
+	err := Internal("Something went wrong", cause)
 
 	raw, jerr := json.Marshal(err)
 	if jerr != nil {
@@ -216,20 +229,21 @@ func TestAppError_MarshalJSON_OmitsErrField(t *testing.T) {
 	}
 
 	wire := string(raw)
-	if strings.Contains(wire, "Err") {
-		t.Errorf("wire bytes contain 'Err' field — leaks internal cause to clients: %s", wire)
+	if strings.Contains(wire, "Cause") {
+		t.Errorf("wire bytes contain 'Cause' field — leaks internal cause to clients: %s", wire)
 	}
 	if strings.Contains(wire, "secret-token") {
 		t.Errorf("wire bytes leak the wrapped cause content: %s", wire)
 	}
 }
 
-// TestAppError_MarshalJSON_IncludesOptionalFields validates that
-// when Details and Param ARE set, they appear on the wire with the
-// correct lowercase keys (the omitempty path).
-func TestAppError_MarshalJSON_IncludesOptionalFields(t *testing.T) {
-	err := NewValidationError("Invalid project ID", "projectId must be a valid UUID")
-	err.Param = "projectId"
+// TestError_MarshalJSON_IncludesOptionalFields validates that when
+// Details and Param ARE set, they appear on the wire with the correct
+// lowercase keys (the omitempty path).
+func TestError_MarshalJSON_IncludesOptionalFields(t *testing.T) {
+	err := InvalidParam("projectId", "Invalid project ID",
+		WithDetails("projectId must be a valid UUID"),
+	)
 
 	raw, jerr := json.Marshal(err)
 	if jerr != nil {
@@ -248,20 +262,19 @@ func TestAppError_MarshalJSON_IncludesOptionalFields(t *testing.T) {
 	}
 }
 
-// TestAppError_MarshalJSON_Errors locks the Errors[] wire shape —
+// TestError_MarshalJSON_FieldErrors locks the Errors[] wire shape —
 // each entry emits as {location, message, value} with omitempty on
 // location+value. The top-level envelope carries `errors` only when
-// non-empty (omitempty), so nil + empty slices disappear from the
-// wire rather than appearing as `"errors":[]` (which would drift
-// from the Stripe/OpenAI envelope shape).
-func TestAppError_MarshalJSON_Errors(t *testing.T) {
+// non-empty.
+func TestError_MarshalJSON_FieldErrors(t *testing.T) {
 	t.Run("populated", func(t *testing.T) {
-		err := NewValidationError("Validation failed", "one or more fields failed validation",
-			WithParam("body.name"),
-			WithErrors([]ErrorDetail{
+		err := InvalidFields(
+			[]ErrorDetail{
 				{Location: "body.name", Message: "required", Value: ""},
 				{Location: "body.count", Message: "must be >= 1", Value: 0},
-			}),
+			},
+			WithMessage("Validation failed"),
+			WithDetails("one or more fields failed validation"),
 		)
 		raw, jerr := json.Marshal(err)
 		if jerr != nil {
@@ -287,7 +300,10 @@ func TestAppError_MarshalJSON_Errors(t *testing.T) {
 	})
 
 	t.Run("empty slice omitted", func(t *testing.T) {
-		err := NewValidationError("nope", "why", WithErrors(nil))
+		err := InvalidFields(nil,
+			WithMessage("nope"),
+			WithDetails("why"),
+		)
 		raw, _ := json.Marshal(err)
 		var parsed map[string]any
 		_ = json.Unmarshal(raw, &parsed)
@@ -298,17 +314,11 @@ func TestAppError_MarshalJSON_Errors(t *testing.T) {
 	})
 }
 
-// TestAppError_MarshalJSON_CodeOverridesType locks the CodeOrType
-// fallback: when the caller sets an explicit Code (e.g. a fine-grained
-// domain code like "project_not_found"), it wins over the coarse Type
-// string on the wire. Clients that switch on `error.code` therefore see
-// the domain-authored value instead of the type name.
-func TestAppError_MarshalJSON_CodeOverridesType(t *testing.T) {
-	err := &AppError{
-		Type:    TypeNotFound,
-		Code:    "project_not_found",
-		Message: "Project not found",
-	}
+// TestError_MarshalJSON_ExplicitCode pins that an explicit Code shows
+// up alongside Type on the wire — clients that switch on `error.code`
+// therefore see the caller's authored value.
+func TestError_MarshalJSON_ExplicitCode(t *testing.T) {
+	err := NotFound("project", WithCode("project_not_found"))
 
 	raw, jerr := json.Marshal(err)
 	if jerr != nil {
@@ -319,8 +329,8 @@ func TestAppError_MarshalJSON_CodeOverridesType(t *testing.T) {
 	_ = json.Unmarshal(raw, &parsed)
 	inner, _ := parsed["error"].(map[string]any)
 
-	if inner["type"] != string(TypeNotFound) {
-		t.Errorf("error.type = %q, want %q", inner["type"], TypeNotFound)
+	if inner["type"] != "not_found_error" {
+		t.Errorf("error.type = %q, want %q", inner["type"], "not_found_error")
 	}
 	if inner["code"] != "project_not_found" {
 		t.Errorf("error.code = %q, want %q (explicit Code)", inner["code"], "project_not_found")

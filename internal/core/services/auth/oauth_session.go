@@ -15,7 +15,7 @@ import (
 // CreateOAuthSession stores a temporary OAuth session in Redis.
 func (s *AuthService) CreateOAuthSession(ctx context.Context, session *authDomain.OAuthSession) (string, error) {
 	if session == nil {
-		return "", appErrors.NewInternalError("nil OAuth session", nil)
+		return "", appErrors.Internal("nil OAuth session", nil)
 	}
 
 	sessionID := uid.New().String()
@@ -25,10 +25,10 @@ func (s *AuthService) CreateOAuthSession(ctx context.Context, session *authDomai
 
 	data, err := json.Marshal(session)
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to marshal OAuth session", err)
+		return "", appErrors.Internal("failed to marshal OAuth session", err)
 	}
 	if err := s.redis.Set(ctx, key, data, 15*time.Minute).Err(); err != nil {
-		return "", appErrors.NewInternalError("failed to store OAuth session", err)
+		return "", appErrors.Internal("failed to store OAuth session", err)
 	}
 	return sessionID, nil
 }
@@ -40,15 +40,15 @@ func (s *AuthService) GetOAuthSession(ctx context.Context, sessionID string) (*a
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("OAuth session expired or invalid")
+		return nil, appErrors.NotFound("oauth_session", appErrors.WithMessage("OAuth session expired or invalid"))
 	}
 
 	var session authDomain.OAuthSession
 	if err := json.Unmarshal([]byte(data), &session); err != nil {
-		return nil, appErrors.NewInternalError("failed to unmarshal OAuth session", err)
+		return nil, appErrors.Internal("failed to unmarshal OAuth session", err)
 	}
 	if time.Now().After(session.ExpiresAt) {
-		return nil, appErrors.NewNotFoundError("OAuth session has expired")
+		return nil, appErrors.NotFound("oauth_session", appErrors.WithMessage("OAuth session has expired"))
 	}
 	return &session, nil
 }
@@ -76,10 +76,10 @@ func (s *AuthService) CreateLoginTokenSession(ctx context.Context, accessToken, 
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to marshal login session", err)
+		return "", appErrors.Internal("failed to marshal login session", err)
 	}
 	if err := s.redis.Set(ctx, key, data, 5*time.Minute).Err(); err != nil {
-		return "", appErrors.NewInternalError("failed to store login session", err)
+		return "", appErrors.Internal("failed to store login session", err)
 	}
 	return sessionID, nil
 }
@@ -92,7 +92,7 @@ func (s *AuthService) GetLoginTokenSession(ctx context.Context, sessionID string
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("login session expired or invalid")
+		return nil, appErrors.NotFound("login_session", appErrors.WithMessage("login session expired or invalid"))
 	}
 
 	// One-time use — delete immediately regardless of subsequent decode.
@@ -100,7 +100,7 @@ func (s *AuthService) GetLoginTokenSession(ctx context.Context, sessionID string
 
 	var out authDomain.LoginTokenSession
 	if err := json.Unmarshal([]byte(data), &out); err != nil {
-		return nil, appErrors.NewInternalError("failed to unmarshal login session", err)
+		return nil, appErrors.Internal("failed to unmarshal login session", err)
 	}
 	return &out, nil
 }

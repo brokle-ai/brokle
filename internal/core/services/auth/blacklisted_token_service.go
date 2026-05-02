@@ -29,7 +29,7 @@ func (s *BlacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 	// Check if token is already blacklisted
 	isBlacklisted, err := s.blacklistedTokenRepo.IsTokenBlacklisted(ctx, jti)
 	if err != nil {
-		return appErrors.NewInternalError("failed to check token blacklist status", err)
+		return appErrors.Internal("failed to check token blacklist status", err)
 	}
 
 	if isBlacklisted {
@@ -43,7 +43,7 @@ func (s *BlacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 	// Add to blacklist
 	err = s.blacklistedTokenRepo.Create(ctx, blacklistedToken)
 	if err != nil {
-		return appErrors.NewInternalError("failed to blacklist token", err)
+		return appErrors.Internal("failed to blacklist token", err)
 	}
 
 	return nil
@@ -65,7 +65,7 @@ func (s *BlacklistedTokenService) CreateUserTimestampBlacklist(ctx context.Conte
 
 	err := s.blacklistedTokenRepo.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 	if err != nil {
-		return appErrors.NewInternalError("failed to create user timestamp blacklist", err)
+		return appErrors.Internal("failed to create user timestamp blacklist", err)
 	}
 
 	return nil
@@ -96,7 +96,7 @@ func (s *BlacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, 
 func (s *BlacklistedTokenService) CleanupExpiredTokens(ctx context.Context) error {
 	err := s.blacklistedTokenRepo.CleanupExpiredTokens(ctx)
 	if err != nil {
-		return appErrors.NewInternalError("failed to cleanup expired tokens", err)
+		return appErrors.Internal("failed to cleanup expired tokens", err)
 	}
 
 	return nil
@@ -106,7 +106,7 @@ func (s *BlacklistedTokenService) CleanupExpiredTokens(ctx context.Context) erro
 func (s *BlacklistedTokenService) CleanupOldTokens(ctx context.Context, olderThan time.Time) error {
 	err := s.blacklistedTokenRepo.CleanupTokensOlderThan(ctx, olderThan)
 	if err != nil {
-		return appErrors.NewInternalError("failed to cleanup old tokens", err)
+		return appErrors.Internal("failed to cleanup old tokens", err)
 	}
 
 	return nil

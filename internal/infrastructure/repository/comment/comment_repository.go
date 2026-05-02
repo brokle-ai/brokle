@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	commentDomain "brokle/internal/core/domain/comment"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
 )
@@ -30,7 +31,7 @@ func (r *commentRepository) Create(ctx context.Context, c *commentDomain.Comment
 		CreatedBy:  c.CreatedBy,
 		UpdatedBy:  c.UpdatedBy,
 	}); err != nil {
-		return fmt.Errorf("create comment: %w", err)
+		return appErrors.Internal("create comment", err, appErrors.WithOp("repo.comment.create"))
 	}
 	return nil
 }
@@ -39,9 +40,9 @@ func (r *commentRepository) GetByID(ctx context.Context, id uuid.UUID) (*comment
 	row, err := r.tm.Queries(ctx).GetCommentByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, commentDomain.ErrNotFound
+			return nil, appErrors.NotFound("comment", appErrors.WithOp("repo.comment.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal(fmt.Sprintf("get comment %s", id), err, appErrors.WithOp("repo.comment.get_by_id"))
 	}
 	return commentFromRow(&row), nil
 }
@@ -66,10 +67,10 @@ func (r *commentRepository) Update(ctx context.Context, c *commentDomain.Comment
 		UpdatedBy: c.UpdatedBy,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal(fmt.Sprintf("update comment %s", c.ID), err, appErrors.WithOp("repo.comment.update"))
 	}
 	if n == 0 {
-		return commentDomain.ErrNotFound
+		return appErrors.NotFound("comment", appErrors.WithOp("repo.comment.update"))
 	}
 	return nil
 }
@@ -77,10 +78,10 @@ func (r *commentRepository) Update(ctx context.Context, c *commentDomain.Comment
 func (r *commentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).SoftDeleteComment(ctx, id)
 	if err != nil {
-		return err
+		return appErrors.Internal(fmt.Sprintf("delete comment %s", id), err, appErrors.WithOp("repo.comment.delete"))
 	}
 	if n == 0 {
-		return commentDomain.ErrNotFound
+		return appErrors.NotFound("comment", appErrors.WithOp("repo.comment.delete"))
 	}
 	return nil
 }

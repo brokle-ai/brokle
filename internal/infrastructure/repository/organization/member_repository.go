@@ -37,30 +37,38 @@ func (r *memberRepository) Create(ctx context.Context, m *orgDomain.Member) erro
 	if m.JoinedAt.IsZero() {
 		m.JoinedAt = now
 	}
-	if m.Status == "" {
-		m.Status = "active"
-	}
-	if err := r.tm.Queries(ctx).CreateMember(ctx, gen.CreateMemberParams{
+	// UPSERT-WHERE absorbs the (user_id, organization_id) PK conflict
+	// structurally: a fresh row is INSERTed; a soft-deleted row is
+	// restored (deleted_at = NULL, fresh role/invited_by/joined_at/
+	// updated_at); an active row is left untouched (rows = 0). See the
+	// SQL query comment for the three reachable outcomes.
+	rows, err := r.tm.Queries(ctx).CreateMember(ctx, gen.CreateMemberParams{
 		UserID:         m.UserID,
 		OrganizationID: m.OrganizationID,
 		RoleID:         m.RoleID,
-		Status:         m.Status,
 		JoinedAt:       m.JoinedAt,
 		InvitedBy:      m.InvitedBy,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
-	}); err != nil {
-		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, orgDomain.ErrMemberAlreadyExists)
-		}
-		return fmt.Errorf("create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
+	})
+	if err != nil {
+		return appErrors.Internal("create member", err,
+			appErrors.WithOp("repo.organization_member.create"))
+	}
+	if rows == 0 {
+		// Active (non-soft-deleted) row already exists on the PK — the
+		// caller raced a concurrent add. AlreadyExists matches the
+		// pre-UPSERT contract; service-layer pre-checks (IsMember)
+		// catch the common case fast.
+		return appErrors.AlreadyExists("member",
+			appErrors.WithOp("repo.organization_member.create"))
 	}
 	return nil
 }
 
 // GetByID is not supported — members are addressed by composite key.
 func (r *memberRepository) GetByID(ctx context.Context, _ uuid.UUID) (*orgDomain.Member, error) {
-	return nil, fmt.Errorf("get member by single ID not supported (composite key): %w", orgDomain.ErrMemberNotFound)
+	return nil, appErrors.NotImplemented("member", "get member by single ID not supported (composite key)", appErrors.WithOp("repo.organization_member.get_by_id"))
 }
 
 func (r *memberRepository) GetByUserAndOrganization(ctx context.Context, userID, orgID uuid.UUID) (*orgDomain.Member, error) {
@@ -70,7 +78,7 @@ func (r *memberRepository) GetByUserAndOrganization(ctx context.Context, userID,
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get member (user=%s org=%s): %w", userID, orgID, orgDomain.ErrMemberNotFound)
+			return nil, appErrors.NotFound("member", appErrors.WithOp("repo.organization_member.get_by_user_and_org"))
 		}
 		return nil, fmt.Errorf("get member (user=%s org=%s): %w", userID, orgID, err)
 	}
@@ -82,7 +90,6 @@ func (r *memberRepository) Update(ctx context.Context, m *orgDomain.Member) erro
 		UserID:         m.UserID,
 		OrganizationID: m.OrganizationID,
 		RoleID:         m.RoleID,
-		Status:         m.Status,
 		InvitedBy:      m.InvitedBy,
 	}); err != nil {
 		return fmt.Errorf("update member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
@@ -93,9 +100,13 @@ func (r *memberRepository) Update(ctx context.Context, m *orgDomain.Member) erro
 // Delete is not supported — members are addressed by composite key.
 // Use DeleteByUserAndOrg instead.
 func (r *memberRepository) Delete(ctx context.Context, _ uuid.UUID) error {
-	return fmt.Errorf("delete member by single ID not supported (composite key): %w", orgDomain.ErrInsufficientRole)
+	return appErrors.NotImplemented("member", "delete member by single ID not supported (composite key)", appErrors.WithOp("repo.organization_member.delete"))
 }
 
+// DeleteByUserAndOrg soft-deletes the organization_members row.
+// Cascade-cleanup of project_members overrides is the application
+// service's responsibility (see invitation/member-removal flows).
+// Single-statement persistence per Vernon's DDD.
 func (r *memberRepository) DeleteByUserAndOrg(ctx context.Context, orgID, userID uuid.UUID) error {
 	if err := r.tm.Queries(ctx).SoftDeleteMemberByUserAndOrg(ctx, gen.SoftDeleteMemberByUserAndOrgParams{
 		UserID:         userID,
@@ -132,7 +143,7 @@ func (r *memberRepository) GetMemberRole(ctx context.Context, userID, orgID uuid
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return uuid.Nil, fmt.Errorf("get member role (user=%s org=%s): %w", userID, orgID, orgDomain.ErrMemberNotFound)
+			return uuid.Nil, appErrors.NotFound("member", appErrors.WithOp("repo.organization_member.get_member_role"))
 		}
 		return uuid.Nil, fmt.Errorf("get member role (user=%s org=%s): %w", userID, orgID, err)
 	}
@@ -176,7 +187,6 @@ func memberFromRow(row *gen.OrganizationMember) *orgDomain.Member {
 		UserID:         row.UserID,
 		OrganizationID: row.OrganizationID,
 		RoleID:         row.RoleID,
-		Status:         row.Status,
 		JoinedAt:       row.JoinedAt,
 		InvitedBy:      row.InvitedBy,
 		CreatedAt:      row.CreatedAt,

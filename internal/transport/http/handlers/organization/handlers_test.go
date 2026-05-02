@@ -24,6 +24,8 @@ import (
 	organizationService "brokle/internal/core/services/organization"
 	handler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/httpctx"
+	appErrors "brokle/pkg/errors"
+	"brokle/pkg/response"
 )
 
 // ---- fake services ---------------------------------------------------
@@ -61,7 +63,11 @@ type fakeSettingsService struct {
 
 // newTestRouter mounts the organization handler on a bare chi router
 // with a user-context injector standing in for the production
-// RequireAuth middleware.
+// RequireAuth middleware. Mounts both halves of the post-split
+// handler:
+//   - RegisterListRoutes — top-level /api/v1/organizations + invitations
+//   - RegisterOrgRoutes  — relative paths under /api/v1/organizations/{orgId}
+//     (a stand-in for RequireOrganizationAccess pins orgID into ctx).
 func newTestRouter(t *testing.T, orgSvc handler.OrganizationService) (*chi.Mux, uuid.UUID) {
 	t.Helper()
 	userID := uuid.New()
@@ -72,7 +78,44 @@ func newTestRouter(t *testing.T, orgSvc handler.OrganizationService) (*chi.Mux, 
 			next.ServeHTTP(w, req.WithContext(ctx))
 		})
 	})
-	handler.RegisterRoutes(r, orgSvc, fakeMemberService{}, fakeInvitationService{}, fakeSettingsService{}, slog.Default())
+	h := handler.New(orgSvc, fakeMemberService{}, fakeInvitationService{}, fakeSettingsService{}, slog.Default())
+
+	// Mirror list/invitation routes from internal/server/routes.go.
+	r.Get("/api/v1/organizations", h.ListOrganizations)
+	r.Post("/api/v1/organizations", h.CreateOrganization)
+	r.Get("/api/v1/invitations", h.ListUserInvitations)
+	r.Get("/api/v1/invitations/validate/{token}", h.ValidateInvitationToken)
+	r.Post("/api/v1/invitations/accept", h.AcceptInvitation)
+	r.Post("/api/v1/invitations/decline", h.DeclineInvitation)
+
+	r.Route("/api/v1/organizations/{orgId}", func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				orgID, err := uuid.Parse(chi.URLParam(req, "orgId"))
+				if err != nil {
+					response.WriteError(w, appErrors.InvalidParam("orgId", "must be a valid UUID"))
+					return
+				}
+				ctx := httpctx.WithOrganizationID(req.Context(), orgID)
+				next.ServeHTTP(w, req.WithContext(ctx))
+			})
+		})
+		// Mirror org-scoped routes from internal/server/routes.go.
+		r.Get("/", h.GetOrganization)
+		r.Patch("/", h.UpdateOrganization)
+		r.Delete("/", h.DeleteOrganization)
+		r.Get("/members", h.ListMembers)
+		r.Delete("/members/{userId}", h.RemoveMember)
+		r.Post("/invitations", h.CreateInvitation)
+		r.Get("/invitations", h.ListPendingInvitations)
+		r.Post("/invitations/{invitationId}/resend", h.ResendInvitation)
+		r.Delete("/invitations/{invitationId}", h.RevokeInvitation)
+		r.Get("/settings/", h.ListSettings)
+		r.Post("/settings/", h.CreateSetting)
+		r.Get("/settings/{key}", h.GetSetting)
+		r.Put("/settings/{key}", h.UpdateSetting)
+		r.Delete("/settings/{key}", h.DeleteSetting)
+	})
 	return r, userID
 }
 

@@ -1,7 +1,7 @@
 // Package request bundles HTTP request-binding helpers for chi-native
 // handlers: JSON body decoding + struct-tag validation, URL parameter
 // parsing, and query parameter parsing. Every helper returns
-// *appErrors.AppError (via the error interface) so handlers hand the
+// *appErrors.Error (via the error interface) so handlers hand the
 // return straight to pkg/response.WriteError — no translation layer,
 // one error taxonomy end-to-end.
 //
@@ -89,7 +89,7 @@ func init() {
 
 // DecodeJSON reads, size-limits, decodes, and validates r.Body into
 // dst. On success dst is populated and nil is returned. On failure
-// the returned error is a typed *appErrors.AppError ready for
+// the returned error is a typed *appErrors.Error ready for
 // response.WriteError — no translation needed at the call site.
 //
 // Safety layers, in order:
@@ -110,7 +110,7 @@ func init() {
 //
 //  4. validator.Struct enforces the `validate:"..."` struct tags.
 //     Error → per-field ErrorDetail entries on the returned
-//     AppError.Errors, with Location using the JSON tag path.
+//     Error.Errors, with Location using the JSON tag path.
 //
 // Error classification:
 //
@@ -133,9 +133,8 @@ func DecodeJSON(r *http.Request, dst any) error {
 		return classifyDecodeError(err)
 	}
 	if dec.More() {
-		return appErrors.NewBadRequestError(
-			"Invalid request body",
-			"request body must contain only a single JSON document",
+		return appErrors.BadRequest("Invalid request body",
+			appErrors.WithDetails("request body must contain only a single JSON document"),
 		)
 	}
 
@@ -153,49 +152,38 @@ func classifyDecodeError(err error) error {
 	)
 	switch {
 	case stderrors.Is(err, io.EOF):
-		return appErrors.NewBadRequestError(
-			"Request body is empty",
-			"expected a JSON document",
+		return appErrors.BadRequest("Request body is empty",
+			appErrors.WithDetails("expected a JSON document"),
 		)
 	case stderrors.Is(err, io.ErrUnexpectedEOF):
-		return appErrors.NewBadRequestError(
-			"Malformed JSON",
-			"request body ended unexpectedly",
+		return appErrors.BadRequest("Malformed JSON",
+			appErrors.WithDetails("request body ended unexpectedly"),
 		)
 	case stderrors.As(err, &syntaxErr):
-		return appErrors.NewBadRequestError(
-			"Malformed JSON",
-			fmt.Sprintf("syntax error at byte offset %d", syntaxErr.Offset),
+		return appErrors.BadRequest("Malformed JSON",
+			appErrors.WithDetails(fmt.Sprintf("syntax error at byte offset %d", syntaxErr.Offset)),
 		)
 	case stderrors.As(err, &unmarshalErr):
 		field := unmarshalErr.Field
 		if field == "" {
 			field = unmarshalErr.Type.String()
 		}
-		return appErrors.NewValidationError(
-			fmt.Sprintf("Invalid type for field %q", field),
-			fmt.Sprintf("expected %s", unmarshalErr.Type.String()),
-			appErrors.WithParam(field),
+		return appErrors.InvalidParam(field,
+			fmt.Sprintf("invalid type, expected %s", unmarshalErr.Type.String()),
 		)
 	case stderrors.As(err, &maxBytesErr):
-		return appErrors.NewBadRequestError(
-			"Request body too large",
-			fmt.Sprintf("body must not exceed %d bytes", maxBytesErr.Limit),
+		return appErrors.BadRequest("Request body too large",
+			appErrors.WithDetails(fmt.Sprintf("body must not exceed %d bytes", maxBytesErr.Limit)),
 		)
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
 		// stdlib does not expose a named error type for unknown
 		// fields. Parse the canonical message: `json: unknown field "X"`.
 		field := strings.TrimPrefix(err.Error(), "json: unknown field ")
 		field = strings.Trim(field, `"`)
-		return appErrors.NewValidationError(
-			fmt.Sprintf("Unknown field %q", field),
-			"remove the field or correct its name",
-			appErrors.WithParam(field),
-		)
+		return appErrors.InvalidParam(field, "unknown field; remove it or correct its name")
 	default:
-		return appErrors.NewBadRequestError(
-			"Invalid request body",
-			err.Error(),
+		return appErrors.BadRequest("Invalid request body",
+			appErrors.WithDetails(err.Error()),
 		)
 	}
 }
@@ -205,9 +193,10 @@ func classifyValidationError(err error) error {
 	if !stderrors.As(err, &ve) {
 		// validator.Struct itself returned a non-ValidationErrors —
 		// typically an InvalidValidationError from passing a nil
-		// pointer. Surface it as a generic validation failure rather
-		// than a 500 because the caller's input did reach validation.
-		return appErrors.NewValidationError("Validation failed", err.Error())
+		// pointer or non-struct. That's a programmer error inside the
+		// handler, not bad client input — surface as 500 so the bug is
+		// visible in logs rather than masked as a generic 422.
+		return appErrors.Internal("validator returned non-validation error", err)
 	}
 	details := make([]appErrors.ErrorDetail, 0, len(ve))
 	for _, fe := range ve {
@@ -217,15 +206,9 @@ func classifyValidationError(err error) error {
 			Value:    fe.Value(),
 		})
 	}
-	param := ""
-	if len(details) > 0 {
-		param = details[0].Location
-	}
-	return appErrors.NewValidationError(
-		"Validation failed",
-		"one or more fields failed validation",
-		appErrors.WithParam(param),
-		appErrors.WithErrors(details),
+	return appErrors.InvalidFields(details,
+		appErrors.WithMessage("Validation failed"),
+		appErrors.WithDetails("one or more fields failed validation"),
 	)
 }
 
@@ -306,11 +289,7 @@ func URLParamUUID(r *http.Request, key string) (uuid.UUID, error) {
 	raw := chi.URLParam(r, key)
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be a valid UUID", key),
-			appErrors.WithParam(key),
-		)
+		return uuid.Nil, appErrors.InvalidParam(key, "must be a valid UUID")
 	}
 	return id, nil
 }
@@ -320,11 +299,7 @@ func URLParamInt(r *http.Request, key string) (int, error) {
 	raw := chi.URLParam(r, key)
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be an integer", key),
-			appErrors.WithParam(key),
-		)
+		return 0, appErrors.InvalidParam(key, "must be an integer")
 	}
 	return v, nil
 }
@@ -357,11 +332,7 @@ func QueryOptionalBool(r *http.Request, key string) (*bool, error) {
 	}
 	v, err := strconv.ParseBool(raw)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be a boolean (true/false)", key),
-			appErrors.WithParam(key),
-		)
+		return nil, appErrors.InvalidParam(key, "must be a boolean (true/false)")
 	}
 	return &v, nil
 }
@@ -374,11 +345,7 @@ func QueryOptionalInt(r *http.Request, key string) (*int, error) {
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be an integer", key),
-			appErrors.WithParam(key),
-		)
+		return nil, appErrors.InvalidParam(key, "must be an integer")
 	}
 	return &v, nil
 }
@@ -391,11 +358,7 @@ func QueryOptionalUUID(r *http.Request, key string) (*uuid.UUID, error) {
 	}
 	v, err := uuid.Parse(raw)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be a valid UUID", key),
-			appErrors.WithParam(key),
-		)
+		return nil, appErrors.InvalidParam(key, "must be a valid UUID")
 	}
 	return &v, nil
 }
@@ -408,11 +371,7 @@ func QueryInt(r *http.Request, key string, def int) (int, error) {
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, appErrors.NewValidationError(
-			fmt.Sprintf("Invalid %s", key),
-			fmt.Sprintf("%s must be an integer", key),
-			appErrors.WithParam(key),
-		)
+		return 0, appErrors.InvalidParam(key, "must be an integer")
 	}
 	return v, nil
 }
@@ -434,18 +393,10 @@ func QueryPagination(r *http.Request) (page, limit int, err error) {
 		return 0, 0, err
 	}
 	if page < 1 {
-		return 0, 0, appErrors.NewValidationError(
-			"Invalid page",
-			"page must be >= 1",
-			appErrors.WithParam("page"),
-		)
+		return 0, 0, appErrors.InvalidParam("page", "must be >= 1")
 	}
 	if limit < 1 || limit > 1000 {
-		return 0, 0, appErrors.NewValidationError(
-			"Invalid limit",
-			"limit must be between 1 and 1000",
-			appErrors.WithParam("limit"),
-		)
+		return 0, 0, appErrors.InvalidParam("limit", "must be between 1 and 1000")
 	}
 	return page, limit, nil
 }

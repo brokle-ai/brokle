@@ -45,12 +45,12 @@ func (s *SessionService) GetSession(ctx context.Context, sessionID uuid.UUID) (*
 func (s *SessionService) RevokeSession(ctx context.Context, sessionID uuid.UUID) error {
 	_, err := s.sessionRepo.GetByID(ctx, sessionID)
 	if err != nil {
-		return appErrors.NewNotFoundError("session not found")
+		return appErrors.NotFound("session")
 	}
 
 	err = s.sessionRepo.RevokeSession(ctx, sessionID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to revoke session", err)
+		return appErrors.Internal("failed to revoke session", err)
 	}
 
 	return nil
@@ -65,7 +65,7 @@ func (s *SessionService) GetUserSessions(ctx context.Context, userID uuid.UUID) 
 func (s *SessionService) RevokeUserSessions(ctx context.Context, userID uuid.UUID) error {
 	err := s.sessionRepo.RevokeUserSessions(ctx, userID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to revoke user sessions", err)
+		return appErrors.Internal("failed to revoke user sessions", err)
 	}
 
 	return nil

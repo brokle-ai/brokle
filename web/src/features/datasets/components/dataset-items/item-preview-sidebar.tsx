@@ -64,11 +64,11 @@ export function ItemPreviewSidebar({ item, open, onOpenChange }: ItemPreviewSide
             />
 
             {/* Expected Output Section */}
-            {item.expected_output && (
+            {item.expected && (
               <FieldSection
                 title="Expected Output"
-                value={item.expected_output}
-                onCopy={() => handleCopy('expected', item.expected_output)}
+                value={item.expected}
+                onCopy={() => handleCopy('expected', item.expected)}
                 isCopied={copiedField === 'expected'}
               />
             )}
@@ -104,10 +104,8 @@ export function ItemPreviewSidebar({ item, open, onOpenChange }: ItemPreviewSide
                   </div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Updated</span>
-                  <div className="mt-1">
-                    {new Date(item.updated_at).toLocaleDateString()}
-                  </div>
+                  <span className="text-muted-foreground">Source</span>
+                  <div className="mt-1">{item.source}</div>
                 </div>
               </div>
             </div>

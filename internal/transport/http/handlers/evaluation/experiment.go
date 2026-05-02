@@ -6,53 +6,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/request"
 	"brokle/pkg/response"
 )
 
-// ---- dashboard routes -----------------------------------------------
-
-func registerDashboardExperimentRoutes(r chi.Router, h *handler) {
-	r.Route("/experiments", func(r chi.Router) {
-		r.Post("/", h.dashCreateExperiment)
-		r.Get("/", h.dashListExperiments)
-		r.Post("/compare", h.dashCompareExperiments)
-		r.Route("/{experimentId}", func(r chi.Router) {
-			r.Get("/", h.dashGetExperiment)
-			r.Put("/", h.dashUpdateExperiment)
-			r.Delete("/", h.dashDeleteExperiment)
-			r.Post("/rerun", h.dashRerunExperiment)
-			r.Get("/progress", h.dashGetExperimentProgress)
-			r.Get("/metrics", h.dashGetExperimentMetrics)
-			r.Get("/items", h.dashListExperimentItems)
-		})
-	})
-}
-
-// ---- SDK routes -----------------------------------------------------
-
-func registerSDKExperimentRoutes(r chi.Router, h *handler) {
-	r.Route("/v1/experiments", func(r chi.Router) {
-		r.Post("/", h.sdkCreateExperiment)
-		r.Get("/", h.sdkListExperiments)
-		r.Post("/compare", h.sdkCompareExperiments)
-		r.Route("/{experimentId}", func(r chi.Router) {
-			r.Get("/", h.sdkGetExperiment)
-			r.Patch("/", h.sdkUpdateExperiment)
-			r.Post("/rerun", h.sdkRerunExperiment)
-			r.Post("/items", h.sdkBatchCreateExperimentItems)
-		})
-	})
-}
-
 // ---- shared cores ---------------------------------------------------
 
-func (h *handler) createExperimentCore(ctx context.Context, projectID uuid.UUID, body *CreateExperimentRequest) (*evaluationDomain.ExperimentResponse, error) {
+func (h *Handler) createExperimentCore(ctx context.Context, projectID uuid.UUID, body *CreateExperimentRequest) (*evaluationDomain.ExperimentResponse, error) {
 	exp, err := h.experimentSvc.Create(ctx, projectID, body)
 	if err != nil {
 		return nil, err
@@ -62,7 +27,7 @@ func (h *handler) createExperimentCore(ctx context.Context, projectID uuid.UUID,
 	return exp.ToResponse(), nil
 }
 
-func (h *handler) listExperimentsCore(
+func (h *Handler) listExperimentsCore(
 	ctx context.Context,
 	projectID uuid.UUID,
 	datasetIDStr, statusStr, search, idsStr string,
@@ -72,7 +37,7 @@ func (h *handler) listExperimentsCore(
 	if datasetIDStr != "" {
 		datasetID, err := uuid.Parse(datasetIDStr)
 		if err != nil {
-			return nil, 0, page, limit, appErrors.NewValidationError("dataset_id", "must be a valid UUID")
+			return nil, 0, page, limit, appErrors.InvalidParam("dataset_id", "must be a valid UUID")
 		}
 		filter = &evaluationDomain.ExperimentFilter{}
 		filter.DatasetID = &datasetID
@@ -91,8 +56,7 @@ func (h *handler) listExperimentsCore(
 			}
 			filter.Status = &status
 		default:
-			return nil, 0, page, limit, appErrors.NewValidationError("status",
-				"must be pending, running, completed, failed, partial, or cancelled")
+			return nil, 0, page, limit, appErrors.InvalidParam("status", "must be pending, running, completed, failed, partial, or cancelled")
 		}
 	}
 	if search != "" {
@@ -110,7 +74,7 @@ func (h *handler) listExperimentsCore(
 			}
 			id, err := uuid.Parse(idStr)
 			if err != nil {
-				return nil, 0, page, limit, appErrors.NewValidationError("ids", "invalid UUID: "+idStr)
+				return nil, 0, page, limit, appErrors.InvalidParam("ids", "invalid UUID: "+idStr)
 			}
 			ids = append(ids, id)
 		}
@@ -133,12 +97,12 @@ func (h *handler) listExperimentsCore(
 	return out, total, page, limit, nil
 }
 
-func (h *handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUID, body *CompareExperimentsRequest) (*CompareExperimentsResponse, error) {
+func (h *Handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUID, body *CompareExperimentsRequest) (*CompareExperimentsResponse, error) {
 	experimentIDs := make([]uuid.UUID, len(body.ExperimentIDs))
 	for i, idStr := range body.ExperimentIDs {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return nil, appErrors.NewValidationError("experiment_ids", "invalid UUID at index "+strconv.Itoa(i))
+			return nil, appErrors.InvalidParam("experiment_ids", "invalid UUID at index "+strconv.Itoa(i))
 		}
 		experimentIDs[i] = id
 	}
@@ -147,7 +111,7 @@ func (h *handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUI
 	if body.BaselineID != nil {
 		id, err := uuid.Parse(*body.BaselineID)
 		if err != nil {
-			return nil, appErrors.NewValidationError("baseline_id", "must be a valid UUID")
+			return nil, appErrors.InvalidParam("baseline_id", "must be a valid UUID")
 		}
 		baselineID = &id
 	}
@@ -196,12 +160,8 @@ func (h *handler) compareExperimentsCore(ctx context.Context, projectID uuid.UUI
 
 // ---- dashboard handlers --------------------------------------------
 
-func (h *handler) dashCreateExperiment(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashCreateExperiment(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body CreateExperimentRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -215,12 +175,8 @@ func (h *handler) dashCreateExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, resp)
 }
 
-func (h *handler) dashListExperiments(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashListExperiments(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	page, limit, err := readPagination(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -239,12 +195,8 @@ func (h *handler) dashListExperiments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) dashCompareExperiments(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashCompareExperiments(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body CompareExperimentsRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -258,12 +210,8 @@ func (h *handler) dashCompareExperiments(w http.ResponseWriter, r *http.Request)
 	response.Success(w, resp)
 }
 
-func (h *handler) dashGetExperiment(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetExperiment(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -277,12 +225,8 @@ func (h *handler) dashGetExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exp.ToResponse())
 }
 
-func (h *handler) dashUpdateExperiment(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashUpdateExperiment(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -303,12 +247,8 @@ func (h *handler) dashUpdateExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exp.ToResponse())
 }
 
-func (h *handler) dashDeleteExperiment(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashDeleteExperiment(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -321,12 +261,8 @@ func (h *handler) dashDeleteExperiment(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) dashRerunExperiment(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashRerunExperiment(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -347,12 +283,8 @@ func (h *handler) dashRerunExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, exp.ToResponse())
 }
 
-func (h *handler) dashGetExperimentProgress(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetExperimentProgress(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -366,12 +298,8 @@ func (h *handler) dashGetExperimentProgress(w http.ResponseWriter, r *http.Reque
 	response.Success(w, progress)
 }
 
-func (h *handler) dashGetExperimentMetrics(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashGetExperimentMetrics(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -385,12 +313,8 @@ func (h *handler) dashGetExperimentMetrics(w http.ResponseWriter, r *http.Reques
 	response.Success(w, metrics)
 }
 
-func (h *handler) dashListExperimentItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DashListExperimentItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -427,7 +351,7 @@ func (h *handler) dashListExperimentItems(w http.ResponseWriter, r *http.Request
 
 // ---- SDK handlers --------------------------------------------------
 
-func (h *handler) sdkCreateExperiment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCreateExperiment(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	var body CreateExperimentRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -442,7 +366,7 @@ func (h *handler) sdkCreateExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, resp)
 }
 
-func (h *handler) sdkListExperiments(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkListExperiments(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	page, limit, err := readPagination(r)
 	if err != nil {
@@ -462,7 +386,7 @@ func (h *handler) sdkListExperiments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) sdkCompareExperiments(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkCompareExperiments(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	var body CompareExperimentsRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -477,7 +401,7 @@ func (h *handler) sdkCompareExperiments(w http.ResponseWriter, r *http.Request) 
 	response.Success(w, resp)
 }
 
-func (h *handler) sdkGetExperiment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkGetExperiment(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
@@ -492,7 +416,7 @@ func (h *handler) sdkGetExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exp.ToResponse())
 }
 
-func (h *handler) sdkUpdateExperiment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkUpdateExperiment(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
@@ -512,7 +436,7 @@ func (h *handler) sdkUpdateExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, exp.ToResponse())
 }
 
-func (h *handler) sdkRerunExperiment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkRerunExperiment(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {
@@ -532,7 +456,7 @@ func (h *handler) sdkRerunExperiment(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, exp.ToResponse())
 }
 
-func (h *handler) sdkBatchCreateExperimentItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkBatchCreateExperimentItems(w http.ResponseWriter, r *http.Request) {
 	projectID := projectIDForSDK(r)
 	experimentID, err := request.URLParamUUID(r, "experimentId")
 	if err != nil {

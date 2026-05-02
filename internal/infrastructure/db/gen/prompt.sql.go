@@ -464,7 +464,8 @@ func (q *Queries) GetPromptVersionByPromptAndVersion(ctx context.Context, arg Ge
 }
 
 const getProtectedPromptLabelByProjectAndLabel = `-- name: GetProtectedPromptLabelByProjectAndLabel :one
-SELECT id, project_id, label_name, created_by, created_at FROM prompt_protected_labels
+SELECT id, project_id, label_name, created_by, created_at
+FROM prompt_protected_labels
 WHERE project_id = $1 AND label_name = $2
 LIMIT 1
 `
@@ -704,7 +705,8 @@ func (q *Queries) ListPromptVersionsByIDs(ctx context.Context, dollar_1 []uuid.U
 }
 
 const listProtectedPromptLabelsByProject = `-- name: ListProtectedPromptLabelsByProject :many
-SELECT id, project_id, label_name, created_by, created_at FROM prompt_protected_labels
+SELECT id, project_id, label_name, created_by, created_at
+FROM prompt_protected_labels
 WHERE project_id = $1
 ORDER BY label_name ASC
 `

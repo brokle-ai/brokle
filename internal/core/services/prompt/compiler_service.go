@@ -10,6 +10,7 @@ import (
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/core/services/prompt/dialects"
+	appErrors "brokle/pkg/errors"
 )
 
 // Variable pattern matches Mustache-style variables: {{variable_name}}
@@ -33,7 +34,7 @@ func (s *CompilerService) ExtractVariables(template any, promptType promptDomain
 	case promptDomain.PromptTypeChat:
 		return s.extractChatVariables(template)
 	default:
-		return nil, promptDomain.ErrInvalidPromptType
+		return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -41,7 +42,7 @@ func (s *CompilerService) extractTextVariables(template any) ([]string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
 		if err := json.Unmarshal(raw, &textTemplate); err != nil {
-			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return nil, appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		return s.extractFromString(textTemplate.Content), nil
 	}
@@ -50,21 +51,21 @@ func (s *CompilerService) extractTextVariables(template any) ([]string, error) {
 		if content, ok := m["content"].(string); ok {
 			return s.extractFromString(content), nil
 		}
-		return nil, promptDomain.NewInvalidTemplateError("text template must have 'content' field")
+		return nil, appErrors.InvalidParam("template", "text template must have 'content' field")
 	}
 
 	if str, ok := template.(string); ok {
 		return s.extractFromString(str), nil
 	}
 
-	return nil, promptDomain.NewInvalidTemplateError("unsupported template format for text type")
+	return nil, appErrors.InvalidParam("template", "unsupported template format for text type")
 }
 
 func (s *CompilerService) extractChatVariables(template any) ([]string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return nil, appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		return s.extractFromMessages(chatTemplate.Messages), nil
 	}
@@ -77,18 +78,18 @@ func (s *CompilerService) extractChatVariables(template any) ([]string, error) {
 		return s.extractFromMessages(messages), nil
 	}
 
-	return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat type")
+	return nil, appErrors.InvalidParam("template", "unsupported template format for chat type")
 }
 
 func (s *CompilerService) parseMessagesFromMap(m map[string]any) ([]promptDomain.ChatMessage, error) {
 	messagesRaw, ok := m["messages"]
 	if !ok {
-		return nil, promptDomain.NewInvalidTemplateError("chat template must have 'messages' field")
+		return nil, appErrors.InvalidParam("template", "chat template must have 'messages' field")
 	}
 
 	messagesSlice, ok := messagesRaw.([]any)
 	if !ok {
-		return nil, promptDomain.NewInvalidTemplateError("messages must be an array")
+		return nil, appErrors.InvalidParam("template", "messages must be an array")
 	}
 
 	var messages []promptDomain.ChatMessage
@@ -163,7 +164,7 @@ func (s *CompilerService) Compile(template any, promptType promptDomain.PromptTy
 	case promptDomain.PromptTypeChat:
 		return s.compileChat(template, variables)
 	default:
-		return nil, promptDomain.ErrInvalidPromptType
+		return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -173,19 +174,19 @@ func (s *CompilerService) compileText(template any, variables map[string]string)
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
 		if err := json.Unmarshal(raw, &textTemplate); err != nil {
-			return "", fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return "", appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		content = textTemplate.Content
 	} else if m, ok := template.(map[string]any); ok {
 		if c, ok := m["content"].(string); ok {
 			content = c
 		} else {
-			return "", promptDomain.NewInvalidTemplateError("text template must have 'content' field")
+			return "", appErrors.InvalidParam("template", "text template must have 'content' field")
 		}
 	} else if str, ok := template.(string); ok {
 		content = str
 	} else {
-		return "", promptDomain.NewInvalidTemplateError("unsupported template format")
+		return "", appErrors.InvalidParam("template", "unsupported template format")
 	}
 
 	return s.CompileText(content, variables)
@@ -215,7 +216,7 @@ func (s *CompilerService) compileChat(template any, variables map[string]string)
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return nil, appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		messages = chatTemplate.Messages
 	} else if m, ok := template.(map[string]any); ok {
@@ -225,7 +226,7 @@ func (s *CompilerService) compileChat(template any, variables map[string]string)
 			return nil, err
 		}
 	} else {
-		return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+		return nil, appErrors.InvalidParam("template", "unsupported template format for chat")
 	}
 
 	return s.CompileChat(messages, variables)
@@ -278,7 +279,7 @@ func (s *CompilerService) ValidateTemplate(template any, promptType promptDomain
 	case promptDomain.PromptTypeChat:
 		return s.validateChatTemplate(template)
 	default:
-		return promptDomain.ErrInvalidPromptType
+		return appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -286,10 +287,10 @@ func (s *CompilerService) validateTextTemplate(template any) error {
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
 		if err := json.Unmarshal(raw, &textTemplate); err != nil {
-			return fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		if textTemplate.Content == "" {
-			return promptDomain.NewInvalidTemplateError("content cannot be empty")
+			return appErrors.InvalidParam("template", "content cannot be empty")
 		}
 		return nil
 	}
@@ -297,32 +298,32 @@ func (s *CompilerService) validateTextTemplate(template any) error {
 	if m, ok := template.(map[string]any); ok {
 		content, ok := m["content"].(string)
 		if !ok {
-			return promptDomain.NewInvalidTemplateError("text template must have 'content' field")
+			return appErrors.InvalidParam("template", "text template must have 'content' field")
 		}
 		if content == "" {
-			return promptDomain.NewInvalidTemplateError("content cannot be empty")
+			return appErrors.InvalidParam("template", "content cannot be empty")
 		}
 		return nil
 	}
 
 	if str, ok := template.(string); ok {
 		if str == "" {
-			return promptDomain.NewInvalidTemplateError("content cannot be empty")
+			return appErrors.InvalidParam("template", "content cannot be empty")
 		}
 		return nil
 	}
 
-	return promptDomain.NewInvalidTemplateError("unsupported template format")
+	return appErrors.InvalidParam("template", "unsupported template format")
 }
 
 func (s *CompilerService) validateChatTemplate(template any) error {
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		if len(chatTemplate.Messages) == 0 {
-			return promptDomain.NewInvalidTemplateError("messages cannot be empty")
+			return appErrors.InvalidParam("template", "messages cannot be empty")
 		}
 		return s.validateMessages(chatTemplate.Messages)
 	}
@@ -333,12 +334,12 @@ func (s *CompilerService) validateChatTemplate(template any) error {
 			return err
 		}
 		if len(messages) == 0 {
-			return promptDomain.NewInvalidTemplateError("messages cannot be empty")
+			return appErrors.InvalidParam("template", "messages cannot be empty")
 		}
 		return s.validateMessages(messages)
 	}
 
-	return promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+	return appErrors.InvalidParam("template", "unsupported template format for chat")
 }
 
 func (s *CompilerService) validateMessages(messages []promptDomain.ChatMessage) error {
@@ -347,20 +348,20 @@ func (s *CompilerService) validateMessages(messages []promptDomain.ChatMessage) 
 
 	for i, msg := range messages {
 		if !validTypes[msg.Type] {
-			return promptDomain.NewInvalidTemplateError(fmt.Sprintf("invalid message type at index %d: %s", i, msg.Type))
+			return appErrors.InvalidParam("template", fmt.Sprintf("invalid message type at index %d: %s", i, msg.Type))
 		}
 
 		if msg.Type == "message" || msg.Type == "" {
 			if !validRoles[msg.Role] {
-				return promptDomain.NewInvalidTemplateError(fmt.Sprintf("invalid role at index %d: %s", i, msg.Role))
+				return appErrors.InvalidParam("template", fmt.Sprintf("invalid role at index %d: %s", i, msg.Role))
 			}
 			if msg.Content == "" {
-				return promptDomain.NewInvalidTemplateError(fmt.Sprintf("empty content at index %d", i))
+				return appErrors.InvalidParam("template", fmt.Sprintf("empty content at index %d", i))
 			}
 		}
 
 		if msg.Type == "placeholder" && msg.Name == "" {
-			return promptDomain.NewInvalidTemplateError(fmt.Sprintf("placeholder at index %d must have a name", i))
+			return appErrors.InvalidParam("template", fmt.Sprintf("placeholder at index %d must have a name", i))
 		}
 	}
 
@@ -376,7 +377,7 @@ func (s *CompilerService) ValidateVariables(required []string, provided map[stri
 	}
 
 	if len(missing) > 0 {
-		return promptDomain.NewVariableMissingError(strings.Join(missing, ", "))
+		return appErrors.InvalidParam("variables", fmt.Sprintf("required variable missing: %s", strings.Join(missing, ", ")))
 	}
 
 	return nil
@@ -401,7 +402,7 @@ func (s *CompilerService) extractContentForDetection(template any, promptType pr
 	case promptDomain.PromptTypeChat:
 		return s.extractChatContent(template)
 	default:
-		return "", promptDomain.ErrInvalidPromptType
+		return "", appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -409,7 +410,7 @@ func (s *CompilerService) extractTextContent(template any) (string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
 		if err := json.Unmarshal(raw, &textTemplate); err != nil {
-			return "", fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return "", appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		return textTemplate.Content, nil
 	}
@@ -417,12 +418,12 @@ func (s *CompilerService) extractTextContent(template any) (string, error) {
 		if content, ok := m["content"].(string); ok {
 			return content, nil
 		}
-		return "", promptDomain.NewInvalidTemplateError("text template must have 'content' field")
+		return "", appErrors.InvalidParam("template", "text template must have 'content' field")
 	}
 	if str, ok := template.(string); ok {
 		return str, nil
 	}
-	return "", promptDomain.NewInvalidTemplateError("unsupported template format")
+	return "", appErrors.InvalidParam("template", "unsupported template format")
 }
 
 func (s *CompilerService) extractChatContent(template any) (string, error) {
@@ -431,7 +432,7 @@ func (s *CompilerService) extractChatContent(template any) (string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return "", fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return "", appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		messages = chatTemplate.Messages
 	} else if m, ok := template.(map[string]any); ok {
@@ -441,7 +442,7 @@ func (s *CompilerService) extractChatContent(template any) (string, error) {
 			return "", err
 		}
 	} else {
-		return "", promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+		return "", appErrors.InvalidParam("template", "unsupported template format for chat")
 	}
 
 	// Concatenate all message content for dialect detection
@@ -486,7 +487,7 @@ func (s *CompilerService) ValidateSyntax(template any, promptType promptDomain.P
 		return compiler.Validate(content)
 
 	default:
-		return nil, promptDomain.ErrInvalidPromptType
+		return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -518,7 +519,7 @@ func (s *CompilerService) ExtractVariablesWithDialect(template any, promptType p
 		return s.extractChatVariablesWithDialect(template, compiler)
 
 	default:
-		return nil, promptDomain.ErrInvalidPromptType
+		return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -528,7 +529,7 @@ func (s *CompilerService) extractChatVariablesWithDialect(template any, compiler
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return nil, appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		messages = chatTemplate.Messages
 	} else if m, ok := template.(map[string]any); ok {
@@ -538,7 +539,7 @@ func (s *CompilerService) extractChatVariablesWithDialect(template any, compiler
 			return nil, err
 		}
 	} else {
-		return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+		return nil, appErrors.InvalidParam("template", "unsupported template format for chat")
 	}
 
 	seen := make(map[string]bool)
@@ -590,7 +591,7 @@ func (s *CompilerService) CompileWithDialect(template any, promptType promptDoma
 	case promptDomain.PromptTypeChat:
 		return s.compileChatWithDialect(template, variables, compiler)
 	default:
-		return nil, promptDomain.ErrInvalidPromptType
+		return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 	}
 }
 
@@ -608,7 +609,7 @@ func (s *CompilerService) compileChatWithDialect(template any, variables map[str
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
 		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
-			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+			return nil, appErrors.InvalidParam("template", fmt.Sprintf("invalid template format: %v", err))
 		}
 		messages = chatTemplate.Messages
 	} else if m, ok := template.(map[string]any); ok {
@@ -618,7 +619,7 @@ func (s *CompilerService) compileChatWithDialect(template any, variables map[str
 			return nil, err
 		}
 	} else {
-		return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+		return nil, appErrors.InvalidParam("template", "unsupported template format for chat")
 	}
 
 	result := make([]promptDomain.ChatMessage, 0, len(messages))

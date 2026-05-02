@@ -28,7 +28,7 @@ func (r *protectedLabelRepository) Create(ctx context.Context, l *promptDomain.P
 		CreatedBy: l.CreatedBy,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create protected label %s: %w", l.LabelName, promptDomain.ErrProtectedLabelAlreadyExists)
+			return appErrors.AlreadyExists("prompt_label", appErrors.WithMessage("protected label already exists"), appErrors.WithOp("repo.protected_prompt_label.create"))
 		}
 		return fmt.Errorf("create protected label %s: %w", l.LabelName, err)
 	}

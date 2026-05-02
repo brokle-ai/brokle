@@ -174,7 +174,7 @@ func (r *telemetryDeduplicationRepository) CheckBatchDuplicates(ctx context.Cont
 	}
 
 	// Collect duplicates
-	var duplicates []string
+	duplicates := make([]string, 0)
 	for i, cmd := range cmds {
 		exists, err := cmd.Result()
 		if err != nil {

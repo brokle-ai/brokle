@@ -9,6 +9,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // permissionRepository is the pgx+sqlc implementation of
@@ -45,7 +46,7 @@ func (r *permissionRepository) GetByID(ctx context.Context, id uuid.UUID) (*auth
 	row, err := r.tm.Queries(ctx).GetPermissionByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get permission %s: %w", id, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("permission", appErrors.WithOp("repo.permission.get_by_id"))
 		}
 		return nil, fmt.Errorf("get permission %s: %w", id, err)
 	}
@@ -56,7 +57,7 @@ func (r *permissionRepository) GetByName(ctx context.Context, name string) (*aut
 	row, err := r.tm.Queries(ctx).GetPermissionByName(ctx, name)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get permission by name %s: %w", name, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("permission", appErrors.WithOp("repo.permission.get_by_name"))
 		}
 		return nil, fmt.Errorf("get permission by name %s: %w", name, err)
 	}
@@ -70,7 +71,7 @@ func (r *permissionRepository) GetByResourceAction(ctx context.Context, resource
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get permission %s:%s: %w", resource, action, authDomain.ErrNotFound)
+			return nil, appErrors.NotFound("permission", appErrors.WithOp("repo.permission.get_by_resource_action"))
 		}
 		return nil, fmt.Errorf("get permission %s:%s: %w", resource, action, err)
 	}
@@ -214,10 +215,10 @@ func (r *permissionRepository) GetUserPermissionsByAPIKey(ctx context.Context, a
 
 func (r *permissionRepository) ValidateResourceAction(ctx context.Context, resource, action string) error {
 	if resource == "" {
-		return fmt.Errorf("validate permission resource: %w", authDomain.ErrInvalidCredentials)
+		return appErrors.InvalidParam("resource", "resource is required", appErrors.WithOp("repo.permission.validate_resource_action"))
 	}
 	if action == "" {
-		return fmt.Errorf("validate permission action: %w", authDomain.ErrInvalidCredentials)
+		return appErrors.InvalidParam("action", "action is required", appErrors.WithOp("repo.permission.validate_resource_action"))
 	}
 	return nil
 }

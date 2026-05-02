@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/transport/http/httpctx"
 	appErrors "brokle/pkg/errors"
@@ -13,18 +11,9 @@ import (
 	"brokle/pkg/response"
 )
 
-// registerSDKOps wires the SDK-plane span-query routes onto r. Called
-// from RegisterSDKRoutes in handlers.go.
-func registerSDKOps(r chi.Router, h *sdkHandler) {
-	r.Route("/v1/spans/query", func(r chi.Router) {
-		r.Post("/", h.querySpans)
-		r.Post("/validate", h.validateFilter)
-	})
-}
-
 // ---- query spans ----------------------------------------------------
 
-func (h *sdkHandler) querySpans(w http.ResponseWriter, r *http.Request) {
+func (h *SDKHandler) QuerySpans(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context()).String()
 
 	var body SpanQueryRequest
@@ -78,7 +67,7 @@ func (h *sdkHandler) querySpans(w http.ResponseWriter, r *http.Request) {
 
 // ---- validate filter -----------------------------------------------
 
-func (h *sdkHandler) validateFilter(w http.ResponseWriter, r *http.Request) {
+func (h *SDKHandler) ValidateFilter(w http.ResponseWriter, r *http.Request) {
 	// RequireSDKAuth middleware guarantees a project is present.
 	_ = httpctx.MustGetProjectID(r.Context())
 
@@ -99,11 +88,7 @@ func (h *sdkHandler) validateFilter(w http.ResponseWriter, r *http.Request) {
 func parseRFC3339(v, field string) (*time.Time, error) {
 	ts, err := time.Parse(time.RFC3339, v)
 	if err != nil {
-		return nil, appErrors.NewValidationError(
-			"Invalid "+field,
-			field+" must be an RFC3339 timestamp",
-			appErrors.WithParam(field),
-		)
+		return nil, appErrors.InvalidParam(field, "must be an RFC3339 timestamp")
 	}
 	return &ts, nil
 }

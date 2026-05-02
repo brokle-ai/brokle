@@ -11,6 +11,7 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // organizationBillingRepository is the pgx+sqlc implementation of
@@ -29,7 +30,7 @@ func (r *organizationBillingRepository) GetByOrgID(ctx context.Context, orgID uu
 	row, err := r.tm.Queries(ctx).GetOrganizationBillingByOrgID(ctx, orgID)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewBillingNotFoundError(orgID.String())
+			return nil, appErrors.NotFound("billing_account", appErrors.WithOp("repo.billing.organization.get_by_org_id"))
 		}
 		return nil, fmt.Errorf("get organization billing for %s: %w", orgID, err)
 	}

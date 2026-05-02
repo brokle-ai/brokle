@@ -48,7 +48,6 @@ CREATE TABLE organization_members (
     user_id UUID NOT NULL,
     organization_id UUID NOT NULL,
     role_id UUID NOT NULL,
-    status VARCHAR(20) DEFAULT 'active', -- 'active', 'invited', 'suspended'
     joined_at TIMESTAMP DEFAULT NOW(),
     invited_by UUID,
     PRIMARY KEY (user_id, organization_id),
@@ -61,14 +60,12 @@ CREATE TABLE organization_members (
 CREATE INDEX idx_org_members_org ON organization_members(organization_id);
 CREATE INDEX idx_org_members_user ON organization_members(user_id);
 CREATE INDEX idx_org_members_role ON organization_members(role_id);
-CREATE INDEX idx_org_members_status ON organization_members(status);
 
 -- 5. Future: Project Membership (Extensible Pattern)
 CREATE TABLE project_members (
     user_id UUID NOT NULL,
     project_id UUID NOT NULL,
     role_id UUID NOT NULL,
-    status VARCHAR(20) DEFAULT 'active',
     joined_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (user_id, project_id),
     FOREIGN KEY (role_id) REFERENCES roles(id),

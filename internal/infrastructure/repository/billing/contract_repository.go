@@ -10,6 +10,7 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // contractRepository is the pgx+sqlc implementation of
@@ -76,7 +77,7 @@ func (r *contractRepository) GetByID(ctx context.Context, id uuid.UUID) (*billin
 	row, err := r.tm.Queries(ctx).GetContractByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewContractNotFoundError(id.String())
+			return nil, appErrors.NotFound("billing_contract", appErrors.WithOp("repo.billing.contract.get_by_id"))
 		}
 		return nil, fmt.Errorf("get contract %s: %w", id, err)
 	}
@@ -152,7 +153,7 @@ func (r *contractRepository) Expire(ctx context.Context, contractID uuid.UUID) e
 		return fmt.Errorf("expire contract %s: %w", contractID, err)
 	}
 	if n == 0 {
-		return billingDomain.NewContractNotFoundError(contractID.String())
+		return appErrors.NotFound("billing_contract", appErrors.WithOp("repo.billing.contract.expire"))
 	}
 	return nil
 }
@@ -163,7 +164,7 @@ func (r *contractRepository) Cancel(ctx context.Context, contractID uuid.UUID) e
 		return fmt.Errorf("cancel contract %s: %w", contractID, err)
 	}
 	if n == 0 {
-		return billingDomain.NewContractNotFoundError(contractID.String())
+		return appErrors.NotFound("billing_contract", appErrors.WithOp("repo.billing.contract.cancel"))
 	}
 	return nil
 }

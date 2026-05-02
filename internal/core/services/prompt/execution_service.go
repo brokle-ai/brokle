@@ -130,16 +130,16 @@ func (s *ExecutionService) ExecuteStream(ctx context.Context, prompt *promptDoma
 		// Template compile failure is a user-input error (bad template
 		// variables, malformed template). Cross-boundary classification
 		// as validation so handlers emit 422, not 500.
-		return nil, nil, appErrors.NewValidationError("failed to compile template", err.Error())
+		return nil, nil, appErrors.InvalidParam("template", "failed to compile template: "+err.Error(), appErrors.WithCause(err))
 	}
 
 	effectiveConfig := s.mergeConfig(nil, configOverrides)
 	if effectiveConfig == nil || effectiveConfig.Model == "" {
-		return nil, nil, appErrors.NewValidationError("no model specified in config", "")
+		return nil, nil, appErrors.InvalidParam("config", "no model specified in config")
 	}
 
 	if effectiveConfig.Provider == "" {
-		return nil, nil, appErrors.NewValidationError("provider not specified in config", "")
+		return nil, nil, appErrors.InvalidParam("config", "provider not specified in config")
 	}
 	provider := AIModelProvider(effectiveConfig.Provider)
 
@@ -304,7 +304,7 @@ func (s *ExecutionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 
 	case ProviderAzure:
 		if config.ResolvedBaseURL == nil || *config.ResolvedBaseURL == "" {
-			return "", "", "", appErrors.NewValidationError("Azure OpenAI requires base URL", "configure base_url in provider credentials")
+			return "", "", "", appErrors.InvalidParam("provider_credentials", "Azure OpenAI requires base URL: configure base_url in provider credentials")
 		}
 
 		// Extract deployment_id from ProviderConfig
@@ -315,7 +315,7 @@ func (s *ExecutionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 			}
 		}
 		if deploymentID == "" {
-			return "", "", "", appErrors.NewValidationError("Azure OpenAI requires deployment_id", "configure deployment_id in provider credentials config")
+			return "", "", "", appErrors.InvalidParam("provider_credentials", "Azure OpenAI requires deployment_id: configure deployment_id in provider credentials config")
 		}
 
 		// Build correct Azure endpoint: {baseURL}/openai/deployments/{deployment_id}
@@ -333,14 +333,14 @@ func (s *ExecutionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 
 	case ProviderCustom:
 		if config.ResolvedBaseURL == nil || *config.ResolvedBaseURL == "" {
-			return "", "", "", appErrors.NewValidationError("Custom provider requires base URL", "configure base_url in provider credentials")
+			return "", "", "", appErrors.InvalidParam("provider_credentials", "Custom provider requires base URL: configure base_url in provider credentials")
 		}
 		baseURL = *config.ResolvedBaseURL
 		authHeader = "Authorization"
 		authValue = "Bearer " + config.APIKey
 
 	default:
-		return "", "", "", appErrors.NewValidationError("provider not OpenAI-compatible", string(provider))
+		return "", "", "", appErrors.InvalidParam("provider", "provider not OpenAI-compatible: "+string(provider))
 	}
 
 	return baseURL, authHeader, authValue, nil
@@ -348,7 +348,7 @@ func (s *ExecutionService) getOpenAICompatibleConfig(provider AIModelProvider, c
 
 func (s *ExecutionService) executeOpenAICompatible(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig, provider AIModelProvider) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, appErrors.NewValidationError("API key not provided", fmt.Sprintf("%s API key must be provided via project credentials", provider))
+		return nil, appErrors.InvalidParam("api_key", fmt.Sprintf("API key not provided: %s API key must be provided via project credentials", provider))
 	}
 
 	baseURL, authHeader, authValue, err := s.getOpenAICompatibleConfig(provider, config)
@@ -374,7 +374,7 @@ func (s *ExecutionService) executeOpenAICompatible(ctx context.Context, promptTy
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.InvalidParam("messages", "invalid compiled chat messages")
 		}
 		req.Messages = make([]openAIMessage, len(messages))
 		for i, msg := range messages {
@@ -388,7 +388,7 @@ func (s *ExecutionService) executeOpenAICompatible(ctx context.Context, promptTy
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.InvalidParam("template", "invalid compiled text prompt")
 		}
 		// Text prompts use chat API with user role
 		req.Messages = []openAIMessage{
@@ -397,7 +397,7 @@ func (s *ExecutionService) executeOpenAICompatible(ctx context.Context, promptTy
 		endpoint = baseURL + "/chat/completions"
 
 	default:
-		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.InvalidParam("prompt_type", "unsupported prompt type: "+string(promptType))
 	}
 
 	// Add api-version query param for Azure
@@ -516,7 +516,7 @@ type anthropicResponse struct {
 
 func (s *ExecutionService) executeAnthropic(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, appErrors.NewValidationError("API key not provided", "Anthropic API key must be provided via project credentials")
+		return nil, appErrors.InvalidParam("api_key", "API key not provided: Anthropic API key must be provided via project credentials")
 	}
 
 	baseURL := "https://api.anthropic.com"
@@ -541,7 +541,7 @@ func (s *ExecutionService) executeAnthropic(ctx context.Context, promptType prom
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.InvalidParam("messages", "invalid compiled chat messages")
 		}
 
 		// Anthropic uses separate system field instead of system role message
@@ -561,14 +561,14 @@ func (s *ExecutionService) executeAnthropic(ctx context.Context, promptType prom
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.InvalidParam("template", "invalid compiled text prompt")
 		}
 		req.Messages = []anthropicMessage{
 			{Role: "user", Content: text},
 		}
 
 	default:
-		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.InvalidParam("prompt_type", "unsupported prompt type: "+string(promptType))
 	}
 
 	body, err := json.Marshal(req)
@@ -805,7 +805,7 @@ type geminiError struct {
 // Uses x-goog-api-key header for security (API keys in URLs get logged).
 func (s *ExecutionService) executeGemini(ctx context.Context, promptType promptDomain.PromptType, compiled any, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
 	if config.APIKey == "" {
-		return nil, appErrors.NewValidationError("API key not provided", "Gemini API key must be provided via project credentials")
+		return nil, appErrors.InvalidParam("api_key", "API key not provided: Gemini API key must be provided via project credentials")
 	}
 
 	baseURL := "https://generativelanguage.googleapis.com/v1beta"
@@ -826,7 +826,7 @@ func (s *ExecutionService) executeGemini(ctx context.Context, promptType promptD
 	case promptDomain.PromptTypeChat:
 		messages, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled chat messages", "")
+			return nil, appErrors.InvalidParam("messages", "invalid compiled chat messages")
 		}
 
 		var contents []geminiContent
@@ -854,7 +854,7 @@ func (s *ExecutionService) executeGemini(ctx context.Context, promptType promptD
 	case promptDomain.PromptTypeText:
 		text, ok := compiled.(string)
 		if !ok {
-			return nil, appErrors.NewValidationError("invalid compiled text prompt", "")
+			return nil, appErrors.InvalidParam("template", "invalid compiled text prompt")
 		}
 		req.Contents = []geminiContent{
 			{
@@ -864,7 +864,7 @@ func (s *ExecutionService) executeGemini(ctx context.Context, promptType promptD
 		}
 
 	default:
-		return nil, appErrors.NewValidationError("unsupported prompt type: "+string(promptType), "")
+		return nil, appErrors.InvalidParam("prompt_type", "unsupported prompt type: "+string(promptType))
 	}
 
 	body, err := json.Marshal(req)

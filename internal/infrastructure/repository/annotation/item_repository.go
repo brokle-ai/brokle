@@ -10,9 +10,9 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
+	appErrors "brokle/pkg/errors"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
-	appErrors "brokle/pkg/errors"
 )
 
 type itemRepository struct {
@@ -42,9 +42,9 @@ func (r *itemRepository) Create(ctx context.Context, item *annotationDomain.Queu
 		Metadata:        meta,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return annotationDomain.ErrItemExists
+			return appErrors.AlreadyExists("annotation_item", appErrors.WithOp("repo.annotation.item.create"), appErrors.WithCause(err))
 		}
-		return err
+		return appErrors.Internal("create annotation item", err, appErrors.WithOp("repo.annotation.item.create"))
 	}
 	return nil
 }
@@ -99,9 +99,9 @@ func (r *itemRepository) GetByID(ctx context.Context, id uuid.UUID) (*annotation
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueItemByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, annotationDomain.ErrItemNotFound
+			return nil, appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.get_by_id"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get annotation item", err, appErrors.WithOp("repo.annotation.item.get_by_id"))
 	}
 	return itemFromRow(&row)
 }
@@ -113,9 +113,9 @@ func (r *itemRepository) GetByIDForQueue(ctx context.Context, id, queueID uuid.U
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, annotationDomain.ErrItemNotFound
+			return nil, appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.get_by_id_for_queue"))
 		}
-		return nil, err
+		return nil, appErrors.Internal("get annotation item", err, appErrors.WithOp("repo.annotation.item.get_by_id_for_queue"))
 	}
 	return itemFromRow(&row)
 }
@@ -181,10 +181,10 @@ func (r *itemRepository) Update(ctx context.Context, item *annotationDomain.Queu
 		Metadata:        meta,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("update annotation item", err, appErrors.WithOp("repo.annotation.item.update"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrItemNotFound
+		return appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.update"))
 	}
 	return nil
 }
@@ -195,10 +195,10 @@ func (r *itemRepository) Delete(ctx context.Context, id, queueID uuid.UUID) erro
 		QueueID: queueID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("delete annotation item", err, appErrors.WithOp("repo.annotation.item.delete"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrItemNotFound
+		return appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.delete"))
 	}
 	return nil
 }
@@ -244,9 +244,11 @@ func (r *itemRepository) FetchAndLockNext(ctx context.Context, queueID, userID u
 	item, err := scanItem(row)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, annotationDomain.ErrNoItemsAvailable
+			return nil, appErrors.NotFound("annotation_item",
+				appErrors.WithMessage("no items available for annotation"),
+				appErrors.WithOp("repo.annotation.item.fetch_and_lock_next"))
 		}
-		return nil, fmt.Errorf("claim next annotation item: %w", err)
+		return nil, appErrors.Internal("claim next annotation item", err, appErrors.WithOp("repo.annotation.item.fetch_and_lock_next"))
 	}
 	return item, nil
 }
@@ -257,10 +259,10 @@ func (r *itemRepository) Complete(ctx context.Context, id, userID uuid.UUID) err
 		AnnotatorUserID: &userID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("complete annotation item", err, appErrors.WithOp("repo.annotation.item.complete"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrItemNotFound
+		return appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.complete"))
 	}
 	return nil
 }
@@ -271,10 +273,10 @@ func (r *itemRepository) Skip(ctx context.Context, id, userID uuid.UUID) error {
 		AnnotatorUserID: &userID,
 	})
 	if err != nil {
-		return err
+		return appErrors.Internal("skip annotation item", err, appErrors.WithOp("repo.annotation.item.skip"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrItemNotFound
+		return appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.skip"))
 	}
 	return nil
 }
@@ -282,10 +284,10 @@ func (r *itemRepository) Skip(ctx context.Context, id, userID uuid.UUID) error {
 func (r *itemRepository) ReleaseLock(ctx context.Context, id uuid.UUID) error {
 	n, err := r.tm.Queries(ctx).ReleaseAnnotationQueueItemLock(ctx, id)
 	if err != nil {
-		return err
+		return appErrors.Internal("release annotation item lock", err, appErrors.WithOp("repo.annotation.item.release_lock"))
 	}
 	if n == 0 {
-		return annotationDomain.ErrItemNotFound
+		return appErrors.NotFound("annotation_item", appErrors.WithOp("repo.annotation.item.release_lock"))
 	}
 	return nil
 }

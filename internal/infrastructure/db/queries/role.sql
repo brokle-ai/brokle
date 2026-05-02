@@ -6,17 +6,17 @@
 
 -- name: CreateRole :exec
 INSERT INTO roles (
-    id, name, scope_type, scope_id, description, created_at, updated_at
+    id, name, scope_type, description, created_at, updated_at, scope_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 );
 
 -- name: GetRoleByID :one
-SELECT * FROM roles WHERE id = $1 LIMIT 1;
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles WHERE id = $1 LIMIT 1;
 
 -- name: GetRoleByNameAndScopeType :one
 -- Template (system) roles have no scope_id; the query matches on that.
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE name = $1
   AND scope_type = $2
   AND scope_id IS NULL
@@ -25,7 +25,7 @@ LIMIT 1;
 -- name: GetRoleByNameScopeAndID :one
 -- Custom-scope role lookup: same (name, scope_type) combo as above but
 -- with an explicit scope_id.
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE name = $1
   AND scope_type = $2
   AND scope_id = $3
@@ -44,27 +44,27 @@ WHERE id = $1;
 DELETE FROM roles WHERE id = $1;
 
 -- name: ListRolesByScopeType :many
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE scope_type = $1
 ORDER BY name ASC;
 
 -- name: ListAllRoles :many
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 ORDER BY scope_type ASC, name ASC;
 
 -- name: ListSystemRoles :many
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE scope_type = 'system' AND scope_id IS NULL
 ORDER BY name ASC;
 
 -- name: ListCustomRolesByScopeID :many
 -- Custom roles attached to a specific organization / project.
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE scope_type = $1 AND scope_id = $2
 ORDER BY name ASC;
 
 -- name: ListCustomRolesByOrganization :many
-SELECT * FROM roles
+SELECT id, name, scope_type, description, created_at, updated_at, scope_id FROM roles
 WHERE scope_type = 'organization' AND scope_id = $1
 ORDER BY name ASC;
 

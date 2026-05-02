@@ -31,7 +31,7 @@ func (r *labelRepository) Create(ctx context.Context, l *promptDomain.Label) err
 		CreatedBy: l.CreatedBy,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create prompt label %s: %w", l.Name, promptDomain.ErrLabelAlreadyExists)
+			return appErrors.AlreadyExists("prompt_label", appErrors.WithOp("repo.prompt_label.create"))
 		}
 		return fmt.Errorf("create prompt label %s: %w", l.Name, err)
 	}
@@ -42,7 +42,7 @@ func (r *labelRepository) GetByID(ctx context.Context, id uuid.UUID) (*promptDom
 	row, err := r.tm.Queries(ctx).GetPromptLabelByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get label by ID %s: %w", id, promptDomain.ErrLabelNotFound)
+			return nil, appErrors.NotFound("prompt_label", appErrors.WithOp("repo.prompt_label.get_by_id"))
 		}
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (r *labelRepository) GetByPromptAndName(ctx context.Context, promptID uuid.
 	})
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get label %s: %w", name, promptDomain.ErrLabelNotFound)
+			return nil, appErrors.NotFound("prompt_label", appErrors.WithOp("repo.prompt_label.get_by_prompt_and_name"))
 		}
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (r *labelRepository) RemoveLabel(ctx context.Context, promptID uuid.UUID, n
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("remove label %s: %w", name, promptDomain.ErrLabelNotFound)
+		return appErrors.NotFound("prompt_label", appErrors.WithOp("repo.prompt_label.remove_label"))
 	}
 	return nil
 }

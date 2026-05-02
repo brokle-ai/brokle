@@ -86,7 +86,7 @@ function AlertCard({
         <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         <div>
           <p className="text-sm font-medium">
-            {dimensionLabels[alert.dimension]} at {alert.percent_used.toFixed(0)}%
+            {dimensionLabels[alert.dimension]} at {parseFloat(alert.percent_used).toFixed(0)}%
           </p>
           <p className="text-xs text-muted-foreground">
             {new Date(alert.triggered_at).toLocaleString()}

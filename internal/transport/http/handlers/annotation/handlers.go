@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	annotationDomain "brokle/internal/core/domain/annotation"
@@ -24,61 +23,21 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	queueSvc      *annotationService.QueueService
 	itemSvc       *annotationService.ItemService
 	assignmentSvc *annotationService.AssignmentService
 	logger        *slog.Logger
 }
 
-// RegisterRoutes mounts the dashboard-plane annotation routes on r.
-// Expected mount context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// newHandler builds the shared handler.
+func New(
 	queueSvc *annotationService.QueueService,
 	itemSvc *annotationService.ItemService,
 	assignmentSvc *annotationService.AssignmentService,
 	logger *slog.Logger,
-) {
-	h := &handler{queueSvc: queueSvc, itemSvc: itemSvc, assignmentSvc: assignmentSvc, logger: logger}
-
-	r.Route("/api/v1/projects/{projectId}/annotation-queues", func(r chi.Router) {
-		r.Post("/", h.createQueue)
-		r.Get("/", h.listQueues)
-		r.Route("/{queueId}", func(r chi.Router) {
-			r.Get("/", h.getQueue)
-			r.Get("/stats", h.getQueueWithStats)
-			r.Put("/", h.updateQueue)
-			r.Delete("/", h.deleteQueue)
-			r.Post("/items", h.addItems)
-			r.Get("/items", h.listItems)
-			r.Post("/items/claim", h.claimNext)
-			r.Post("/items/{itemId}/complete", h.completeItem)
-			r.Post("/items/{itemId}/skip", h.skipItem)
-			r.Post("/items/{itemId}/release", h.releaseLock)
-			r.Delete("/items/{itemId}", h.deleteItem)
-			r.Post("/assignments", h.assignUser)
-			r.Get("/assignments", h.listAssignments)
-			r.Delete("/assignments/{userId}", h.unassignUser)
-		})
-	})
-
-	r.Get("/api/v1/annotation-queues/my-assignments", h.myAssignments)
-}
-
-// RegisterSDKRoutes mounts the SDK-plane annotation routes on r
-// (project derived from the API key).
-func RegisterSDKRoutes(
-	r chi.Router,
-	itemSvc *annotationService.ItemService,
-	logger *slog.Logger,
-) {
-	h := &handler{itemSvc: itemSvc, logger: logger}
-
-	r.Route("/v1/annotation-queues/{queueId}/items", func(r chi.Router) {
-		r.Post("/", h.sdkAddItems)
-		r.Get("/", h.sdkListItems)
-	})
+) *Handler {
+	return &Handler{queueSvc: queueSvc, itemSvc: itemSvc, assignmentSvc: assignmentSvc, logger: logger}
 }
 
 // ---- shared helpers --------------------------------------------------
@@ -93,12 +52,8 @@ func userIDPtr(ctx context.Context) *uuid.UUID {
 
 // ---- queue: create ---------------------------------------------------
 
-func (h *handler) createQueue(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateQueue(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 
 	var body CreateQueueRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -131,12 +86,8 @@ func (h *handler) createQueue(w http.ResponseWriter, r *http.Request) {
 
 // ---- queue: list -----------------------------------------------------
 
-func (h *handler) listQueues(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListQueues(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 
 	page, err := request.QueryInt(r, "page", 1)
 	if err != nil {
@@ -184,12 +135,8 @@ func (h *handler) listQueues(w http.ResponseWriter, r *http.Request) {
 
 // ---- queue: get / get-with-stats ------------------------------------
 
-func (h *handler) getQueue(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -203,12 +150,8 @@ func (h *handler) getQueue(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, toQueueResponse(queue))
 }
 
-func (h *handler) getQueueWithStats(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetQueueWithStats(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -227,12 +170,8 @@ func (h *handler) getQueueWithStats(w http.ResponseWriter, r *http.Request) {
 
 // ---- queue: update --------------------------------------------------
 
-func (h *handler) updateQueue(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdateQueue(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -272,12 +211,8 @@ func (h *handler) updateQueue(w http.ResponseWriter, r *http.Request) {
 
 // ---- queue: delete --------------------------------------------------
 
-func (h *handler) deleteQueue(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteQueue(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -292,12 +227,8 @@ func (h *handler) deleteQueue(w http.ResponseWriter, r *http.Request) {
 
 // ---- items: add / list ---------------------------------------------
 
-func (h *handler) addItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) AddItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -312,7 +243,7 @@ func (h *handler) addItems(w http.ResponseWriter, r *http.Request) {
 	h.doAddItems(w, r, projectID, queueID, body)
 }
 
-func (h *handler) doAddItems(w http.ResponseWriter, r *http.Request, projectID, queueID uuid.UUID, body AddItemsBatchRequest) {
+func (h *Handler) doAddItems(w http.ResponseWriter, r *http.Request, projectID, queueID uuid.UUID, body AddItemsBatchRequest) {
 	domainReq := &annotationDomain.AddItemsBatchRequest{
 		Items: make([]annotationDomain.AddItemRequest, len(body.Items)),
 	}
@@ -334,12 +265,8 @@ func (h *handler) doAddItems(w http.ResponseWriter, r *http.Request, projectID, 
 	response.Created(w, &BatchAddItemsResponse{Created: count})
 }
 
-func (h *handler) listItems(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListItems(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -348,7 +275,7 @@ func (h *handler) listItems(w http.ResponseWriter, r *http.Request) {
 	h.doListItems(w, r, projectID, queueID)
 }
 
-func (h *handler) doListItems(w http.ResponseWriter, r *http.Request, projectID, queueID uuid.UUID) {
+func (h *Handler) doListItems(w http.ResponseWriter, r *http.Request, projectID, queueID uuid.UUID) {
 	page, err := request.QueryInt(r, "page", 1)
 	if err != nil {
 		response.WriteError(w, err)
@@ -389,12 +316,8 @@ func (h *handler) doListItems(w http.ResponseWriter, r *http.Request, projectID,
 
 // ---- items: claim-next ---------------------------------------------
 
-func (h *handler) claimNext(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ClaimNext(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -425,12 +348,8 @@ func (h *handler) claimNext(w http.ResponseWriter, r *http.Request) {
 
 // ---- items: complete / skip / release-lock -------------------------
 
-func (h *handler) completeItem(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CompleteItem(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -472,12 +391,8 @@ func (h *handler) completeItem(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) skipItem(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) SkipItem(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -510,12 +425,8 @@ func (h *handler) skipItem(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) releaseLock(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ReleaseLock(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -538,12 +449,8 @@ func (h *handler) releaseLock(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) deleteItem(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -563,12 +470,8 @@ func (h *handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 
 // ---- assignments ---------------------------------------------------
 
-func (h *handler) assignUser(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) AssignUser(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -596,12 +499,8 @@ func (h *handler) assignUser(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, toAssignmentResponse(assignment))
 }
 
-func (h *handler) listAssignments(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -619,12 +518,8 @@ func (h *handler) listAssignments(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, out)
 }
 
-func (h *handler) unassignUser(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UnassignUser(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -642,7 +537,7 @@ func (h *handler) unassignUser(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-func (h *handler) myAssignments(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) MyAssignments(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	assignments, err := h.assignmentSvc.GetUserQueues(r.Context(), userID)
 	if err != nil {
@@ -658,7 +553,7 @@ func (h *handler) myAssignments(w http.ResponseWriter, r *http.Request) {
 
 // ---- SDK handlers --------------------------------------------------
 
-func (h *handler) sdkAddItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkAddItems(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {
@@ -673,7 +568,7 @@ func (h *handler) sdkAddItems(w http.ResponseWriter, r *http.Request) {
 	h.doAddItems(w, r, projectID, queueID, body)
 }
 
-func (h *handler) sdkListItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SdkListItems(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	queueID, err := request.URLParamUUID(r, "queueId")
 	if err != nil {

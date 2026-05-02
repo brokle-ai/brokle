@@ -5,7 +5,7 @@ export { BrokleAPIError } from './types'
 // Type exports
 export type {
   APIClientConfig,
-  RequestConfig,
+  RequestOptions,
   RequestInterceptor,
   ResponseInterceptor,
 } from './types'

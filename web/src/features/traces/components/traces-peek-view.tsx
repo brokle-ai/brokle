@@ -108,7 +108,7 @@ export function TracesPeekView() {
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: traceQueryKeys.spans(projectId!, peekId!),
+    queryKey: traceQueryKeys.traceSpans(projectId!, peekId!),
     queryFn: () => getSpansForTrace(projectId!, peekId!),
     enabled: !!projectId && !!peekId && !!trace,
     staleTime: 30_000,

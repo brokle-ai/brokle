@@ -18,22 +18,26 @@ INSERT INTO usage_budgets (
 );
 
 -- name: GetUsageBudgetByID :one
-SELECT * FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE id = $1
 LIMIT 1;
 
 -- name: ListUsageBudgetsByOrg :many
-SELECT * FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE organization_id = $1
 ORDER BY created_at DESC;
 
 -- name: ListUsageBudgetsByProject :many
-SELECT * FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE project_id = $1
 ORDER BY created_at DESC;
 
 -- name: ListActiveUsageBudgetsByOrg :many
-SELECT * FROM usage_budgets
+SELECT id, organization_id, project_id, name, budget_type, span_limit, bytes_limit, score_limit, cost_limit, current_spans, current_bytes, current_scores, current_cost, alert_thresholds, is_active, created_at, updated_at
+FROM usage_budgets
 WHERE organization_id = $1 AND is_active = TRUE
 ORDER BY created_at DESC;
 

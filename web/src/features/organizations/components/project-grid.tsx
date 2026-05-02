@@ -8,7 +8,6 @@ import {
   Search,
 } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
-import { useOrganizationProjects } from '../hooks/use-organization-projects'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +22,7 @@ import { CreateProjectDialog } from '@/features/projects'
 import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/layout/page-header'
-import type { Project, ProjectStatus } from '../types'
+import type { ProjectStatus, ProjectSummary } from '../types'
 
 interface ProjectGridProps {
   className?: string
@@ -33,9 +32,14 @@ interface ProjectGridProps {
 export function ProjectGrid({ className, showCreateButton = true }: ProjectGridProps) {
   const router = useRouter()
   const { currentOrganization } = useWorkspace()
-  const { data } = useOrganizationProjects()
 
-  const projects = data ?? []
+  // Project list is the discoverable subset surfaced by /api/v1/users/me
+  // (Langfuse session-bootstrap pattern). RBAC-correct: a project-
+  // collaborator user without org_projects:list still sees their
+  // override projects here without a 403 round trip. Mutation paths
+  // invalidate ['workspace'] (use-project-queries.ts), so create /
+  // rename / delete refresh this view automatically.
+  const projects = currentOrganization?.projects ?? []
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
@@ -87,7 +91,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
     return num.toString()
   }
 
-  const handleProjectClick = (project: Project) => {
+  const handleProjectClick = (project: ProjectSummary) => {
     const projectUrl = buildProjectUrl(project.name, project.id)
     router.push(projectUrl)
   }

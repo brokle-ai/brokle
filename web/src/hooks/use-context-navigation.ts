@@ -8,11 +8,12 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useWorkspace } from '@/context/workspace-context'
 import { parsePathContext, extractIdFromCompositeSlug, generateCompositeSlug } from '@/lib/utils/slug-utils'
-import type { Organization, Project } from '@/features/organizations'
+import type { Project } from '@/features/organizations'
+import type { OrganizationWithProjects } from '@/features/authentication'
 
 export interface ContextNavigationHooks {
   // Current context
-  currentOrganization: Organization | null
+  currentOrganization: OrganizationWithProjects | null
   currentProject: Project | null
   isLoading: boolean
 

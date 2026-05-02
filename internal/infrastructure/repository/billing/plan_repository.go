@@ -9,6 +9,7 @@ import (
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 // planRepository is the pgx+sqlc implementation of
@@ -47,7 +48,7 @@ func (r *planRepository) GetByID(ctx context.Context, id uuid.UUID) (*billingDom
 	row, err := r.tm.Queries(ctx).GetPlanByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewPlanNotFoundError(id.String())
+			return nil, appErrors.NotFound("billing_plan", appErrors.WithOp("repo.billing.plan.get_by_id"))
 		}
 		return nil, fmt.Errorf("get plan %s: %w", id, err)
 	}
@@ -58,7 +59,7 @@ func (r *planRepository) GetByName(ctx context.Context, name string) (*billingDo
 	row, err := r.tm.Queries(ctx).GetPlanByName(ctx, name)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewPlanNotFoundError(name)
+			return nil, appErrors.NotFound("billing_plan", appErrors.WithOp("repo.billing.plan.get_by_name"))
 		}
 		return nil, fmt.Errorf("get plan by name %s: %w", name, err)
 	}
@@ -69,7 +70,7 @@ func (r *planRepository) GetDefault(ctx context.Context) (*billingDomain.Plan, e
 	row, err := r.tm.Queries(ctx).GetDefaultPlan(ctx)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, billingDomain.NewPlanNotFoundError("default")
+			return nil, appErrors.NotFound("billing_plan", appErrors.WithOp("repo.billing.plan.get_default"))
 		}
 		return nil, fmt.Errorf("get default plan: %w", err)
 	}

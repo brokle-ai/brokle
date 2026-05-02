@@ -26,61 +26,20 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	promptSvc   *promptService.PromptService
 	compilerSvc *promptService.CompilerService
 	logger      *slog.Logger
 }
 
-// RegisterRoutes mounts the dashboard-plane prompt routes on r.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs a Handler with all services any prompt Register* function
+// might need (dashboard + SDK).
+func New(
 	promptSvc *promptService.PromptService,
 	compilerSvc *promptService.CompilerService,
 	logger *slog.Logger,
-) {
-	h := &handler{promptSvc: promptSvc, compilerSvc: compilerSvc, logger: logger}
-
-	r.Route("/api/v1/projects/{projectId}/prompts", func(r chi.Router) {
-		r.Get("/", h.listPrompts)
-		r.Post("/", h.createPrompt)
-
-		// settings + compiler helpers live under the prompts root.
-		r.Get("/settings/protected-labels", h.getProtectedLabels)
-		r.Put("/settings/protected-labels", h.setProtectedLabels)
-		r.Post("/validate-template", h.validateTemplate)
-		r.Post("/preview-template", h.previewTemplate)
-		r.Post("/detect-dialect", h.detectDialect)
-
-		r.Route("/{promptId}", func(r chi.Router) {
-			r.Get("/", h.getPrompt)
-			r.Put("/", h.updatePrompt)
-			r.Delete("/", h.deletePrompt)
-			r.Get("/diff", h.getVersionDiff)
-			r.Route("/versions", func(r chi.Router) {
-				r.Get("/", h.listVersions)
-				r.Post("/", h.createVersion)
-				r.Get("/{versionId}", h.getVersion)
-				r.Patch("/{versionId}/labels", h.setLabels)
-			})
-		})
-	})
-}
-
-// RegisterSDKRoutes mounts the SDK-plane prompt routes on r. Project ID is
-// derived from the API key.
-func RegisterSDKRoutes(
-	r chi.Router,
-	promptSvc *promptService.PromptService,
-	logger *slog.Logger,
-) {
-	h := &handler{promptSvc: promptSvc, logger: logger}
-
-	r.Route("/v1/prompts", func(r chi.Router) {
-		r.Post("/", h.upsertPrompt)
-		r.Get("/", h.listPromptsSDK)
-		r.Get("/{name}", h.getPromptByName)
-	})
+) *Handler {
+	return &Handler{promptSvc: promptSvc, compilerSvc: compilerSvc, logger: logger}
 }
 
 // ---- shared helpers --------------------------------------------------
@@ -103,10 +62,7 @@ func buildPromptFilters(r *http.Request) (*promptDomain.PromptFilters, error) {
 	if t := q.Get("type"); t != "" {
 		pt := promptDomain.PromptType(t)
 		if pt != promptDomain.PromptTypeText && pt != promptDomain.PromptTypeChat {
-			return nil, appErrors.NewValidationError(
-				"Invalid type", "type must be 'text' or 'chat'",
-				appErrors.WithParam("type"),
-			)
+			return nil, appErrors.InvalidParam("type", "must be 'text' or 'chat'")
 		}
 		filters.Type = &pt
 	}
@@ -143,12 +99,8 @@ func buildPromptFilters(r *http.Request) (*promptDomain.PromptFilters, error) {
 
 // ---- prompts: list ---------------------------------------------------
 
-func (h *handler) listPrompts(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListPrompts(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	filters, err := buildPromptFilters(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -171,29 +123,19 @@ func (h *handler) listPrompts(w http.ResponseWriter, r *http.Request) {
 
 // ---- prompts: create -------------------------------------------------
 
-func (h *handler) createPrompt(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body promptDomain.CreatePromptRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name is required"))
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "prompt template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "prompt template is required"))
 		return
 	}
 	prompt, version, labels, err := h.promptSvc.CreatePrompt(r.Context(), projectID, userIDPtr(r.Context()), &body)
@@ -207,12 +149,8 @@ func (h *handler) createPrompt(w http.ResponseWriter, r *http.Request) {
 
 // ---- prompts: get ----------------------------------------------------
 
-func (h *handler) getPrompt(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetPrompt(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -238,12 +176,8 @@ func (h *handler) getPrompt(w http.ResponseWriter, r *http.Request) {
 
 // ---- prompts: update -------------------------------------------------
 
-func (h *handler) updatePrompt(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -266,12 +200,8 @@ func (h *handler) updatePrompt(w http.ResponseWriter, r *http.Request) {
 
 // ---- prompts: delete -------------------------------------------------
 
-func (h *handler) deletePrompt(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DeletePrompt(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -288,12 +218,8 @@ func (h *handler) deletePrompt(w http.ResponseWriter, r *http.Request) {
 
 // ---- versions: list --------------------------------------------------
 
-func (h *handler) listVersions(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ListVersions(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -311,12 +237,8 @@ func (h *handler) listVersions(w http.ResponseWriter, r *http.Request) {
 
 // ---- versions: create ------------------------------------------------
 
-func (h *handler) createVersion(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) CreateVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -328,10 +250,7 @@ func (h *handler) createVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	version, labels, err := h.promptSvc.CreateVersion(r.Context(), projectID, promptID, userIDPtr(r.Context()), &body)
@@ -346,12 +265,8 @@ func (h *handler) createVersion(w http.ResponseWriter, r *http.Request) {
 
 // ---- versions: get (ID or version-number) ---------------------------
 
-func (h *handler) getVersion(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetVersion(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -371,11 +286,7 @@ func (h *handler) getVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	versionID, err := uuid.Parse(raw)
 	if err != nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid version ID",
-			"versionId must be a valid UUID or integer version number",
-			appErrors.WithParam("versionId"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("versionId", "must be a valid UUID or integer version number"))
 		return
 	}
 	resp, err := h.promptSvc.GetVersionByID(r.Context(), projectID, promptID, versionID)
@@ -390,12 +301,8 @@ func (h *handler) getVersion(w http.ResponseWriter, r *http.Request) {
 
 // ---- versions: diff --------------------------------------------------
 
-func (h *handler) getVersionDiff(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetVersionDiff(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -423,12 +330,8 @@ func (h *handler) getVersionDiff(w http.ResponseWriter, r *http.Request) {
 
 // ---- labels: set on version -----------------------------------------
 
-func (h *handler) setLabels(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) SetLabels(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	promptID, err := request.URLParamUUID(r, "promptId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -459,12 +362,8 @@ func (h *handler) setLabels(w http.ResponseWriter, r *http.Request) {
 
 // ---- labels: protected (get / set) ----------------------------------
 
-func (h *handler) getProtectedLabels(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetProtectedLabels(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	labels, err := h.promptSvc.GetProtectedLabels(r.Context(), projectID)
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "prompt: get-protected-labels failed",
@@ -478,12 +377,8 @@ func (h *handler) getProtectedLabels(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, protectedLabelsResponse{ProtectedLabels: labels})
 }
 
-func (h *handler) setProtectedLabels(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) SetProtectedLabels(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	var body promptDomain.ProtectedLabelsRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -504,28 +399,18 @@ func (h *handler) setProtectedLabels(w http.ResponseWriter, r *http.Request) {
 
 // ---- compiler helpers: validate / preview / detect-dialect ---------
 
-func (h *handler) validateTemplate(w http.ResponseWriter, r *http.Request) {
-	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) ValidateTemplate(w http.ResponseWriter, r *http.Request) {
 	var body ValidateTemplateRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 
@@ -567,35 +452,22 @@ func (h *handler) validateTemplate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) previewTemplate(w http.ResponseWriter, r *http.Request) {
-	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) PreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	var body PreviewTemplateRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Variables == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing variables", "variables is required",
-			appErrors.WithParam("variables"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("variables", "variables is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 
@@ -619,16 +491,14 @@ func (h *handler) previewTemplate(w http.ResponseWriter, r *http.Request) {
 	case promptDomain.PromptTypeText:
 		content, ok := compiled.(string)
 		if !ok {
-			response.WriteError(w, appErrors.NewInternalError(
-				"unexpected compilation result type for text template", nil))
+			response.WriteError(w, appErrors.Internal("unexpected compilation result type for text template", nil))
 			return
 		}
 		wrapped = promptDomain.TextTemplate{Content: content}
 	case promptDomain.PromptTypeChat:
 		msgs, ok := compiled.([]promptDomain.ChatMessage)
 		if !ok {
-			response.WriteError(w, appErrors.NewInternalError(
-				"unexpected compilation result type for chat template", nil))
+			response.WriteError(w, appErrors.Internal("unexpected compilation result type for chat template", nil))
 			return
 		}
 		wrapped = promptDomain.ChatTemplate{Messages: msgs}
@@ -638,28 +508,18 @@ func (h *handler) previewTemplate(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, PreviewTemplateResponse{Compiled: wrapped, Dialect: dialect})
 }
 
-func (h *handler) detectDialect(w http.ResponseWriter, r *http.Request) {
-	if _, err := request.URLParamUUID(r, "projectId"); err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) DetectDialect(w http.ResponseWriter, r *http.Request) {
 	var body DetectDialectRequest
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "template is required"))
 		return
 	}
 	if body.Type != promptDomain.PromptTypeText && body.Type != promptDomain.PromptTypeChat {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Invalid type", "type must be 'text' or 'chat'",
-			appErrors.WithParam("type"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("type", "must be 'text' or 'chat'"))
 		return
 	}
 	dialect, err := h.compilerSvc.DetectDialect(body.Template, body.Type)
@@ -672,7 +532,7 @@ func (h *handler) detectDialect(w http.ResponseWriter, r *http.Request) {
 
 // ---- SDK: upsert ----------------------------------------------------
 
-func (h *handler) upsertPrompt(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpsertPrompt(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 
 	var body promptDomain.UpsertPromptRequest
@@ -681,17 +541,11 @@ func (h *handler) upsertPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name is required"))
 		return
 	}
 	if body.Template == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing template", "prompt template is required",
-			appErrors.WithParam("template"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("template", "prompt template is required"))
 		return
 	}
 	result, err := h.promptSvc.UpsertPrompt(r.Context(), projectID, nil, &body)
@@ -706,7 +560,7 @@ func (h *handler) upsertPrompt(w http.ResponseWriter, r *http.Request) {
 
 // ---- SDK: list ------------------------------------------------------
 
-func (h *handler) listPromptsSDK(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListPromptsSDK(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	filters, err := buildPromptFilters(r)
 	if err != nil {
@@ -730,14 +584,11 @@ func (h *handler) listPromptsSDK(w http.ResponseWriter, r *http.Request) {
 
 // ---- SDK: get by name ----------------------------------------------
 
-func (h *handler) getPromptByName(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetPromptByName(w http.ResponseWriter, r *http.Request) {
 	projectID := httpctx.MustGetProjectID(r.Context())
 	name := chi.URLParam(r, "name")
 	if name == "" {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Missing name", "prompt name path parameter is required",
-			appErrors.WithParam("name"),
-		))
+		response.WriteError(w, appErrors.InvalidParam("name", "prompt name path parameter is required"))
 		return
 	}
 
@@ -748,10 +599,7 @@ func (h *handler) getPromptByName(w http.ResponseWriter, r *http.Request) {
 	if versionStr := r.URL.Query().Get("version"); versionStr != "" {
 		v, err := strconv.Atoi(versionStr)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid version", "version must be an integer",
-				appErrors.WithParam("version"),
-			))
+			response.WriteError(w, appErrors.InvalidParam("version", "must be an integer"))
 			return
 		}
 		if v > 0 {
@@ -762,10 +610,7 @@ func (h *handler) getPromptByName(w http.ResponseWriter, r *http.Request) {
 	if cacheTTLStr := r.URL.Query().Get("cache_ttl"); cacheTTLStr != "" {
 		t, err := strconv.Atoi(cacheTTLStr)
 		if err != nil {
-			response.WriteError(w, appErrors.NewValidationError(
-				"Invalid cache_ttl", "cache_ttl must be an integer",
-				appErrors.WithParam("cache_ttl"),
-			))
+			response.WriteError(w, appErrors.InvalidParam("cache_ttl", "must be an integer"))
 			return
 		}
 		if t > 0 {

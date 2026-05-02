@@ -239,11 +239,7 @@ ALTER TABLE user_profiles        ALTER COLUMN timezone SET NOT NULL;
 ALTER TABLE user_profiles        ALTER COLUMN language SET NOT NULL;
 ALTER TABLE user_profiles        ALTER COLUMN theme    SET NOT NULL;
 
-UPDATE organization_members      SET status = 'active'    WHERE status IS NULL;
-UPDATE project_members           SET status = 'active'    WHERE status IS NULL;
 UPDATE usage_alerts              SET status = 'triggered' WHERE status IS NULL;
-ALTER TABLE organization_members ALTER COLUMN status SET NOT NULL;
-ALTER TABLE project_members      ALTER COLUMN status SET NOT NULL;
 ALTER TABLE usage_alerts         ALTER COLUMN status SET NOT NULL;
 
 -- =====================================================================

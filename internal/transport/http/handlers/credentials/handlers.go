@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	analyticsDomain "brokle/internal/core/domain/analytics"
@@ -35,42 +34,19 @@ type ModelCatalog interface {
 	GetAvailableModels(ctx context.Context, orgID uuid.UUID) ([]*analyticsDomain.AvailableModel, error)
 }
 
-type handler struct {
+type Handler struct {
 	svc     CredentialService
 	catalog ModelCatalog
 	logger  *slog.Logger
 }
 
-// RegisterRoutes registers every credential operation on the provided
-// chi router. Expected mount context: the authed dashboard group
-// (RequireAuth + LimitByUser already applied).
-func RegisterRoutes(
-	r chi.Router,
-	svc CredentialService,
-	catalog ModelCatalog,
-	logger *slog.Logger,
-) {
-	h := &handler{svc: svc, catalog: catalog, logger: logger}
-
-	r.Route("/api/v1/organizations/{orgId}/credentials/ai", func(r chi.Router) {
-		r.Post("/", h.create)
-		r.Get("/", h.list)
-		r.Get("/{credentialId}", h.get)
-		r.Patch("/{credentialId}", h.update)
-		r.Delete("/{credentialId}", h.delete)
-		r.Post("/test", h.testConnection)
-		r.Get("/models", h.getAvailableModels)
-	})
+// New constructs a Handler with all required services.
+func New(svc CredentialService, catalog ModelCatalog, logger *slog.Logger) *Handler {
+	return &Handler{svc: svc, catalog: catalog, logger: logger}
 }
 
-// ---------------------------------------------------------------------------
-
-func (h *handler) create(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 
 	var body createCredentialBody
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -97,12 +73,8 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, cred)
 }
 
-func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	creds, err := h.svc.List(r.Context(), orgID)
 	if err != nil {
 		response.WriteError(w, err)
@@ -111,12 +83,8 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, creds)
 }
 
-func (h *handler) get(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -130,12 +98,8 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, cred)
 }
 
-func (h *handler) update(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -163,12 +127,8 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, cred)
 }
 
-func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	credID, err := request.URLParamUUID(r, "credentialId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -185,11 +145,7 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 // success and probe-level failure so the caller can render field-
 // level feedback. Only input-validation / auth failures emit the
 // standard error envelope.
-func (h *handler) testConnection(w http.ResponseWriter, r *http.Request) {
-	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) TestConnection(w http.ResponseWriter, r *http.Request) {
 
 	var body testConnectionBody
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -207,12 +163,8 @@ func (h *handler) testConnection(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *handler) getAvailableModels(w http.ResponseWriter, r *http.Request) {
-	orgID, err := request.URLParamUUID(r, "orgId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) GetAvailableModels(w http.ResponseWriter, r *http.Request) {
+	orgID := httpctx.MustGetOrganizationID(r.Context())
 	models, err := h.catalog.GetAvailableModels(r.Context(), orgID)
 	if err != nil {
 		response.WriteError(w, err)

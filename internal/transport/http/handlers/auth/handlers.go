@@ -20,7 +20,7 @@ import (
 
 // ----- login ---------------------------------------------------------
 
-func (h *handler) login(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var body loginBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -43,14 +43,14 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.logger.ErrorContext(r.Context(),
 			"login: user fetch failed after successful credentials",
 			"email", body.Email, "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Failed to complete authentication", err))
+		response.WriteError(w, appErrors.Internal("Failed to complete authentication", err))
 		return
 	}
 
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "login: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 
 // ----- signup --------------------------------------------------------
 
-func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var body signupBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -69,9 +69,8 @@ func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body.InvitationToken == nil && body.OrganizationName == nil {
-		response.WriteError(w, appErrors.NewValidationError(
-			"Signup requires either organization_name or invitation_token",
-			"Provide organization_name for a fresh signup, or invitation_token to join an existing organization",
+		response.WriteError(w, appErrors.BadRequest(
+			"signup requires either organization_name or invitation_token: provide organization_name for a fresh signup, or invitation_token to join an existing organization",
 		))
 		return
 	}
@@ -106,7 +105,7 @@ func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "signup: CSRF token generation failed", "error", err)
-		response.WriteError(w, appErrors.NewInternalError("Authentication setup failed", err))
+		response.WriteError(w, appErrors.Internal("Authentication setup failed", err))
 		return
 	}
 
@@ -118,7 +117,7 @@ func (h *handler) signup(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-current-user (/me) ---------------------------------------
 
-func (h *handler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	claims := httpctx.MustGetTokenClaims(r.Context())
 
@@ -142,7 +141,7 @@ func (h *handler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-profile ---------------------------------------------------
 
-func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	u, err := h.userSvc.GetUser(r.Context(), userID)
 	if err != nil {
@@ -156,7 +155,7 @@ func (h *handler) getProfile(w http.ResponseWriter, r *http.Request) {
 
 // ----- update-profile -----------------------------------------------
 
-func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body updateAuthProfileBody
@@ -200,7 +199,7 @@ func (h *handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 
 // ----- sessions list -------------------------------------------------
 
-func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessions, err := h.sessionSvc.GetUserSessions(r.Context(), userID)
 	if err != nil {
@@ -214,7 +213,7 @@ func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
 
 // ----- session get ---------------------------------------------------
 
-func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "session_id")
 	if err != nil {
@@ -229,7 +228,7 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 	if sess.UserID != userID {
 		h.logger.WarnContext(r.Context(), "get-session: cross-user access attempt",
 			"actor", userID, "session_id", sessionID, "owner", sess.UserID)
-		response.WriteError(w, appErrors.NewNotFoundError("Session"))
+		response.WriteError(w, appErrors.NotFound("session"))
 		return
 	}
 	response.Success(w, sess)
@@ -237,7 +236,7 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 // ----- session revoke -----------------------------------------------
 
-func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	sessionID, err := request.URLParamUUID(r, "session_id")
 	if err != nil {
@@ -252,7 +251,7 @@ func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
 	if sess.UserID != userID {
 		h.logger.WarnContext(r.Context(), "revoke-session: cross-user access attempt",
 			"actor", userID, "session_id", sessionID, "owner", sess.UserID)
-		response.WriteError(w, appErrors.NewNotFoundError("Session"))
+		response.WriteError(w, appErrors.NotFound("session"))
 		return
 	}
 	if err := h.sessionSvc.RevokeSession(r.Context(), sessionID); err != nil {
@@ -268,7 +267,7 @@ func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
 
 // ----- sessions revoke-all ------------------------------------------
 
-func (h *handler) revokeAllSessions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RevokeAllSessions(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	if err := h.authSvc.RevokeAllSessions(r.Context(), userID); err != nil {
 		h.logger.WarnContext(r.Context(), "revoke-all-sessions: failed",
@@ -283,7 +282,7 @@ func (h *handler) revokeAllSessions(w http.ResponseWriter, r *http.Request) {
 
 // ----- logout --------------------------------------------------------
 
-func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := httpctx.MustGetTokenClaims(r.Context())
 
 	if err := h.authSvc.Logout(r.Context(), claims.JWTID, claims.UserID); err != nil {
@@ -300,12 +299,12 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 
 // ----- refresh-tokens -----------------------------------------------
 
-func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(cookieNameRefresh)
 	if err != nil || cookie.Value == "" {
 		h.logger.WarnContext(r.Context(), "refresh: missing refresh_token cookie")
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewUnauthorizedError("Refresh token not found"))
+		response.WriteError(w, appErrors.Unauthenticated("Refresh token not found"))
 		return
 	}
 
@@ -315,7 +314,7 @@ func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.WarnContext(r.Context(), "refresh: token validation failed", "error", err)
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewUnauthorizedError("Refresh token invalid or expired"))
+		response.WriteError(w, appErrors.Unauthenticated("Refresh token invalid or expired"))
 		return
 	}
 
@@ -323,7 +322,7 @@ func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "refresh: CSRF token generation failed", "error", err)
 		clearAuthCookies(w, h.cfg.Server.CookieDomain)
-		response.WriteError(w, appErrors.NewInternalError("Token refresh setup failed", err))
+		response.WriteError(w, appErrors.Internal("Token refresh setup failed", err))
 		return
 	}
 
@@ -339,7 +338,7 @@ func (h *handler) refresh(w http.ResponseWriter, r *http.Request) {
 
 // ----- forgot-password ----------------------------------------------
 
-func (h *handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var body forgotPasswordBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -365,7 +364,7 @@ func (h *handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 
 // ----- reset-password -----------------------------------------------
 
-func (h *handler) resetPassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var body resetPasswordBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -378,13 +377,13 @@ func (h *handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	h.logger.WarnContext(r.Context(),
 		"reset-password endpoint hit — service-layer completion not yet implemented",
 		"token_prefix", body.Token[:prefixLen])
-	response.WriteError(w, appErrors.NewNotImplementedError(
+	response.WriteError(w, appErrors.NotImplemented("", 
 		"Password reset completion is not yet implemented in the service layer"))
 }
 
 // ----- change-password ----------------------------------------------
 
-func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body changePasswordBody

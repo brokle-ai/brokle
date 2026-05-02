@@ -36,15 +36,7 @@ export interface User {
   updatedAt: string
   lastLoginAt?: string
   isEmailVerified: boolean
-  organizations?: OrganizationWithProjects[]  // NEW: Organizations with nested projects
-
-  // TODO: Add when implementing backend-integrated permission system
-  // permissions?: Permission[]  // User's calculated permissions for current context
-  // organizationMemberships?: Array<{
-  //   organizationId: string
-  //   role: OrganizationRole  // Backend compatibility
-  //   permissions: Permission[]  // Calculated permissions for this org
-  // }>
+  organizations?: OrganizationWithProjects[]  // Organizations with nested projects
 }
 
 export interface Organization {
@@ -52,7 +44,6 @@ export interface Organization {
   name: string
   plan: SubscriptionPlan
   members: OrganizationMember[]
-  apiKeys: ApiKey[]
   usage: UsageStats
   createdAt: string
   updatedAt: string
@@ -69,66 +60,18 @@ export interface Project {
   id: string
   name: string
   organizationId: string
-  apiKeys: ApiKey[]
   settings: ProjectSettings
   createdAt: string
   updatedAt: string
 }
 
-export interface ApiKey {
-  id: string
-  name: string
-  key: string
-  permissions: Permission[]
-  lastUsed?: string
-  createdAt: string
-  expiresAt?: string
-}
-
-// TODO: These role types are kept for backend compatibility
-// Frontend should use Permission-based access control instead of role checking
+// Role types are kept for backend compatibility. Permission-based access
+// control is sourced from `@/generated/permissions` (codegenned from
+// seeds/permissions.yaml) — `OrganizationScope` / `ProjectScope` / `Scope`.
 export type UserRole = 'user' | 'admin' | 'super_admin'
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
 
 export type SubscriptionPlan = 'free' | 'pro' | 'business' | 'enterprise'
-
-export type Permission = 
-  | 'auth:read' 
-  | 'auth:write' 
-  | 'analytics:read' 
-  | 'analytics:write'
-  | 'models:read' 
-  | 'models:write'
-  | 'costs:read' 
-  | 'costs:write'
-  | 'settings:read' 
-  | 'settings:write'
-  | 'members:read'
-  | 'members:write'
-  | 'members:manage'
-  | 'billing:read'
-  | 'billing:write'
-  | 'projects:read'
-  | 'projects:write'
-  | 'projects:create'
-  | 'projects:delete'
-
-// TODO: Utility types for future permission-based system
-// export type PermissionCategory = 'auth' | 'analytics' | 'models' | 'costs' | 'settings' | 'members' | 'billing' | 'projects'
-// export type PermissionAction = 'read' | 'write' | 'create' | 'delete' | 'manage'
-// 
-// export interface PermissionCheck {
-//   required: Permission | Permission[]
-//   requireAll?: boolean
-// }
-//
-// export interface UserPermissions {
-//   organizationId: string
-//   permissions: Permission[]
-//   lastUpdated: string
-// }
-
-// UsageStats removed - now imported from organizations (snake_case)
 
 export interface AuthTokens {
   accessToken: string
@@ -208,6 +151,12 @@ export interface OrganizationWithProjects {
   compositeSlug: string
   plan: SubscriptionPlan
   role: OrganizationRole
+  /**
+   * The user's resolved org-tier permissions for this organization,
+   * populated by /v1/users/me. Read synchronously by
+   * useHasOrganizationAccess — no per-check API round trip.
+   */
+  scopes: string[]
   billing_email?: string
   createdAt: string
   updatedAt: string

@@ -2,7 +2,7 @@
 // Direct functions using optimal backend endpoints
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { RequestOptions } from '@/lib/api/core/types'
+import type { PaginatedResponse, RequestOptions } from '@/lib/api/core/types'
 import type { Organization, Project, OrganizationMember, ProjectStatus } from '../types'
 
 // API response types matching backend
@@ -72,20 +72,6 @@ export const getOrganizationById = async (organizationId: string): Promise<Organ
     return mapOrganizationFromAPI(response)
   }
 
-export const getOrganizationProjects = async (organizationId: string, page = 1, limit = 20): Promise<Project[]> => {
-    const response = await client.get<ProjectAPIResponse[]>(
-      `/v1/projects`,
-      {
-        organization_id: organizationId,
-        page,
-        limit
-      }
-    )
-
-    return response.map(mapProjectFromAPI)
-  }
-
-
 export const getProjectById = async (projectId: string): Promise<Project> => {
     const response = await client.get<ProjectAPIResponse>(
       `/v1/projects/${projectId}`
@@ -153,12 +139,14 @@ export const createProject = async (organizationId: string, data: {
     name: string
     description?: string
   }): Promise<Project> => {
+    // Tenancy is in the URL; the request body must NOT carry
+    // organization_id (the request DTO rejects unknown fields with 422
+    // via DisallowUnknownFields). See CLAUDE.md gotcha #41.
     const response = await client.post<ProjectAPIResponse>(
-      `/v1/projects`,
+      `/v1/organizations/${organizationId}/projects`,
       {
         name: data.name,
         description: data.description,
-        organization_id: organizationId,
       }
     )
 

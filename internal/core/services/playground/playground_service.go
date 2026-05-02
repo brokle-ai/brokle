@@ -4,7 +4,6 @@ package playground
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -13,9 +12,9 @@ import (
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 	credentials "brokle/internal/core/services/credentials"
 	promptService "brokle/internal/core/services/prompt"
-	appErrors "brokle/pkg/errors"
 	"brokle/pkg/uid"
 )
 
@@ -46,18 +45,18 @@ func NewPlaygroundService(
 // All sessions are saved (no ephemeral sessions).
 func (s *PlaygroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreatePlaygroundSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	if req.Name == "" {
-		return nil, appErrors.NewValidationError("name required", "name is required")
+		return nil, appErrors.InvalidParam("name", "required", appErrors.WithDetails("name is required"))
 	}
 	if len(req.Name) > playgroundDomain.MaxNameLength {
-		return nil, appErrors.NewValidationError("name too long", "name must be 200 characters or less")
+		return nil, appErrors.InvalidParam("name", "too long", appErrors.WithDetails("name must be 200 characters or less"))
 	}
 
 	if len(req.Windows) == 0 {
-		return nil, appErrors.NewValidationError("windows required", "windows must be provided")
+		return nil, appErrors.InvalidParam("windows", "required", appErrors.WithDetails("windows must be provided"))
 	}
 
 	if len(req.Tags) > playgroundDomain.MaxTagsCount {
-		return nil, appErrors.NewValidationError("too many tags", "maximum 10 tags allowed")
+		return nil, appErrors.InvalidParam("tags", "too many", appErrors.WithDetails("maximum 10 tags allowed"))
 	}
 
 	now := time.Now()
@@ -95,7 +94,7 @@ func (s *PlaygroundService) CreateSession(ctx context.Context, req *playgroundDo
 			"error", err,
 			"project_id", req.ProjectID,
 		)
-		return nil, appErrors.NewInternalError("failed to create session", err)
+		return nil, appErrors.Internal("failed to create session", err)
 	}
 
 	s.logger.Info("playground session created",
@@ -110,10 +109,7 @@ func (s *PlaygroundService) CreateSession(ctx context.Context, req *playgroundDo
 func (s *PlaygroundService) GetSession(ctx context.Context, sessionID uuid.UUID) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, sessionID)
 	if err != nil {
-		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return nil, appErrors.NewNotFoundError("session not found")
-		}
-		return nil, appErrors.NewInternalError("failed to retrieve session", err)
+		return nil, err
 	}
 
 	return session.ToResponse(), nil
@@ -138,7 +134,7 @@ func (s *PlaygroundService) ListSessions(ctx context.Context, req *playgroundDom
 	}
 
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list sessions", err)
+		return nil, err
 	}
 
 	summaries := make([]*playgroundDomain.PlaygroundSessionSummary, len(sessions))
@@ -152,15 +148,12 @@ func (s *PlaygroundService) ListSessions(ctx context.Context, req *playgroundDom
 func (s *PlaygroundService) UpdateSession(ctx context.Context, req *playgroundDomain.UpdateSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, req.SessionID)
 	if err != nil {
-		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return nil, appErrors.NewNotFoundError("session not found")
-		}
-		return nil, appErrors.NewInternalError("failed to retrieve session", err)
+		return nil, err
 	}
 
 	if req.Name != nil {
 		if len(*req.Name) > playgroundDomain.MaxNameLength {
-			return nil, appErrors.NewValidationError("name too long", "name must be 200 characters or less")
+			return nil, appErrors.InvalidParam("name", "too long", appErrors.WithDetails("name must be 200 characters or less"))
 		}
 		session.Name = req.Name
 	}
@@ -169,7 +162,7 @@ func (s *PlaygroundService) UpdateSession(ctx context.Context, req *playgroundDo
 	}
 	if req.Tags != nil {
 		if len(req.Tags) > playgroundDomain.MaxTagsCount {
-			return nil, appErrors.NewValidationError("too many tags", "maximum 10 tags allowed")
+			return nil, appErrors.InvalidParam("tags", "too many", appErrors.WithDetails("maximum 10 tags allowed"))
 		}
 		session.Tags = req.Tags
 	}
@@ -191,7 +184,7 @@ func (s *PlaygroundService) UpdateSession(ctx context.Context, req *playgroundDo
 			"error", err,
 			"session_id", req.SessionID,
 		)
-		return nil, appErrors.NewInternalError("failed to update session", err)
+		return nil, err
 	}
 
 	return session.ToResponse(), nil
@@ -199,10 +192,7 @@ func (s *PlaygroundService) UpdateSession(ctx context.Context, req *playgroundDo
 
 func (s *PlaygroundService) DeleteSession(ctx context.Context, sessionID uuid.UUID) error {
 	if err := s.repo.Delete(ctx, sessionID); err != nil {
-		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("session not found")
-		}
-		return appErrors.NewInternalError("failed to delete session", err)
+		return err
 	}
 
 	s.logger.Info("playground session deleted",
@@ -214,23 +204,22 @@ func (s *PlaygroundService) DeleteSession(ctx context.Context, sessionID uuid.UU
 
 func (s *PlaygroundService) UpdateLastRun(ctx context.Context, req *playgroundDomain.UpdateLastRunRequest) error {
 	if req.LastRun == nil {
-		return appErrors.NewValidationError("last run required", "last_run cannot be empty")
+		return appErrors.InvalidParam("last_run", "is required", appErrors.WithDetails("last_run cannot be empty"))
 	}
 
 	lastRunJSON, err := json.Marshal(req.LastRun)
 	if err != nil {
-		return appErrors.NewInternalError("failed to serialize last run", err)
+		return appErrors.Internal("failed to serialize last run", err)
 	}
 
 	if err := s.repo.UpdateLastRun(ctx, req.SessionID, playgroundDomain.JSON(lastRunJSON)); err != nil {
-		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("session not found")
+		if !appErrors.IsNotFound(err) {
+			s.logger.Error("failed to update last run",
+				"error", err,
+				"session_id", req.SessionID,
+			)
 		}
-		s.logger.Error("failed to update last run",
-			"error", err,
-			"session_id", req.SessionID,
-		)
-		return appErrors.NewInternalError("failed to update last run", err)
+		return err
 	}
 
 	return nil
@@ -238,14 +227,13 @@ func (s *PlaygroundService) UpdateLastRun(ctx context.Context, req *playgroundDo
 
 func (s *PlaygroundService) UpdateWindows(ctx context.Context, sessionID uuid.UUID, windows json.RawMessage) error {
 	if err := s.repo.UpdateWindows(ctx, sessionID, playgroundDomain.JSON(windows)); err != nil {
-		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
-			return appErrors.NewNotFoundError("session not found")
+		if !appErrors.IsNotFound(err) {
+			s.logger.Error("failed to update windows",
+				"error", err,
+				"session_id", sessionID,
+			)
 		}
-		s.logger.Error("failed to update windows",
-			"error", err,
-			"session_id", sessionID,
-		)
-		return appErrors.NewInternalError("failed to update windows", err)
+		return err
 	}
 
 	return nil
@@ -254,10 +242,10 @@ func (s *PlaygroundService) UpdateWindows(ctx context.Context, sessionID uuid.UU
 func (s *PlaygroundService) ValidateProjectAccess(ctx context.Context, sessionID uuid.UUID, projectID uuid.UUID) error {
 	exists, err := s.repo.ExistsByProjectID(ctx, sessionID, projectID)
 	if err != nil {
-		return appErrors.NewInternalError("failed to validate access", err)
+		return err
 	}
 	if !exists {
-		return appErrors.NewNotFoundError("session not found")
+		return appErrors.NotFound("session", appErrors.WithOp("service.playground.validate_project_access"))
 	}
 	return nil
 }
@@ -269,7 +257,7 @@ func (s *PlaygroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 
 	variables, err := s.compiler.ExtractVariables(req.Template, req.PromptType)
 	if err != nil {
-		return nil, appErrors.NewValidationError("invalid template", err.Error())
+		return nil, appErrors.InvalidParam("template", "invalid template", appErrors.WithDetails(err.Error()))
 	}
 
 	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
@@ -290,7 +278,7 @@ func (s *PlaygroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 			"project_id", req.ProjectID.String(),
 			"organization_id", req.OrganizationID.String(),
 		)
-		return nil, appErrors.NewInternalError("execution failed", err)
+		return nil, appErrors.Internal("execution failed", err)
 	}
 
 	// Update session last_run (async, non-blocking)
@@ -316,7 +304,7 @@ func (s *PlaygroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 
 	variables, err := s.compiler.ExtractVariables(req.Template, req.PromptType)
 	if err != nil {
-		return nil, appErrors.NewValidationError("invalid template", err.Error())
+		return nil, appErrors.InvalidParam("template", "invalid template", appErrors.WithDetails(err.Error()))
 	}
 
 	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
@@ -337,7 +325,7 @@ func (s *PlaygroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 			"project_id", req.ProjectID.String(),
 			"organization_id", req.OrganizationID.String(),
 		)
-		return nil, appErrors.NewInternalError("stream execution failed", err)
+		return nil, appErrors.Internal("stream execution failed", err)
 	}
 
 	// Wrap result channel to intercept for session update
@@ -358,33 +346,33 @@ func (s *PlaygroundService) resolveCredentials(ctx context.Context, orgID uuid.U
 
 	// Provider must be explicitly specified
 	if overrides.Provider == "" {
-		return nil, appErrors.NewValidationError("provider required", "provider must be specified")
+		return nil, appErrors.InvalidParam("provider", "required", appErrors.WithDetails("provider must be specified"))
 	}
 
 	// Credential ID is required (no fallback to adapter-based lookup)
 	if overrides.CredentialID == nil || *overrides.CredentialID == uuid.Nil {
-		return nil, appErrors.NewValidationError("credential required", "credential_id must be specified")
+		return nil, appErrors.InvalidParam("credential_id", "is required", appErrors.WithDetails("credential_id must be specified"))
 	}
 
 	if s.credentials == nil {
-		return nil, appErrors.NewInternalError("credentials service not configured", nil)
+		return nil, appErrors.Internal("credentials service not configured", nil)
 	}
 
 	credID := *overrides.CredentialID
 
 	keyConfig, err := s.credentials.GetExecutionConfig(ctx, orgID, credID, credentialsDomain.Provider(overrides.Provider))
 	if err != nil {
-		// Handle specific errors for better UX
-		if errors.Is(err, credentialsDomain.ErrAdapterMismatch) {
-			return nil, appErrors.NewValidationError("credential mismatch", err.Error())
+		// Pass typed *Error through — credentials service already
+		// emits canonical wire shapes (NotFound("credential") /
+		// Conflict("credential", "provider adapter mismatch: ...")).
+		// Downgrading Conflict → InvalidParam would hide the
+		// state-machine signal and turn a 409 into a 422 with a
+		// synthetic field-level param. Internal wrap is reserved
+		// for raw (non-typed) errors.
+		if appErrors.As(err) != nil {
+			return nil, err
 		}
-		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
-			return nil, appErrors.NewNotFoundError("credential not found")
-		}
-		if errors.Is(err, credentialsDomain.ErrNoKeyConfigured) {
-			return nil, appErrors.NewNotFoundError("no credentials configured")
-		}
-		return nil, appErrors.NewInternalError("failed to resolve credentials", err)
+		return nil, appErrors.Internal("failed to resolve credentials", err)
 	}
 
 	overrides.APIKey = keyConfig.APIKey

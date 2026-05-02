@@ -10,6 +10,7 @@ import (
 	observabilityDomain "brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/db"
 	"brokle/internal/infrastructure/db/gen"
+	appErrors "brokle/pkg/errors"
 )
 
 type filterPresetRepository struct {
@@ -44,7 +45,7 @@ func (r *filterPresetRepository) GetByID(ctx context.Context, id uuid.UUID) (*ob
 	row, err := r.tm.Queries(ctx).GetFilterPresetByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, observabilityDomain.ErrFilterPresetNotFound
+			return nil, appErrors.NotFound("filter_preset", appErrors.WithOp("repo.observability.filter_preset.get_by_id"))
 		}
 		return nil, fmt.Errorf("get filter preset by id: %w", err)
 	}
@@ -67,7 +68,7 @@ func (r *filterPresetRepository) Update(ctx context.Context, p *observabilityDom
 		return fmt.Errorf("update filter preset: %w", err)
 	}
 	if n == 0 {
-		return observabilityDomain.ErrFilterPresetNotFound
+		return appErrors.NotFound("filter_preset", appErrors.WithOp("repo.observability.filter_preset.update_or_delete"))
 	}
 	return nil
 }
@@ -78,7 +79,7 @@ func (r *filterPresetRepository) Delete(ctx context.Context, id uuid.UUID) error
 		return fmt.Errorf("delete filter preset: %w", err)
 	}
 	if n == 0 {
-		return observabilityDomain.ErrFilterPresetNotFound
+		return appErrors.NotFound("filter_preset", appErrors.WithOp("repo.observability.filter_preset.update_or_delete"))
 	}
 	return nil
 }

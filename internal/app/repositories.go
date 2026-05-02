@@ -66,6 +66,7 @@ func ProvideAuthRepositories(tm *db.TxManager) *AuthRepositories {
 		APIKey:             authRepo.NewAPIKeyRepository(tm),
 		Role:               authRepo.NewRoleRepository(tm),
 		OrganizationMember: authRepo.NewOrganizationMemberRepository(tm),
+		ProjectMember:      authRepo.NewProjectMemberRepository(tm),
 		Permission:         authRepo.NewPermissionRepository(tm),
 		RolePermission:     authRepo.NewRolePermissionRepository(tm),
 		AuditLog:           authRepo.NewAuditLogRepository(tm),

@@ -103,7 +103,6 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         role: 'owner',
         joinedAt: new Date().toISOString(),
       }],
-      apiKeys: [],
       usage: {
         traces_this_month: 0,
         observed_cost_this_month: 0,
@@ -208,7 +207,6 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
       name: selectedOrg.name,
       plan: selectedOrg.subscription_plan,
       members: [],
-      apiKeys: [],
       usage: {
         traces_this_month: 0,
         observed_cost_this_month: 0,
@@ -335,7 +333,6 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
       name: selectedOrg.name,
       plan: selectedOrg.subscription_plan,
       members: [],
-      apiKeys: [],
       usage: {
         traces_this_month: 0,
         observed_cost_this_month: 0,
@@ -434,7 +431,6 @@ export const completeOAuthSignup = async (data: {
     name: backendResponse.organization.name,
     plan: backendResponse.organization.subscription_plan,
     members: [],
-    apiKeys: [],
     usage: {
       traces_this_month: 0,
       observed_cost_this_month: 0,

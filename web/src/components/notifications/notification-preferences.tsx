@@ -461,7 +461,7 @@ export function NotificationPreferences() {
                             <Switch
                               checked={rule.channels.includes(channel.id)}
                               onCheckedChange={(checked) => updateRuleChannels(rule.id, channel.id, checked)}
-                              size="sm"
+                              className="scale-75"
                             />
                             <div className="flex items-center gap-1">
                               <channel.icon className="h-3 w-3" />

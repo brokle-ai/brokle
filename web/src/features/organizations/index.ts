@@ -2,7 +2,6 @@
 
 // Hooks
 export { useOrganizationOnly } from './hooks/use-organization-only'
-export { useOrganizationProjects } from './hooks/use-organization-projects'
 export { useCreateOrganizationMutation, useUpdateOrganizationMutation } from './hooks/use-organization-queries'
 
 // API Functions

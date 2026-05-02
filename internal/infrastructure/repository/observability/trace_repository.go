@@ -185,7 +185,7 @@ func statusHavingClauses(filter *observability.TraceFilter) (clauses []string, a
 	}
 
 	buildInClause := func(statuses []string, not bool) (string, []any) {
-		var codes []int32
+		codes := make([]int32, 0)
 		for _, s := range statuses {
 			if code := statusToCode(s); code >= 0 {
 				codes = append(codes, code)
@@ -229,14 +229,14 @@ func statusHavingClauses(filter *observability.TraceFilter) (clauses []string, a
 func ScanSpanRow(row driver.Row) (*observability.Span, error) {
 	var span observability.Span
 
-	var eventsTimestamps []time.Time
-	var eventsNames []string
-	var eventsAttributes []map[string]string
+	eventsTimestamps := make([]time.Time, 0)
+	eventsNames := make([]string, 0)
+	eventsAttributes := make([]map[string]string, 0)
 
-	var linksTraceIDs []string
-	var linksSpanIDs []string
-	var linksTraceStates []string
-	var linksAttributes []map[string]string
+	linksTraceIDs := make([]string, 0)
+	linksSpanIDs := make([]string, 0)
+	linksTraceStates := make([]string, 0)
+	linksAttributes := make([]map[string]string, 0)
 
 	err := row.Scan(
 		&span.SpanID,
@@ -298,14 +298,14 @@ func (r *traceRepository) scanSpans(rows driver.Rows) ([]*observability.Span, er
 	for rows.Next() {
 		var span observability.Span
 
-		var eventsTimestamps []time.Time
-		var eventsNames []string
-		var eventsAttributes []map[string]string
+		eventsTimestamps := make([]time.Time, 0)
+		eventsNames := make([]string, 0)
+		eventsAttributes := make([]map[string]string, 0)
 
-		var linksTraceIDs []string
-		var linksSpanIDs []string
-		var linksTraceStates []string
-		var linksAttributes []map[string]string
+		linksTraceIDs := make([]string, 0)
+		linksSpanIDs := make([]string, 0)
+		linksTraceStates := make([]string, 0)
+		linksAttributes := make([]map[string]string, 0)
 
 		err := rows.Scan(
 			&span.SpanID,
@@ -1000,7 +1000,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 	}
 	defer rows.Close()
 
-	var traces []*observability.TraceSummary
+	traces := make([]*observability.TraceSummary, 0)
 	for rows.Next() {
 		var trace observability.TraceSummary
 		var totalCostFloat float64
@@ -1436,7 +1436,7 @@ func (r *traceRepository) DiscoverAttributes(ctx context.Context, req *observabi
 	// Normalize request with defaults
 	observability.NormalizeAttributeDiscoveryRequest(req)
 
-	var allAttributes []observability.AttributeKey
+	allAttributes := make([]observability.AttributeKey, 0)
 
 	// Query each source separately for cleaner results
 	for _, source := range req.Sources {
@@ -1503,7 +1503,7 @@ func (r *traceRepository) discoverAttributesFromSource(ctx context.Context, proj
 	}
 	defer rows.Close()
 
-	var attributes []observability.AttributeKey
+	attributes := make([]observability.AttributeKey, 0)
 	for rows.Next() {
 		var key string
 		var count uint64
@@ -1725,7 +1725,7 @@ func (r *traceRepository) ListSessions(ctx context.Context, filter *observabilit
 	}
 	defer rows.Close()
 
-	var sessions []*observability.TraceSessionSummary
+	sessions := make([]*observability.TraceSessionSummary, 0)
 	for rows.Next() {
 		var session observability.TraceSessionSummary
 		var totalCostFloat float64

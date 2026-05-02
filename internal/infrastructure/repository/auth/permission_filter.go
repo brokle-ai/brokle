@@ -75,7 +75,7 @@ func (r *permissionRepository) runPermissionSearch(ctx context.Context, query st
 	}
 	defer rows.Close()
 
-	var out []*authDomain.Permission
+	out := make([]*authDomain.Permission, 0)
 	for rows.Next() {
 		p := &authDomain.Permission{}
 		var description, category *string

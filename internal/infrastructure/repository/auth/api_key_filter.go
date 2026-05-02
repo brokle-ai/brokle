@@ -45,7 +45,7 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 	}
 	defer rows.Close()
 
-	var out []*authDomain.APIKey
+	out := make([]*authDomain.APIKey, 0)
 	for rows.Next() {
 		a := &authDomain.APIKey{}
 		if err := rows.Scan(

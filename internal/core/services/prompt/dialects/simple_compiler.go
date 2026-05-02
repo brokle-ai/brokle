@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 )
 
 // Variable pattern matches simple Mustache-style variables: {{variable_name}}
@@ -44,7 +45,7 @@ func (c *simpleCompiler) ExtractVariables(content string) ([]string, error) {
 // Compile renders with string substitution; non-string values are JSON-serialized.
 func (c *simpleCompiler) Compile(content string, variables map[string]any) (string, error) {
 	if len(content) > promptDomain.MaxTemplateSize {
-		return "", promptDomain.NewTemplateTooLargeError(len(content), promptDomain.MaxTemplateSize)
+		return "", appErrors.BadRequest(fmt.Sprintf("template too large: size %d exceeds limit %d", len(content), promptDomain.MaxTemplateSize))
 	}
 
 	result := simpleVarPattern.ReplaceAllStringFunc(content, func(match string) string {

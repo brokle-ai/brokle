@@ -1,7 +1,7 @@
-// Package comment exposes /api/v1/traces/{id}/comments chi routes —
-// trace-attached discussion threads with reactions. Dashboard plane;
-// every op requires RequireAuth and a project_id query param for
-// tenant scoping.
+// Package comment exposes trace-attached comment chi routes —
+// discussion threads with reactions. Dashboard plane; mounted under
+// the project subgroup so tenant scoping (projectID) is sourced from
+// httpctx.MustGetProjectID rather than a query parameter.
 package comment
 
 import (
@@ -19,52 +19,31 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	svc    *commentService.CommentService
 	logger *slog.Logger
 }
 
-// RegisterRoutes mounts the comment routes on r. Expected mount
-// context: the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, svc *commentService.CommentService, logger *slog.Logger) {
-	h := &handler{svc: svc, logger: logger}
-
-	r.Route("/api/v1/traces/{id}/comments", func(r chi.Router) {
-		r.Post("/", h.create)
-		r.Get("/", h.list)
-		r.Get("/count", h.count)
-		r.Put("/{comment_id}", h.update)
-		r.Delete("/{comment_id}", h.delete)
-		r.Post("/{comment_id}/reactions", h.toggleReaction)
-		r.Post("/{comment_id}/replies", h.createReply)
-	})
+// New constructs a Handler with all required services.
+func New(svc *commentService.CommentService, logger *slog.Logger) *Handler {
+	return &Handler{svc: svc, logger: logger}
 }
 
-// parseScope validates the trace-ID path segment + the project_id
-// query param (tenant scoping). Returns a typed AppError on failure.
+// parseScope validates the trace-ID path segment and pulls the
+// projectID from context (set by RequireProjectAccess on the parent
+// chi subgroup). Returns a typed AppError on missing trace ID.
 func parseScope(r *http.Request) (traceID string, projectID uuid.UUID, err error) {
 	traceID = chi.URLParam(r, "id")
 	if traceID == "" {
-		return "", uuid.Nil, appErrors.NewValidationError(
-			"Missing trace ID", "id is required",
-			appErrors.WithParam("id"),
-		)
+		return "", uuid.Nil, appErrors.InvalidParam("id", "is required")
 	}
-	pidStr := r.URL.Query().Get("project_id")
-	projectID, perr := uuid.Parse(pidStr)
-	if perr != nil {
-		return "", uuid.Nil, appErrors.NewValidationError(
-			"Invalid project ID",
-			"project_id must be a valid UUID",
-			appErrors.WithParam("project_id"),
-		)
-	}
+	projectID = httpctx.MustGetProjectID(r.Context())
 	return traceID, projectID, nil
 }
 
 // ----- create-comment --------------------------------------------------
 
-func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -91,7 +70,7 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 
 // ----- list-comments ---------------------------------------------------
 
-func (h *handler) list(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -109,7 +88,7 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-comment-count -----------------------------------------------
 
-func (h *handler) count(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Count(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -125,7 +104,7 @@ func (h *handler) count(w http.ResponseWriter, r *http.Request) {
 
 // ----- update-comment --------------------------------------------------
 
-func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -155,7 +134,7 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 
 // ----- delete-comment --------------------------------------------------
 
-func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -177,7 +156,7 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 
 // ----- toggle-reaction -------------------------------------------------
 
-func (h *handler) toggleReaction(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)
@@ -207,7 +186,7 @@ func (h *handler) toggleReaction(w http.ResponseWriter, r *http.Request) {
 
 // ----- create-reply ----------------------------------------------------
 
-func (h *handler) createReply(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 	traceID, projectID, err := parseScope(r)
 	if err != nil {
 		response.WriteError(w, err)

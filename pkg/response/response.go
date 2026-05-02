@@ -12,15 +12,17 @@
 //     http helpers called by every handler.
 //   - BuildPagination — constructs the canonical Pagination metadata.
 //
-// Wire contract (Stripe / OpenAI / Anthropic style):
+// Wire contract (Stripe / OpenAI style):
 //
 //   - Success: raw resource body, HTTP status 2xx. No envelope.
-//   - Error:   `{"error":{"type":"...","code":"...","message":"...",...}}`,
+//   - Error:   `{"error":{"type":"...","message":"...",...}}`,
 //     HTTP status 4xx/5xx. No `success` boolean — status is the signal.
 //   - List:    `{"data":[...],"pagination":{...}}` inline. No outer meta.
 //
 // Request IDs surface as the `X-Request-Id` response header
-// (chi/middleware.RequestID installs it globally).
+// (chi/middleware.RequestID installs it globally), matching Stripe /
+// OpenAI / GitHub / Twilio / Cloudflare / Helicone convention.
+// Frontend + SDKs read the header via standard fetch APIs.
 package response
 
 import (
@@ -30,22 +32,29 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// APIError mirrors the Stripe / OpenAI / Anthropic shape.
+// APIError mirrors the Stripe / OpenAI shape.
 //
-//   - Type   — closed coarse classification clients switch on for
+//   - Type    — closed coarse classification clients switch on for
 //     retry / alert behaviour (e.g. "validation_error", "rate_limit").
-//   - Code   — open fine-grained domain code (snake_case) for SDK
-//     subclassing (e.g. "project_not_found", "quota_exceeded").
-//   - Errors — per-field validation diagnostics populated by
+//   - Code    — OPTIONAL open fine-grained domain code (snake_case)
+//     for SDK subclassing (e.g. "card_declined", "quota_exceeded").
+//     Populated only when an explicit code is set via WithCode at the
+//     call site — never defaults to Type. Stripe behaviour: emit the
+//     field only when it's programmatically actionable.
+//   - Errors  — per-field validation diagnostics populated by
 //     pkg/request.DecodeJSON. Empty on domain-level errors where a
 //     single Message suffices.
 //   - Details — free-form human-readable elaboration. Kept alongside
 //     Errors (not replaced by it) because many AppError call sites
 //     populate a single-string detail; machine-readable Errors is
 //     additive, not a replacement.
-//   - Param  — input field reference for single-field errors that
+//   - Param   — input field reference for single-field errors that
 //     predate the Errors array. New handler code should prefer
 //     Errors[].Location.
+//
+// Per-request correlation IDs live in the `X-Request-Id` response
+// header — matching Stripe / OpenAI / GitHub / Twilio / Cloudflare /
+// Helicone. NEVER add request_id to this struct.
 type APIError struct {
 	Type    string        `json:"type"`
 	Code    string        `json:"code,omitempty"`
@@ -108,10 +117,14 @@ func BuildPagination(page, limit int, total int64) *Pagination {
 // stdlib http.ResponseWriter. Used by every chi handler + every chi
 // middleware that rejects a request (auth failure, rate limit, panic).
 //
-// Output shape matches AppError.MarshalJSON exactly — bytes pinned by
-// error_shape_test.go:
+// Output shape:
 //
-//	{"error":{"type":"...","code":"...","message":"...",...}}
+//	{"error":{"type":"...","message":"...",...}}
+//
+// `code` is omitted unless explicitly set via WithCode at the call
+// site (Stripe behaviour). Per-request correlation IDs live in the
+// `X-Request-Id` response header, NOT this body — see the package
+// doc comment for the rationale.
 //
 // HTTP status derives from AppError.Type via the canonical mapping;
 // non-AppError errors surface as TypeAPIError (HTTP 500). Skips
@@ -164,20 +177,27 @@ func NoContent(w http.ResponseWriter) {
 
 // buildAPIError renders an arbitrary error into the wire APIError plus
 // the HTTP status to write.
+//
+// Two branches by error origin:
+//
+//  1. *Error (the canonical pkg/errors type; repos, services, handlers,
+//     middleware all emit this) — Reason → wire `type` and HTTP status
+//     via the pure HTTPType()/HTTPStatus() functions. Resource → public
+//     message when no override is set.
+//  2. Anything else — opaque 500 fallback.
 func buildAPIError(err error) (*APIError, int) {
-	if appErr := appErrors.AsAppError(err); appErr != nil {
+	if e := appErrors.As(err); e != nil {
 		return &APIError{
-			Type:    string(appErr.Type),
-			Code:    appErr.CodeOrType(),
-			Message: appErr.Message,
-			Details: appErr.Details,
-			Param:   appErr.Param,
-			Errors:  appErr.Errors,
-		}, appErr.HTTPStatus()
+			Type:    e.Reason.HTTPType(),
+			Code:    e.Code,
+			Message: e.PublicMessage(),
+			Details: e.Details,
+			Param:   e.Param,
+			Errors:  e.Errors,
+		}, e.HTTPStatus()
 	}
 	return &APIError{
-		Type:    string(appErrors.TypeAPIError),
-		Code:    string(appErrors.TypeAPIError),
+		Type:    appErrors.ReasonInternal.HTTPType(),
 		Message: "Internal server error",
 	}, http.StatusInternalServerError
 }

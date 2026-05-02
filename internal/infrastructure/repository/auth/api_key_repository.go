@@ -39,7 +39,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *authDomain.APIKey) e
 		DeletedAt:  key.DeletedAt,
 	}); err != nil {
 		if appErrors.IsUniqueViolation(err) {
-			return fmt.Errorf("create api_key: %w", authDomain.ErrAPIKeyAlreadyExists)
+			return appErrors.AlreadyExists("api_key", appErrors.WithOp("repo.api_key.create"), appErrors.WithCause(err))
 		}
 		return fmt.Errorf("create api_key: %w", err)
 	}
@@ -50,7 +50,7 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id uuid.UUID) (*authDoma
 	row, err := r.tm.Queries(ctx).GetAPIKeyByID(ctx, id)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get api_key by ID %s: %w", id, authDomain.ErrAPIKeyNotFound)
+			return nil, appErrors.NotFound("api_key", appErrors.WithOp("repo.api_key.get_by_id"))
 		}
 		return nil, fmt.Errorf("get api_key by ID %s: %w", id, err)
 	}
@@ -61,7 +61,7 @@ func (r *apiKeyRepository) GetByKeyHash(ctx context.Context, keyHash string) (*a
 	row, err := r.tm.Queries(ctx).GetAPIKeyByKeyHash(ctx, keyHash)
 	if err != nil {
 		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get api_key by hash: %w", authDomain.ErrAPIKeyNotFound)
+			return nil, appErrors.NotFound("api_key", appErrors.WithOp("repo.api_key.get_by_key_hash"))
 		}
 		return nil, fmt.Errorf("get api_key by hash: %w", err)
 	}

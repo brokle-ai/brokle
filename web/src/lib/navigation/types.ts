@@ -1,6 +1,6 @@
 import { type LucideIcon } from 'lucide-react'
 import { type ReactNode } from 'react'
-import { type Scope } from '@/hooks/rbac/use-has-access'
+import { type Scope } from '@/generated/permissions'
 import { type ProjectSummary, type OrganizationWithProjects } from '@/features/authentication'
 
 export enum RouteSection {

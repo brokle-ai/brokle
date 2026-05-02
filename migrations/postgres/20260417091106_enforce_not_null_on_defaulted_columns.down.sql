@@ -89,8 +89,6 @@ ALTER TABLE organizations             ALTER COLUMN subscription_status DROP NOT 
 ALTER TABLE user_profiles             ALTER COLUMN timezone            DROP NOT NULL;
 ALTER TABLE user_profiles             ALTER COLUMN language            DROP NOT NULL;
 ALTER TABLE user_profiles             ALTER COLUMN theme               DROP NOT NULL;
-ALTER TABLE organization_members      ALTER COLUMN status              DROP NOT NULL;
-ALTER TABLE project_members           ALTER COLUMN status              DROP NOT NULL;
 ALTER TABLE usage_alerts              ALTER COLUMN status              DROP NOT NULL;
 
 -- JSONB / arrays

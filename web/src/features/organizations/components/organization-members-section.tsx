@@ -10,7 +10,7 @@ import {
 import { Users, Search } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { useAuth } from '@/features/authentication'
-import { useHasAccess } from '@/hooks/rbac/use-has-access'
+import { useHasOrganizationAccess } from '@/hooks/rbac/use-has-organization-access'
 import { getOrganizationMembers, removeMember, type Member } from '../api/members-api'
 import {
   Table,
@@ -45,8 +45,8 @@ export function OrganizationMembersSection() {
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
 
   // Scope-based permission checks
-  const canUpdateMembers = useHasAccess({ scope: "members:update" })
-  const canRemoveMembers = useHasAccess({ scope: "members:remove" })
+  const canUpdateMembers = useHasOrganizationAccess({ scope: "org_members:update" })
+  const canRemoveMembers = useHasOrganizationAccess({ scope: "org_members:remove" })
 
   // Fetch members from API
   const { data: membersResponse, isLoading, error } = useQuery({
@@ -93,8 +93,11 @@ export function OrganizationMembersSection() {
 
     try {
       await removeMember(currentOrganization.id, memberId)
-      // Invalidate members cache to refetch
+      // Invalidate members cache to refetch + workspace cache so the
+      // removed user's session-bootstrap scope tree refreshes (Langfuse
+      // session-bootstrap pattern; see use-has-organization-access.ts).
       queryClient.invalidateQueries({ queryKey: ['organization-members', currentOrganization.id] })
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
       toast.success(`${memberName} has been removed from the organization`)
     } catch (err) {
       console.error('Failed to remove member:', err)

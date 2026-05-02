@@ -1,0 +1,6 @@
+export { DatasetDetailLayout } from './dataset-detail-layout'
+export { DatasetDetailHeader } from './dataset-detail-header'
+export { DatasetDetailTabs } from './dataset-detail-tabs'
+export { DatasetItemsTab } from './dataset-items-tab'
+export { DatasetVersionsTab } from './dataset-versions-tab'
+export { DatasetSettingsTab } from './dataset-settings-tab'

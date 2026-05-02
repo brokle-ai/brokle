@@ -63,7 +63,7 @@ type SettingsService interface {
 	DeleteSetting(ctx context.Context, orgID uuid.UUID, key string, userID uuid.UUID) error
 }
 
-type handler struct {
+type Handler struct {
 	orgSvc        OrganizationService
 	memberSvc     MemberService
 	invitationSvc InvitationService
@@ -71,53 +71,21 @@ type handler struct {
 	logger        *slog.Logger
 }
 
-// RegisterRoutes mounts the organization / invitation / settings
-// routes on r. Expected mount context: the authed dashboard chi group.
-func RegisterRoutes(
-	r chi.Router,
+// New constructs the organization handler.
+func New(
 	orgSvc OrganizationService,
 	memberSvc MemberService,
 	invitationSvc InvitationService,
 	settingsSvc SettingsService,
 	logger *slog.Logger,
-) {
-	h := &handler{
+) *Handler {
+	return &Handler{
 		orgSvc:        orgSvc,
 		memberSvc:     memberSvc,
 		invitationSvc: invitationSvc,
 		settingsSvc:   settingsSvc,
 		logger:        logger,
 	}
-
-	r.Route("/api/v1/organizations", func(r chi.Router) {
-		r.Get("/", h.listOrganizations)
-		r.Post("/", h.createOrganization)
-		r.Route("/{orgId}", func(r chi.Router) {
-			r.Get("/", h.getOrganization)
-			r.Patch("/", h.updateOrganization)
-			r.Delete("/", h.deleteOrganization)
-			r.Get("/members", h.listMembers)
-			r.Delete("/members/{userId}", h.removeMember)
-			r.Post("/invitations", h.createInvitation)
-			r.Get("/invitations", h.listPendingInvitations)
-			r.Post("/invitations/{invitationId}/resend", h.resendInvitation)
-			r.Delete("/invitations/{invitationId}", h.revokeInvitation)
-			r.Route("/settings", func(r chi.Router) {
-				r.Get("/", h.listSettings)
-				r.Post("/", h.createSetting)
-				r.Get("/{key}", h.getSetting)
-				r.Put("/{key}", h.updateSetting)
-				r.Delete("/{key}", h.deleteSetting)
-			})
-		})
-	})
-
-	r.Route("/api/v1/invitations", func(r chi.Router) {
-		r.Get("/", h.listUserInvitations)
-		r.Get("/validate/{token}", h.validateInvitationToken)
-		r.Post("/accept", h.acceptInvitation)
-		r.Post("/decline", h.declineInvitation)
-	})
 }
 
 // ----- response helpers -----------------------------------------------
@@ -138,7 +106,6 @@ func toMemberResponse(m *organization.Member) memberResponse {
 	return memberResponse{
 		UserID:    m.UserID,
 		RoleID:    m.RoleID,
-		Status:    m.Status,
 		InvitedBy: m.InvitedBy,
 		JoinedAt:  m.JoinedAt,
 		CreatedAt: m.CreatedAt,
@@ -180,7 +147,7 @@ func toSettingResponse(s *organization.OrganizationSettings) settingResponse {
 
 // ----- list-organizations ---------------------------------------------
 
-func (h *handler) listOrganizations(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	orgs, err := h.orgSvc.GetUserOrganizations(r.Context(), userID)
@@ -245,7 +212,7 @@ func (h *handler) listOrganizations(w http.ResponseWriter, r *http.Request) {
 
 // ----- create-organization --------------------------------------------
 
-func (h *handler) createOrganization(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body createOrganizationBody
@@ -266,7 +233,7 @@ func (h *handler) createOrganization(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-organization -----------------------------------------------
 
-func (h *handler) getOrganization(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -280,7 +247,7 @@ func (h *handler) getOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to access this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to access this organization"))
 		return
 	}
 
@@ -294,7 +261,7 @@ func (h *handler) getOrganization(w http.ResponseWriter, r *http.Request) {
 
 // ----- update-organization --------------------------------------------
 
-func (h *handler) updateOrganization(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateOrganization(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -308,7 +275,7 @@ func (h *handler) updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to update this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to update this organization"))
 		return
 	}
 
@@ -336,7 +303,7 @@ func (h *handler) updateOrganization(w http.ResponseWriter, r *http.Request) {
 
 // ----- delete-organization --------------------------------------------
 
-func (h *handler) deleteOrganization(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteOrganization(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -350,7 +317,7 @@ func (h *handler) deleteOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to delete this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to delete this organization"))
 		return
 	}
 	if err := h.orgSvc.DeleteOrganization(r.Context(), orgID); err != nil {
@@ -362,7 +329,7 @@ func (h *handler) deleteOrganization(w http.ResponseWriter, r *http.Request) {
 
 // ----- list-members ---------------------------------------------------
 
-func (h *handler) listMembers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -376,7 +343,7 @@ func (h *handler) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to view organization members"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to view organization members"))
 		return
 	}
 
@@ -386,12 +353,8 @@ func (h *handler) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := r.URL.Query().Get("status")
 	out := make([]memberResponse, 0, len(members))
 	for _, m := range members {
-		if status != "" && m.Status != status {
-			continue
-		}
 		out = append(out, toMemberResponse(m))
 	}
 	response.Success(w, listMembersBody{Members: out, Total: len(out)})
@@ -399,7 +362,7 @@ func (h *handler) listMembers(w http.ResponseWriter, r *http.Request) {
 
 // ----- remove-member --------------------------------------------------
 
-func (h *handler) removeMember(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -418,7 +381,7 @@ func (h *handler) removeMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		response.WriteError(w, appErrors.NewForbiddenError("Insufficient permissions to remove members from this organization"))
+		response.WriteError(w, appErrors.PermissionDenied("organization", "Insufficient permissions to remove members from this organization"))
 		return
 	}
 	if err := h.memberSvc.RemoveMember(r.Context(), orgID, targetUserID, callerID); err != nil {
@@ -430,7 +393,7 @@ func (h *handler) removeMember(w http.ResponseWriter, r *http.Request) {
 
 // ----- create-invitation ----------------------------------------------
 
-func (h *handler) createInvitation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -458,7 +421,7 @@ func (h *handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 
 // ----- list-pending-invitations ---------------------------------------
 
-func (h *handler) listPendingInvitations(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListPendingInvitations(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -472,7 +435,7 @@ func (h *handler) listPendingInvitations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !isMember {
-		response.WriteError(w, appErrors.NewForbiddenError("You are not authorized to view this organization's invitations"))
+		response.WriteError(w, appErrors.PermissionDenied("invitation", "You are not authorized to view this organization's invitations"))
 		return
 	}
 
@@ -493,7 +456,7 @@ func (h *handler) listPendingInvitations(w http.ResponseWriter, r *http.Request)
 
 // ----- resend-invitation ----------------------------------------------
 
-func (h *handler) resendInvitation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ResendInvitation(w http.ResponseWriter, r *http.Request) {
 	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
 		response.WriteError(w, err)
 		return
@@ -515,7 +478,7 @@ func (h *handler) resendInvitation(w http.ResponseWriter, r *http.Request) {
 
 // ----- revoke-invitation ----------------------------------------------
 
-func (h *handler) revokeInvitation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
 	if _, err := request.URLParamUUID(r, "orgId"); err != nil {
 		response.WriteError(w, err)
 		return
@@ -536,7 +499,7 @@ func (h *handler) revokeInvitation(w http.ResponseWriter, r *http.Request) {
 
 // ----- list-user-invitations ------------------------------------------
 
-func (h *handler) listUserInvitations(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListUserInvitations(w http.ResponseWriter, r *http.Request) {
 	claims := httpctx.MustGetTokenClaims(r.Context())
 
 	invitations, err := h.invitationSvc.GetUserInvitations(r.Context(), claims.Email)
@@ -581,7 +544,7 @@ func (h *handler) listUserInvitations(w http.ResponseWriter, r *http.Request) {
 
 // ----- validate-invitation-token --------------------------------------
 
-func (h *handler) validateInvitationToken(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ValidateInvitationToken(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	invitation, err := h.invitationSvc.GetInvitationByToken(r.Context(), token)
 	if err != nil {
@@ -592,8 +555,7 @@ func (h *handler) validateInvitationToken(w http.ResponseWriter, r *http.Request
 	isExpired := time.Now().After(invitation.ExpiresAt) ||
 		invitation.Status != organization.InvitationStatusPending
 	if isExpired {
-		response.WriteError(w, appErrors.NewConflictError(
-			"Invitation has expired or is no longer valid",
+		response.WriteError(w, appErrors.Conflict("invitation", "Invitation has expired or is no longer valid",
 			appErrors.WithCode("invitation_expired"),
 		))
 		return
@@ -627,7 +589,7 @@ func (h *handler) validateInvitationToken(w http.ResponseWriter, r *http.Request
 
 // ----- accept-invitation ----------------------------------------------
 
-func (h *handler) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 	userID := httpctx.MustGetUserID(r.Context())
 	var body acceptInvitationBody
 	if err := request.DecodeJSON(r, &body); err != nil {
@@ -643,7 +605,7 @@ func (h *handler) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 
 // ----- decline-invitation ---------------------------------------------
 
-func (h *handler) declineInvitation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeclineInvitation(w http.ResponseWriter, r *http.Request) {
 	var body declineInvitationBody
 	if err := request.DecodeJSON(r, &body); err != nil {
 		response.WriteError(w, err)
@@ -658,7 +620,7 @@ func (h *handler) declineInvitation(w http.ResponseWriter, r *http.Request) {
 
 // ----- list-settings --------------------------------------------------
 
-func (h *handler) listSettings(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListSettings(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -674,7 +636,7 @@ func (h *handler) listSettings(w http.ResponseWriter, r *http.Request) {
 
 // ----- create-setting -------------------------------------------------
 
-func (h *handler) createSetting(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateSetting(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -701,7 +663,7 @@ func (h *handler) createSetting(w http.ResponseWriter, r *http.Request) {
 
 // ----- get-setting ----------------------------------------------------
 
-func (h *handler) getSetting(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetSetting(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -718,7 +680,7 @@ func (h *handler) getSetting(w http.ResponseWriter, r *http.Request) {
 
 // ----- update-setting -------------------------------------------------
 
-func (h *handler) updateSetting(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateSetting(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)
@@ -745,7 +707,7 @@ func (h *handler) updateSetting(w http.ResponseWriter, r *http.Request) {
 
 // ----- delete-setting -------------------------------------------------
 
-func (h *handler) deleteSetting(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteSetting(w http.ResponseWriter, r *http.Request) {
 	orgID, err := request.URLParamUUID(r, "orgId")
 	if err != nil {
 		response.WriteError(w, err)

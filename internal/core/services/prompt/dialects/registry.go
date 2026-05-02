@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	appErrors "brokle/pkg/errors"
 )
 
 type registry struct {
@@ -36,7 +37,7 @@ func (r *registry) Get(dialect promptDomain.TemplateDialect) (promptDomain.Diale
 
 	compiler, ok := r.compilers[dialect]
 	if !ok {
-		return nil, promptDomain.NewUnsupportedDialectError(string(dialect))
+		return nil, appErrors.InvalidParam("dialect", "unsupported template dialect: "+string(dialect))
 	}
 	return compiler, nil
 }

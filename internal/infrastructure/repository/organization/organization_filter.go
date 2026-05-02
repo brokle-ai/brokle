@@ -84,7 +84,7 @@ func (r *organizationRepository) List(ctx context.Context, filters *orgDomain.Or
 	}
 	defer rows.Close()
 
-	var out []*orgDomain.Organization
+	out := make([]*orgDomain.Organization, 0)
 	for rows.Next() {
 		o := &orgDomain.Organization{}
 		var (

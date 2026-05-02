@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { User, Organization, Project, ApiKey, LoginCredentials, AuthResponse } from '../types'
+import type { User, Organization, Project, LoginCredentials, AuthResponse } from '../types'
 import * as authApi from '../api/auth-api'
 import { BrokleAPIError } from '@/lib/api/core/types'
 import { BrokleAPIClient } from '@/lib/api/core/client'
@@ -47,9 +47,6 @@ export interface AuthState {
   refreshTimerId: ReturnType<typeof setTimeout> | null
   refreshPromise: Promise<void> | null
 
-  // API keys
-  apiKeys: ApiKey[]
-
   // Actions
   login: (credentials: LoginCredentials) => Promise<AuthResponse>
   logout: () => Promise<void>
@@ -64,7 +61,6 @@ export interface AuthState {
   setUser: (user: User | null) => void
   setOrganization: (organization: Organization | null) => void
   setCurrentProject: (project: Project | null) => void
-  setApiKeys: (apiKeys: ApiKey[]) => void
   setLoading: (loading: boolean) => void
 }
 
@@ -83,7 +79,6 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       refreshTimerId: null,
       refreshPromise: null,
-      apiKeys: [],
 
       // Login action
       login: async (credentials) => {
@@ -414,11 +409,10 @@ export const useAuthStore = create<AuthState>()(
               name: firstOrg.name,
               plan: firstOrg.subscription_plan,
               members: [],
-              apiKeys: [],
               usage: {
-                requests_this_month: 0,
-                cost_this_month: 0,
-                models_used: 0,
+                traces_this_month: 0,
+                observed_cost_this_month: 0,
+                models_observed: 0,
               },
               createdAt: firstOrg.created_at,
               updatedAt: firstOrg.updated_at,
@@ -469,7 +463,6 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       setOrganization: (organization) => set({ organization }),
       setCurrentProject: (project) => set({ currentProject: project }),
-      setApiKeys: (apiKeys) => set({ apiKeys }),
       setLoading: (loading) => set({ isLoading: loading }),
     }),
     {

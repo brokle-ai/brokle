@@ -6,7 +6,7 @@ import type { ExperimentStatus } from '../types'
 
 export type SortField = 'name' | 'status' | 'created_at' | 'updated_at'
 
-const STATUS_VALUES = ['pending', 'running', 'completed', 'failed'] as const
+const STATUS_VALUES = ['pending', 'running', 'completed', 'failed', 'partial', 'cancelled'] as const
 
 export interface UseExperimentsTableStateReturn {
   // State (read from URL)

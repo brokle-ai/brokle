@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	authDomain "brokle/internal/core/domain/auth"
 	authService "brokle/internal/core/services/auth"
 	"brokle/internal/transport/http/httpctx"
@@ -20,21 +18,14 @@ import (
 	"brokle/pkg/response"
 )
 
-type handler struct {
+type Handler struct {
 	apiKeySvc *authService.APIKeyService
 	logger    *slog.Logger
 }
 
-// RegisterRoutes mounts API-key routes on r. Expected mount context:
-// the authed dashboard chi group (RequireAuth + LimitByUser).
-func RegisterRoutes(r chi.Router, apiKeySvc *authService.APIKeyService, logger *slog.Logger) {
-	h := &handler{apiKeySvc: apiKeySvc, logger: logger}
-
-	r.Route("/api/v1/projects/{projectId}/api-keys", func(r chi.Router) {
-		r.Get("/", h.list)
-		r.Post("/", h.create)
-		r.Delete("/{keyId}", h.delete)
-	})
+// New constructs a Handler with all required services.
+func New(apiKeySvc *authService.APIKeyService, logger *slog.Logger) *Handler {
+	return &Handler{apiKeySvc: apiKeySvc, logger: logger}
 }
 
 func keyStatus(k authDomain.APIKey) string {
@@ -46,12 +37,8 @@ func keyStatus(k authDomain.APIKey) string {
 
 // list returns a paginated view of the project's API keys. Status
 // filter (active/expired) is optional.
-func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	userID := httpctx.MustGetUserID(r.Context())
 
 	page, limit, err := request.QueryPagination(r)
@@ -120,12 +107,8 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 
 // create mints a new API key. The response includes the full key
 // value ONCE — it is never replayed on subsequent reads.
-func (h *handler) create(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	userID := httpctx.MustGetUserID(r.Context())
 
 	var body createAPIKeyBody
@@ -176,12 +159,8 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 
 // delete revokes an API key. SDK clients using it start receiving
 // 401 on their next request.
-func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
-	projectID, err := request.URLParamUUID(r, "projectId")
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	projectID := httpctx.MustGetProjectID(r.Context())
 	keyID, err := request.URLParamUUID(r, "keyId")
 	if err != nil {
 		response.WriteError(w, err)

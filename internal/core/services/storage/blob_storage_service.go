@@ -45,19 +45,19 @@ func NewBlobStorageService(
 // CreateBlobReference creates a new blob storage reference
 func (s *BlobStorageService) CreateBlobReference(ctx context.Context, blob *storage.BlobStorageFileLog) error {
 	if blob.ProjectID == uuid.Nil {
-		return appErrors.NewValidationError("project_id is required", "blob must have a valid project_id")
+		return appErrors.InvalidParam("project_id", "is required", appErrors.WithDetails("blob must have a valid project_id"))
 	}
 	if blob.EntityType == "" {
-		return appErrors.NewValidationError("entity_type is required", "blob must have an entity_type")
+		return appErrors.InvalidParam("entity_type", "is required", appErrors.WithDetails("blob must have an entity_type"))
 	}
 	if blob.EntityID == "" {
-		return appErrors.NewValidationError("entity_id is required", "blob must have an entity_id")
+		return appErrors.InvalidParam("entity_id", "is required", appErrors.WithDetails("blob must have an entity_id"))
 	}
 	if blob.BucketName == "" {
-		return appErrors.NewValidationError("bucket_name is required", "blob must have a bucket_name")
+		return appErrors.InvalidParam("bucket_name", "is required", appErrors.WithDetails("blob must have a bucket_name"))
 	}
 	if blob.BucketPath == "" {
-		return appErrors.NewValidationError("bucket_path is required", "blob must have a bucket_path")
+		return appErrors.InvalidParam("bucket_path", "is required", appErrors.WithDetails("blob must have a bucket_path"))
 	}
 
 	if blob.ID == "" {
@@ -71,7 +71,7 @@ func (s *BlobStorageService) CreateBlobReference(ctx context.Context, blob *stor
 	}
 
 	if err := s.blobRepo.Create(ctx, blob); err != nil {
-		return appErrors.NewInternalError("failed to create blob reference", err)
+		return appErrors.Internal("failed to create blob reference", err)
 	}
 
 	return nil
@@ -82,15 +82,15 @@ func (s *BlobStorageService) UpdateBlobReference(ctx context.Context, blob *stor
 	existing, err := s.blobRepo.GetByID(ctx, blob.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError("blob " + blob.ID)
+			return appErrors.NotFound("blob", appErrors.WithMessage("blob "+blob.ID+" not found"))
 		}
-		return appErrors.NewInternalError("failed to get blob", err)
+		return appErrors.Internal("failed to get blob", err)
 	}
 
 	mergeBlobFields(existing, blob)
 
 	if err := s.blobRepo.Update(ctx, existing); err != nil {
-		return appErrors.NewInternalError("failed to update blob reference", err)
+		return appErrors.Internal("failed to update blob reference", err)
 	}
 
 	return nil
@@ -101,9 +101,9 @@ func (s *BlobStorageService) DeleteBlobReference(ctx context.Context, id string)
 	blob, err := s.blobRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError("blob " + id)
+			return appErrors.NotFound("blob", appErrors.WithMessage("blob "+id+" not found"))
 		}
-		return appErrors.NewInternalError("failed to get blob", err)
+		return appErrors.Internal("failed to get blob", err)
 	}
 
 	// S3 deletion is best-effort
@@ -114,7 +114,7 @@ func (s *BlobStorageService) DeleteBlobReference(ctx context.Context, id string)
 	}
 
 	if err := s.blobRepo.Delete(ctx, id); err != nil {
-		return appErrors.NewInternalError("failed to delete blob reference", err)
+		return appErrors.Internal("failed to delete blob reference", err)
 	}
 
 	return nil
@@ -125,9 +125,9 @@ func (s *BlobStorageService) GetBlobByID(ctx context.Context, id string) (*stora
 	blob, err := s.blobRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError("blob " + id)
+			return nil, appErrors.NotFound("blob", appErrors.WithMessage("blob "+id+" not found"))
 		}
-		return nil, appErrors.NewInternalError("failed to get blob", err)
+		return nil, appErrors.Internal("failed to get blob", err)
 	}
 
 	return blob, nil
@@ -137,7 +137,7 @@ func (s *BlobStorageService) GetBlobByID(ctx context.Context, id string) (*stora
 func (s *BlobStorageService) GetBlobsByEntityID(ctx context.Context, entityType, entityID string) ([]*storage.BlobStorageFileLog, error) {
 	blobs, err := s.blobRepo.GetByEntityID(ctx, entityType, entityID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get blobs by entity", err)
+		return nil, appErrors.Internal("failed to get blobs by entity", err)
 	}
 
 	return blobs, nil
@@ -147,7 +147,7 @@ func (s *BlobStorageService) GetBlobsByEntityID(ctx context.Context, entityType,
 func (s *BlobStorageService) GetBlobsByProjectID(ctx context.Context, projectID uuid.UUID, filter *storage.BlobStorageFilter) ([]*storage.BlobStorageFileLog, error) {
 	blobs, err := s.blobRepo.GetByProjectID(ctx, projectID, filter)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get blobs by project", err)
+		return nil, appErrors.Internal("failed to get blobs by project", err)
 	}
 
 	return blobs, nil
@@ -161,7 +161,7 @@ func (s *BlobStorageService) ShouldOffload(content string) bool {
 // UploadToS3 uploads content to S3 and creates a blob reference
 func (s *BlobStorageService) UploadToS3(ctx context.Context, content string, projectID uuid.UUID, entityType, entityID, eventID string) (*storage.BlobStorageFileLog, error) {
 	if s.s3Client == nil {
-		return nil, appErrors.NewInternalError("S3 client not initialized - check BLOB_STORAGE configuration in environment", nil)
+		return nil, appErrors.Internal("S3 client not initialized - check BLOB_STORAGE configuration in environment", nil)
 	}
 
 	blobID := uid.New().String()
@@ -169,7 +169,7 @@ func (s *BlobStorageService) UploadToS3(ctx context.Context, content string, pro
 
 	contentBytes := []byte(content)
 	if err := s.s3Client.Upload(ctx, s3Key, contentBytes, "application/json"); err != nil {
-		return nil, appErrors.NewInternalError("failed to upload to S3", err)
+		return nil, appErrors.Internal("failed to upload to S3", err)
 	}
 
 	blob := &storage.BlobStorageFileLog{
@@ -213,17 +213,17 @@ func (s *BlobStorageService) UploadToS3WithPreview(ctx context.Context, content 
 // DownloadFromS3 downloads content from S3 using blob reference
 func (s *BlobStorageService) DownloadFromS3(ctx context.Context, blobID string) (string, error) {
 	if s.s3Client == nil {
-		return "", appErrors.NewInternalError("S3 client not initialized - check BLOB_STORAGE configuration in environment", nil)
+		return "", appErrors.Internal("S3 client not initialized - check BLOB_STORAGE configuration in environment", nil)
 	}
 
 	blob, err := s.blobRepo.GetByID(ctx, blobID)
 	if err != nil {
-		return "", appErrors.NewNotFoundError("blob " + blobID)
+		return "", appErrors.NotFound("blob", appErrors.WithMessage("blob "+blobID+" not found"))
 	}
 
 	contentBytes, err := s.s3Client.Download(ctx, blob.BucketPath)
 	if err != nil {
-		return "", appErrors.NewInternalError("failed to download from S3", err)
+		return "", appErrors.Internal("failed to download from S3", err)
 	}
 
 	return string(contentBytes), nil
@@ -233,7 +233,7 @@ func (s *BlobStorageService) DownloadFromS3(ctx context.Context, blobID string) 
 func (s *BlobStorageService) CountBlobs(ctx context.Context, filter *storage.BlobStorageFilter) (int64, error) {
 	count, err := s.blobRepo.Count(ctx, filter)
 	if err != nil {
-		return 0, appErrors.NewInternalError("failed to count blobs", err)
+		return 0, appErrors.Internal("failed to count blobs", err)
 	}
 
 	return count, nil

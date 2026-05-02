@@ -177,7 +177,7 @@ function inferColumnType(values: string[]): ColumnType {
   types.delete('null')
 
   if (types.size === 0) return 'null'
-  if (types.size === 1) return types.values().next().value
+  if (types.size === 1) return types.values().next().value ?? 'null'
 
   // Check for JSON/array mixed (still JSON-ish)
   if (types.has('json') && types.has('array') && types.size === 2) {
