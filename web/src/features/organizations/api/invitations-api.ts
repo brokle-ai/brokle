@@ -271,13 +271,13 @@ export const validateInvitationToken = async (
  * Returns organization-scoped roles that can be assigned to new members
  */
 export const getAvailableRolesForInvitation = async (): Promise<Role[]> => {
-  const response = await client.get<RoleAPIResponse[]>(
+  const response = await client.get<{ data: RoleAPIResponse[] }>(
     '/v1/rbac/roles',
     { scope_type: 'organization' }
   )
 
   // Filter to roles that can be assigned (exclude owner - only one owner allowed)
-  return response
+  return response.data
     .map(mapRoleFromAPI)
     .filter(role => role.name !== 'owner')
 }

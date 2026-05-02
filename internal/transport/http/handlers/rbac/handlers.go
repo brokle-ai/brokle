@@ -70,7 +70,7 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, listRolesResponse{Roles: roles, TotalCount: len(roles)})
+	response.Success(w, listRolesResponse{Data: roles})
 }
 
 func (h *Handler) GetRole(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +147,7 @@ func (h *Handler) ListCustomRoles(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, listCustomRolesResponse{Roles: roles, TotalCount: len(roles)})
+	response.Success(w, listCustomRolesResponse{Data: roles})
 }
 
 func (h *Handler) GetCustomRole(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +246,7 @@ func (h *Handler) GetUserRoles(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, getUserRolesResponse{Memberships: memberships, TotalCount: len(memberships)})
+	response.Success(w, getUserRolesResponse{Data: memberships})
 }
 
 func (h *Handler) AssignOrganizationRole(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +369,7 @@ func (h *Handler) GetAvailableResources(w http.ResponseWriter, r *http.Request) 
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, getAvailableResourcesResponse{Resources: resources, TotalCount: len(resources)})
+	response.Success(w, getAvailableResourcesResponse{Data: resources})
 }
 
 func (h *Handler) GetActionsForResource(w http.ResponseWriter, r *http.Request) {
@@ -385,8 +385,6 @@ func (h *Handler) GetActionsForResource(w http.ResponseWriter, r *http.Request) 
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, getActionsForResourceResponse{
-		Resource: resource, Actions: actions, TotalCount: len(actions),
-	})
+	response.Success(w, getActionsForResourceResponse{Data: actions})
 }
 

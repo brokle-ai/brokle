@@ -10,8 +10,7 @@ import (
 // ---- list-roles ------------------------------------------------------
 
 type listRolesResponse struct {
-	Roles      []*authDomain.Role `json:"roles"`
-	TotalCount int                `json:"total_count"`
+	Data []*authDomain.Role `json:"data"`
 }
 
 // ---- list-permissions (canonical {data, pagination} envelope) --------
@@ -30,8 +29,7 @@ type createCustomRoleBody struct {
 }
 
 type listCustomRolesResponse struct {
-	Roles      []*authDomain.Role `json:"roles"`
-	TotalCount int                `json:"total_count"`
+	Data []*authDomain.Role `json:"data"`
 }
 
 type updateCustomRoleBody struct {
@@ -42,8 +40,7 @@ type updateCustomRoleBody struct {
 // ---- user memberships -------------------------------------------------
 
 type getUserRolesResponse struct {
-	Memberships []*authDomain.OrganizationMember `json:"memberships"`
-	TotalCount  int                              `json:"total_count"`
+	Data []*authDomain.OrganizationMember `json:"data"`
 }
 
 type assignOrgRoleBody struct {
@@ -53,12 +50,9 @@ type assignOrgRoleBody struct {
 // ---- permission discovery --------------------------------------------
 
 type getAvailableResourcesResponse struct {
-	Resources  []string `json:"resources"`
-	TotalCount int      `json:"total_count"`
+	Data []string `json:"data"`
 }
 
 type getActionsForResourceResponse struct {
-	Resource   string   `json:"resource"`
-	Actions    []string `json:"actions"`
-	TotalCount int      `json:"total_count"`
+	Data []string `json:"data"`
 }

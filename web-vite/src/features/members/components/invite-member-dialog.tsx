@@ -53,7 +53,7 @@ export function InviteMemberDialog({
   // resolves; never overrides an explicit user choice.
   useEffect(() => {
     if (!rolesQuery.data || roleId) return
-    const assignable = rolesQuery.data.roles.filter((r) => r.name !== 'owner')
+    const assignable = rolesQuery.data.data.filter((r) => r.name !== 'owner')
     const dev = assignable.find((r) => r.name === 'developer')
     setRoleId((dev ?? assignable[0])?.id ?? '')
   }, [rolesQuery.data, roleId])
@@ -106,7 +106,7 @@ export function InviteMemberDialog({
   }
 
   const assignableRoles =
-    rolesQuery.data?.roles.filter((r) => r.name !== 'owner') ?? []
+    rolesQuery.data?.data.filter((r) => r.name !== 'owner') ?? []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

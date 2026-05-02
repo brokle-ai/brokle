@@ -77,6 +77,5 @@ export interface RoleListItem {
 }
 
 export interface RoleListResponse {
-  roles: RoleListItem[]
-  total_count: number
+  data: RoleListItem[]
 }
