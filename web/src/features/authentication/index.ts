@@ -2,7 +2,6 @@
 
 // Hooks
 export { useAuth } from './hooks/use-auth'
-export { useAuthGuard } from './hooks/use-auth-guard'
 export {
   useCurrentUser,
   useCurrentOrganization,
@@ -22,7 +21,6 @@ export { SignInForm } from './components/sign-in-form'
 export { TwoStepSignUpForm } from './components/two-step-signup-form'
 export { ForgotPasswordForm } from './components/forgot-password-form'
 export { OtpForm as OTPForm } from './components/otp-form'
-export { AuthGuard } from './components/auth-guard'
 export { UnauthorizedFallback } from './components/unauthorized-fallback'
 export { LogoutButton } from './components/logout-button'
 export { AuthStatus } from './components/auth-status'

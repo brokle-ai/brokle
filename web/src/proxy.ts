@@ -248,6 +248,6 @@ function redirectToSignin(req: NextRequest, status?: string): NextResponse {
 // presence check (and conditional silent refresh) above.
 export const config = {
   matcher: [
-    '/((?!signin|signup|forgot-password|reset-password|verify-email|callback|accept-invite|api|_next|v1|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)',
+    '/((?!signin|signup|forgot-password|reset-password|verify-email|callback|accept-invite|api|_next|v1|favicon.ico|site.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|webmanifest)$).*)',
   ],
 }

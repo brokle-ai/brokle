@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
 import { WorkspaceProvider, useWorkspace } from '@/context/workspace-context'
 import { useAuthStore } from '@/features/authentication'
@@ -10,7 +9,6 @@ import { AppSidebar } from '@/components/layout/app-sidebar'
 import { useNavigationContext } from '@/hooks/use-navigation-context'
 import { processNavigation } from '@/lib/navigation/process-routes'
 import { ROUTES as NAV_ROUTES } from '@/lib/navigation/routes'
-import { ROUTES } from '@/lib/routes'
 import { WorkspaceErrorPage } from '@/components/errors/workspace-error-page'
 import type { User, Organization, OrganizationWithProjects } from '@/features/authentication'
 
@@ -31,20 +29,27 @@ export function DashboardLayoutClient({
   initialUser,
   initialOrganizations,
 }: DashboardLayoutClientProps) {
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
-  const router = useRouter()
-
-  // Hydrate Zustand from server-fetched data on first render.
+  // Seed the legacy auth-store from server-fetched data so components
+  // that still read from it (auth-status, etc.) see a populated user
+  // on first render. The workspace context below owns the richer
+  // org/project tree and is the canonical source for new code.
   //
-  // useState's lazy initializer fires synchronously during the first
-  // render, BEFORE children mount, so any descendant reading from
-  // the store sees the hydrated state on its first render too.
-  // The guard inside hydrate() makes the call idempotent across
-  // StrictMode double-renders and HMR.
+  // useState's lazy initializer runs synchronously during the first
+  // render and before any descendant mounts. The guard inside
+  // hydrate() keeps the call idempotent across StrictMode
+  // double-renders and HMR.
+  //
+  // No client-side cold-load redirect guard here — auth is enforced
+  // by proxy.ts (cookie-presence gate) + lib/auth/dal.ts (server-side
+  // round-trip). Layout.tsx only reaches this component with a valid
+  // session. Cross-tab logout / runtime session expiry are handled
+  // reactively by the `auth:session-expired` and `storage` listeners
+  // in components/providers.tsx — those react to actual events, not
+  // a stale comparison against an un-hydrated store snapshot. The
+  // earlier `useEffect(() => router.replace(SIGNIN))` here was a
+  // closure-stale anti-pattern that the Next.js 16 auth guide
+  // explicitly warns against.
   useState(() => {
-    // Pick a sensible default organization to seed the auth-store's
-    // legacy `organization` field (some components still read this
-    // directly). Workspace context owns the richer org/project tree.
     const defaultOrg: Organization | null = pickDefaultOrganization(
       initialUser,
       initialOrganizations,
@@ -56,24 +61,6 @@ export function DashboardLayoutClient({
     })
     return true
   })
-
-  // Belt-and-suspenders for in-app auth-state changes (logout in
-  // another tab via storage event, cookie cleared in devtools, refresh
-  // failed mid-session). proxy.ts (route guard) handles cold-load
-  // redirect; this covers state changes after mount.
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace(ROUTES.SIGNIN)
-    }
-  }, [isAuthenticated, router])
-
-  // If isAuthenticated flipped to false after mount (logout, cookie
-  // cleared), render nothing while the redirect runs. Server-side
-  // verification guarantees we always start authenticated; this branch
-  // only ever hits on client-side state change.
-  if (!isAuthenticated) {
-    return null
-  }
 
   return (
     <WorkspaceProvider initialData={{ user: initialUser, organizations: initialOrganizations }}>
