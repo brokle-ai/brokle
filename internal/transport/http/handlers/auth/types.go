@@ -148,7 +148,7 @@ type completeOAuthSignupResponse struct {
 }
 
 type listAuthSessionsResponse struct {
-	Sessions []*authDomain.UserSession `json:"sessions"`
+	Data []*authDomain.UserSession `json:"data"`
 }
 
 type validateAPIKeyResponse struct {

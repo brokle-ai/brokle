@@ -54,7 +54,7 @@ function NewExperimentPage() {
       await navigate({
         to: '/o/$orgId/p/$projectId/experiments/$experimentId',
         params: { orgId, projectId, experimentId: created.id },
-        search: { page: 1, limit: 20, offset: 0, q: undefined },
+        search: { page: 1, limit: 20 },
       })
     },
     onError: (err) => {

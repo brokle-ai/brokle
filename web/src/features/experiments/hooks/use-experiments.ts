@@ -114,17 +114,17 @@ export function useExperimentProgressQuery(
 export function useExperimentItemsQuery(
   projectId: string | undefined,
   experimentId: string | undefined,
-  limit = 50,
-  offset = 0
+  page = 1,
+  limit = 50
 ) {
   return useQuery({
     queryKey: [
       ...experimentQueryKeys.items(projectId ?? '', experimentId ?? ''),
+      page,
       limit,
-      offset,
     ],
     queryFn: () =>
-      experimentsApi.listExperimentItems(projectId!, experimentId!, limit, offset),
+      experimentsApi.listExperimentItems(projectId!, experimentId!, page, limit),
     enabled: !!projectId && !!experimentId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,

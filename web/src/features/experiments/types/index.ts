@@ -1,3 +1,5 @@
+import type { PaginatedResponse } from '@/lib/api/core/types'
+
 export type ExperimentStatus =
   | 'pending'
   | 'running'
@@ -84,10 +86,9 @@ export interface ExperimentListParams {
   ids?: string // Comma-separated experiment IDs
 }
 
-export interface ExperimentItemListResponse {
-  items: ExperimentItem[]
-  total: number
-}
+// Experiment items list — matches backend `pageList[*ExperimentItemResponse]`
+// → `{data, pagination}` (Stripe / OpenAI shape).
+export type ExperimentItemListResponse = PaginatedResponse<ExperimentItem>
 
 export interface ExperimentScoreStats {
   mean: number

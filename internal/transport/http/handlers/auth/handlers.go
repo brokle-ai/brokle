@@ -208,7 +208,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, err)
 		return
 	}
-	response.Success(w, listAuthSessionsResponse{Sessions: sessions})
+	response.Success(w, listAuthSessionsResponse{Data: sessions})
 }
 
 // ----- session get ---------------------------------------------------

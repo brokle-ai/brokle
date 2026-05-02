@@ -47,15 +47,18 @@ export function ExperimentItemTable({
   projectSlug,
   experimentId,
 }: ExperimentItemTableProps) {
-  const [page, setPage] = useState(0)
+  const [page, setPage] = useState(1)
   const limit = 50
 
   const { data, isLoading } = useExperimentItemsQuery(
     projectId,
     experimentId,
-    limit,
-    page * limit
+    page,
+    limit
   )
+
+  const items = data?.data ?? []
+  const total = data?.pagination.total ?? 0
 
   const columns = [
     columnHelper.accessor('trial_number', {
@@ -103,7 +106,7 @@ export function ExperimentItemTable({
   ]
 
   const table = useReactTable({
-    data: data?.items ?? [],
+    data: items,
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -112,7 +115,7 @@ export function ExperimentItemTable({
     return <DataTableSkeleton columns={6} rows={5} showToolbar={false} />
   }
 
-  if (!data?.items.length) {
+  if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center border rounded-md">
         <p className="text-lg font-medium">No items yet</p>
@@ -158,18 +161,18 @@ export function ExperimentItemTable({
         </Table>
       </div>
 
-      {data && data.total > 0 && (
+      {total > 0 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-muted-foreground">
-            Showing {page * limit + 1}-{Math.min((page + 1) * limit, data.total)} of {data.total} items
+            Showing {(page - 1) * limit + 1}-{Math.min(page * limit, total)} of {total} items
           </p>
-          {data.total > limit && (
+          {total > limit && (
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
               >
                 Previous
               </Button>
@@ -177,7 +180,7 @@ export function ExperimentItemTable({
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => p + 1)}
-                disabled={(page + 1) * limit >= data.total}
+                disabled={page * limit >= total}
               >
                 Next
               </Button>

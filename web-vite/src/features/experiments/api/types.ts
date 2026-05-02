@@ -46,10 +46,9 @@ export type ExperimentListResponse = EvaluationPageList<ExperimentListItem>
 // returns the same `evaluationDomain.ExperimentResponse` as the list.
 export type ExperimentDetail = ExperimentListItem
 
-// Experiment items live under `.../experiments/{id}/items` and return
-// `{items, total}` (flat — this endpoint predates the pageList wrapper).
-// `limit` / `offset` drive pagination on this endpoint, unlike the
-// page/limit convention everywhere else in evaluation.
+// Experiment items live under `.../experiments/{id}/items` and now use the
+// canonical `pageList[*ExperimentItemResponse]` envelope (`{data, pagination}`)
+// driven by `?page=&limit=` like the rest of the evaluation surface.
 export interface ExperimentItem {
   id: string
   experiment_id: string
@@ -64,9 +63,20 @@ export interface ExperimentItem {
   created_at: string
 }
 
-export interface ExperimentItemListResponse {
-  items: ExperimentItem[]
+// Matches the canonical Stripe-shape envelope emitted by `pageList[T]` /
+// `response.BuildPagination` on the backend (`{data, pagination: {...}}`).
+export interface PageListPagination {
+  page: number
+  limit: number
   total: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
+}
+
+export interface ExperimentItemListResponse {
+  data: ExperimentItem[]
+  pagination: PageListPagination
 }
 
 // Metrics response — GET .../experiments/{id}/metrics. Provides progress

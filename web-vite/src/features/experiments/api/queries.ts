@@ -95,13 +95,12 @@ export const experimentMetricsQueryOptions = (
   })
 
 export interface ExperimentItemsListParams {
+  page: number
   limit: number
-  offset: number
 }
 
-// Experiment items use limit/offset (predates the pageList wrapper used
-// elsewhere in evaluation). Derive page-boundary state at the render
-// layer the same way.
+// Experiment items use the canonical `?page=&limit=` pagination matching
+// the rest of the evaluation surface. Wire shape: `{data, pagination}`.
 export const experimentItemsKey = (
   experimentId: string,
   params: ExperimentItemsListParams,
@@ -116,8 +115,8 @@ export const experimentItemsListQueryOptions = (
     queryKey: experimentItemsKey(experimentId, params),
     queryFn: async () => {
       const search = new URLSearchParams()
+      search.set('page', String(params.page))
       search.set('limit', String(params.limit))
-      search.set('offset', String(params.offset))
       const resp = await rawFetch(
         `/api/v1/projects/${projectId}/experiments/${experimentId}/items?${search.toString()}`,
         { method: 'GET' },
