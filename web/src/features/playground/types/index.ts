@@ -320,7 +320,6 @@ export interface ExecuteRequest {
   variables: Record<string, string>
   config_overrides?: APIModelConfig // API-safe config (tools without UI id field)
   session_id?: string // Optional: updates session's last_run if provided
-  project_id: string // Required: for session access validation
 }
 
 // Execution response

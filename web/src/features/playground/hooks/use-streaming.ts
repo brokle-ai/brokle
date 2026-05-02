@@ -29,7 +29,7 @@ export const useStreaming = (options?: UseStreamingOptions) => {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const stream = useCallback(
-    async (request: ExecuteRequest, fullConfig?: ModelConfig | null) => {
+    async (request: ExecuteRequest, projectId: string, fullConfig?: ModelConfig | null) => {
       // CRITICAL: Capture inputs BEFORE any async operations
       // This ensures history entries reflect inputs at execution time, not when streaming ends
       //
@@ -66,7 +66,7 @@ export const useStreaming = (options?: UseStreamingOptions) => {
           headers['X-CSRF-Token'] = csrfToken
         }
 
-        const response = await fetch(`${config.api.baseUrl}/api/v1/playground/stream`, {
+        const response = await fetch(`${config.api.baseUrl}/api/v1/projects/${projectId}/playground/stream`, {
           method: 'POST',
           headers,
           body: JSON.stringify(request),
