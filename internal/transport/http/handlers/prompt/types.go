@@ -2,15 +2,14 @@ package prompt
 
 import (
 	promptDomain "brokle/internal/core/domain/prompt"
+	"brokle/pkg/response"
 )
 
 // ---- list-prompts response shape ------------------------------------
 
 type listPromptsResponse struct {
-	Data  []*promptDomain.PromptListItem `json:"data"`
-	Total int64                          `json:"total"`
-	Page  int                            `json:"page"`
-	Limit int                            `json:"limit"`
+	Data       []*promptDomain.PromptListItem `json:"data"`
+	Pagination *response.Pagination           `json:"pagination"`
 }
 
 // ---- labels ---------------------------------------------------------

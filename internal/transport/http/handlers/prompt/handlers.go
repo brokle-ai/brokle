@@ -114,10 +114,8 @@ func (h *Handler) ListPrompts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, listPromptsResponse{
-		Data:  prompts,
-		Total: total,
-		Page:  filters.Params.Page,
-		Limit: filters.Params.Limit,
+		Data:       prompts,
+		Pagination: response.BuildPagination(filters.Params.Page, filters.Params.Limit, total),
 	})
 }
 
@@ -575,10 +573,8 @@ func (h *Handler) ListPromptsSDK(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, listPromptsResponse{
-		Data:  prompts,
-		Total: total,
-		Page:  filters.Params.Page,
-		Limit: filters.Params.Limit,
+		Data:       prompts,
+		Pagination: response.BuildPagination(filters.Params.Page, filters.Params.Limit, total),
 	})
 }
 

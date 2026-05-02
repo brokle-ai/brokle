@@ -13,6 +13,7 @@ import { ErrorBoundary } from './error-boundary'
 import { useAuthStore } from '@/features/authentication'
 import { Loader2 } from 'lucide-react'
 import { signinWithStatus } from '@/lib/routes'
+import { BrokleAPIError } from '@/lib/api/core/types'
 
 interface ClientProvidersProps {
   children: React.ReactNode
@@ -29,6 +30,13 @@ export function ClientProviders({ children }: ClientProvidersProps) {
         retry: (failureCount, error: any) => {
           // Don't retry on auth errors
           if (error?.statusCode === 401 || error?.statusCode === 403) {
+            return false
+          }
+          // Don't retry deterministic parse/contract/programmer errors thrown
+          // synchronously inside the query function (e.g. extractPaginatedData
+          // throwing on a malformed response). BrokleAPIError wraps all axios
+          // failures and stays retryable so 5xx/network errors still retry.
+          if (!(error instanceof BrokleAPIError) && error instanceof Error) {
             return false
           }
           return failureCount < 3
