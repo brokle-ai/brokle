@@ -46,7 +46,7 @@ func (h *Handler) ListExecutions(w http.ResponseWriter, r *http.Request) {
 		out[i] = e.ToResponse()
 	}
 	response.Success(w, &ExecutionListResponse{
-		Executions: out, Total: total, Page: params.Page, Limit: params.Limit,
+		Data: out, Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 

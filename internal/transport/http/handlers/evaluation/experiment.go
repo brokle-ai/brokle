@@ -191,7 +191,7 @@ func (h *Handler) DashListExperiments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.ExperimentResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 
@@ -382,7 +382,7 @@ func (h *Handler) SdkListExperiments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.ExperimentResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 

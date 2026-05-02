@@ -81,7 +81,7 @@ func (h *Handler) ListEvaluators(w http.ResponseWriter, r *http.Request) {
 		out[i] = e.ToResponse()
 	}
 	response.Success(w, pageList[*evaluationDomain.EvaluatorResponse]{
-		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
+		Data: out, Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 
