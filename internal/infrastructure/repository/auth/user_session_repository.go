@@ -107,20 +107,6 @@ func (r *userSessionRepository) GetActiveSessionsByUserID(ctx context.Context, u
 	return userSessionsFromRows(rows), nil
 }
 
-func (r *userSessionRepository) DeactivateSession(ctx context.Context, id uuid.UUID) error {
-	if err := r.tm.Queries(ctx).DeactivateUserSession(ctx, id); err != nil {
-		return fmt.Errorf("deactivate user_session %s: %w", id, err)
-	}
-	return nil
-}
-
-func (r *userSessionRepository) DeactivateUserSessions(ctx context.Context, userID uuid.UUID) error {
-	if _, err := r.tm.Queries(ctx).DeactivateUserSessionsForUser(ctx, userID); err != nil {
-		return fmt.Errorf("deactivate user_sessions for user %s: %w", userID, err)
-	}
-	return nil
-}
-
 func (r *userSessionRepository) RevokeSession(ctx context.Context, id uuid.UUID) error {
 	if err := r.tm.Queries(ctx).RevokeUserSession(ctx, id); err != nil {
 		return fmt.Errorf("revoke user_session %s: %w", id, err)
@@ -140,43 +126,6 @@ func (r *userSessionRepository) CleanupExpiredSessions(ctx context.Context) erro
 		return fmt.Errorf("cleanup expired user_sessions: %w", err)
 	}
 	return nil
-}
-
-func (r *userSessionRepository) CleanupRevokedSessions(ctx context.Context) error {
-	if _, err := r.tm.Queries(ctx).CleanupRevokedUserSessions(ctx); err != nil {
-		return fmt.Errorf("cleanup revoked user_sessions: %w", err)
-	}
-	return nil
-}
-
-func (r *userSessionRepository) MarkAsUsed(ctx context.Context, id uuid.UUID) error {
-	if err := r.tm.Queries(ctx).MarkUserSessionUsed(ctx, id); err != nil {
-		return fmt.Errorf("mark user_session %s used: %w", id, err)
-	}
-	return nil
-}
-
-func (r *userSessionRepository) GetByDeviceInfo(ctx context.Context, userID uuid.UUID, deviceInfo any) ([]*authDomain.UserSession, error) {
-	raw, err := json.Marshal(deviceInfo)
-	if err != nil {
-		return nil, fmt.Errorf("marshal device info: %w", err)
-	}
-	rows, err := r.tm.Queries(ctx).ListUserSessionsByDeviceInfo(ctx, gen.ListUserSessionsByDeviceInfoParams{
-		UserID:     userID,
-		DeviceInfo: raw,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list user sessions by device info for user %s: %w", userID, err)
-	}
-	return userSessionsFromRows(rows), nil
-}
-
-func (r *userSessionRepository) GetActiveSessionsCount(ctx context.Context, userID uuid.UUID) (int, error) {
-	n, err := r.tm.Queries(ctx).CountActiveUserSessions(ctx, userID)
-	if err != nil {
-		return 0, fmt.Errorf("count active user_sessions for user %s: %w", userID, err)
-	}
-	return int(n), nil
 }
 
 // ----- gen ↔ domain conversion ---------------------------------------

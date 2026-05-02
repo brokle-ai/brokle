@@ -39,20 +39,6 @@ func (r *protectedLabelRepository) Delete(ctx context.Context, id uuid.UUID) err
 	return r.tm.Queries(ctx).DeleteProtectedPromptLabel(ctx, id)
 }
 
-func (r *protectedLabelRepository) GetByProjectAndLabel(ctx context.Context, projectID uuid.UUID, labelName string) (*promptDomain.ProtectedLabel, error) {
-	row, err := r.tm.Queries(ctx).GetProtectedPromptLabelByProjectAndLabel(ctx, gen.GetProtectedPromptLabelByProjectAndLabelParams{
-		ProjectID: projectID,
-		LabelName: labelName,
-	})
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get protected label %s: %w", labelName, promptDomain.ErrLabelNotFound)
-		}
-		return nil, err
-	}
-	return protectedLabelFromRow(&row), nil
-}
-
 func (r *protectedLabelRepository) ListByProject(ctx context.Context, projectID uuid.UUID) ([]*promptDomain.ProtectedLabel, error) {
 	rows, err := r.tm.Queries(ctx).ListProtectedPromptLabelsByProject(ctx, projectID)
 	if err != nil {
@@ -93,10 +79,6 @@ func (r *protectedLabelRepository) SetProtectedLabels(ctx context.Context, proje
 		}
 		return nil
 	})
-}
-
-func (r *protectedLabelRepository) DeleteByProject(ctx context.Context, projectID uuid.UUID) error {
-	return r.tm.Queries(ctx).DeleteProtectedPromptLabelsByProject(ctx, projectID)
 }
 
 func protectedLabelFromRow(row *gen.PromptProtectedLabel) *promptDomain.ProtectedLabel {

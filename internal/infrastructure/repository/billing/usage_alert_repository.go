@@ -53,14 +53,6 @@ func (r *usageAlertRepository) GetByBudgetID(ctx context.Context, budgetID uuid.
 	return usageAlertsFromRows(rows), nil
 }
 
-func (r *usageAlertRepository) GetUnacknowledged(ctx context.Context, orgID uuid.UUID) ([]*billingDomain.UsageAlert, error) {
-	rows, err := r.tm.Queries(ctx).ListUnacknowledgedUsageAlertsByOrg(ctx, orgID)
-	if err != nil {
-		return nil, fmt.Errorf("list unacknowledged alerts for org %s: %w", orgID, err)
-	}
-	return usageAlertsFromRows(rows), nil
-}
-
 func (r *usageAlertRepository) Create(ctx context.Context, a *billingDomain.UsageAlert) error {
 	if err := r.tm.Queries(ctx).CreateUsageAlert(ctx, gen.CreateUsageAlertParams{
 		ID:               a.ID,
@@ -87,13 +79,6 @@ func (r *usageAlertRepository) Create(ctx context.Context, a *billingDomain.Usag
 func (r *usageAlertRepository) Acknowledge(ctx context.Context, id uuid.UUID) error {
 	if err := r.tm.Queries(ctx).AcknowledgeUsageAlert(ctx, id); err != nil {
 		return fmt.Errorf("acknowledge alert %s: %w", id, err)
-	}
-	return nil
-}
-
-func (r *usageAlertRepository) Resolve(ctx context.Context, id uuid.UUID) error {
-	if err := r.tm.Queries(ctx).ResolveUsageAlert(ctx, id); err != nil {
-		return fmt.Errorf("resolve alert %s: %w", id, err)
 	}
 	return nil
 }

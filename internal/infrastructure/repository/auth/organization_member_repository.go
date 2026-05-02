@@ -136,7 +136,7 @@ func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.C
 
 func (r *organizationMemberRepository) HasUserPermission(ctx context.Context, userID uuid.UUID, permission string) (bool, error) {
 	ok, err := r.tm.Queries(ctx).UserHasPermissionGlobal(ctx, gen.UserHasPermissionGlobalParams{
-		UserID: userID,
+		UserID:  userID,
 		Column2: permission,
 	})
 	if err != nil {
@@ -219,59 +219,6 @@ func (r *organizationMemberRepository) UpdateMemberRole(ctx context.Context, use
 }
 
 // ----- Bulk operations ----------------------------------------------
-
-func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members []*authDomain.OrganizationMember) error {
-	if len(members) == 0 {
-		return nil
-	}
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		q := r.tm.Queries(ctx)
-		now := time.Now()
-		for _, m := range members {
-			if m.JoinedAt.IsZero() {
-				m.JoinedAt = now
-			}
-			if m.Status == "" {
-				m.Status = authDomain.MemberStatusActive
-			}
-			if err := q.CreateMember(ctx, gen.CreateMemberParams{
-				UserID:         m.UserID,
-				OrganizationID: m.OrganizationID,
-				RoleID:         m.RoleID,
-				Status:         m.Status,
-				JoinedAt:       m.JoinedAt,
-				InvitedBy:      m.InvitedBy,
-				CreatedAt:      now,
-				UpdatedAt:      now,
-			}); err != nil {
-				return fmt.Errorf("bulk-create member (user=%s org=%s): %w", m.UserID, m.OrganizationID, err)
-			}
-		}
-		return nil
-	})
-}
-
-func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, updates []authDomain.MemberRoleUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-	userIDs := make([]uuid.UUID, len(updates))
-	orgIDs := make([]uuid.UUID, len(updates))
-	roleIDs := make([]uuid.UUID, len(updates))
-	for i, u := range updates {
-		userIDs[i] = u.UserID
-		orgIDs[i] = u.OrganizationID
-		roleIDs[i] = u.RoleID
-	}
-	if err := r.tm.Queries(ctx).BulkUpdateMemberRoles(ctx, gen.BulkUpdateMemberRolesParams{
-		Column1: userIDs,
-		Column2: orgIDs,
-		Column3: roleIDs,
-	}); err != nil {
-		return fmt.Errorf("bulk-update member roles (%d updates): %w", len(updates), err)
-	}
-	return nil
-}
 
 // ----- Statistics ---------------------------------------------------
 

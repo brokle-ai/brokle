@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -97,43 +96,6 @@ func (r *auditLogRepository) GetByResource(ctx context.Context, resource, resour
 		return nil, fmt.Errorf("list audit_logs for resource %s/%s: %w", resource, resourceID, err)
 	}
 	return auditLogsFromRows(rows), nil
-}
-
-func (r *auditLogRepository) GetByAction(ctx context.Context, action string, limit, offset int) ([]*authDomain.AuditLog, error) {
-	rows, err := r.tm.Queries(ctx).ListAuditLogsByAction(ctx, gen.ListAuditLogsByActionParams{
-		Action: action,
-		Limit:  int32(limit),
-		Offset: int32(offset),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list audit_logs by action %s: %w", action, err)
-	}
-	return auditLogsFromRows(rows), nil
-}
-
-func (r *auditLogRepository) GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*authDomain.AuditLog, error) {
-	rows, err := r.tm.Queries(ctx).ListAuditLogsByDateRange(ctx, gen.ListAuditLogsByDateRangeParams{
-		CreatedAt:   startDate,
-		CreatedAt_2: endDate,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list audit_logs by date range: %w", err)
-	}
-	return auditLogsFromRows(rows), nil
-}
-
-// Search is a domain alias that delegates to GetByFilters.
-func (r *auditLogRepository) Search(ctx context.Context, filters *authDomain.AuditLogFilters) ([]*authDomain.AuditLog, int64, error) {
-	return r.GetByFilters(ctx, filters)
-}
-
-func (r *auditLogRepository) CleanupOldLogs(ctx context.Context, olderThan time.Time) error {
-	if _, err := r.tm.Queries(ctx).CleanupAuditLogsOlderThan(ctx, olderThan); err != nil {
-		return fmt.Errorf("cleanup audit_logs older than %s: %w", olderThan, err)
-	}
-	return nil
 }
 
 // ----- gen ↔ domain boundary -----------------------------------------

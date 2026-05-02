@@ -156,45 +156,6 @@ type VolumeTier struct {
 	Discount  decimal.Decimal `json:"discount"` // percentage or fixed amount
 }
 
-// BillingRecord represents a billing record (moved from deleted analytics worker)
-type BillingRecord struct {
-	UpdatedAt      time.Time       `json:"updated_at"`
-	CreatedAt      time.Time       `json:"created_at"`
-	Metadata       map[string]any  `json:"metadata"`
-	TransactionID  *string         `json:"transaction_id,omitempty"`
-	PaymentMethod  *string         `json:"payment_method,omitempty"`
-	ProcessedAt    *time.Time      `json:"processed_at,omitempty"`
-	Period         string          `json:"period"`
-	Currency       string          `json:"currency"`
-	Status         string          `json:"status"`
-	Amount         decimal.Decimal `json:"amount"`
-	NetCost        decimal.Decimal `json:"net_cost"`
-	ID             uuid.UUID       `json:"id"`
-	OrganizationID uuid.UUID       `json:"organization_id"`
-}
-
-// BillingSummary represents aggregated billing data (moved from deleted analytics worker)
-type BillingSummary struct {
-	PeriodStart       time.Time       `json:"period_start"`
-	PeriodEnd         time.Time       `json:"period_end"`
-	CreatedAt         time.Time       `json:"created_at"`
-	GeneratedAt       time.Time       `json:"generated_at"`
-	ModelBreakdown    map[string]any  `json:"model_breakdown"`
-	ProviderBreakdown map[string]any  `json:"provider_breakdown"`
-	Currency          string          `json:"currency"`
-	Period            string          `json:"period"`
-	Status            string          `json:"status"`
-	TotalAmount       decimal.Decimal `json:"total_amount"`
-	Discounts         decimal.Decimal `json:"discounts"`
-	NetCost           decimal.Decimal `json:"net_cost"`
-	RecordCount       int             `json:"record_count"`
-	TotalCost         decimal.Decimal `json:"total_cost"`
-	TotalTokens       int             `json:"total_tokens"`
-	TotalRequests     int             `json:"total_requests"`
-	ID                uuid.UUID       `json:"id"`
-	OrganizationID    uuid.UUID       `json:"organization_id"`
-}
-
 // Usage-Based Billing Entities
 
 // Queried from ClickHouse billable_usage_hourly/daily tables

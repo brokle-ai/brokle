@@ -18,7 +18,6 @@ import (
 type ProviderModelRepository interface {
 	// Provider Model CRUD
 	CreateProviderModel(ctx context.Context, model *ProviderModel) error
-	GetProviderModel(ctx context.Context, modelID uuid.UUID) (*ProviderModel, error)
 	GetProviderModelByName(ctx context.Context, projectID *uuid.UUID, modelName string) (*ProviderModel, error)
 	GetProviderModelAtTime(ctx context.Context, projectID *uuid.UUID, modelName string, atTime time.Time) (*ProviderModel, error)
 	ListProviderModels(ctx context.Context, projectID *uuid.UUID) ([]*ProviderModel, error)

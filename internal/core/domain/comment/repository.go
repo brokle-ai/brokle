@@ -24,6 +24,4 @@ type Repository interface {
 
 	// CountByEntity returns count of non-deleted comments (including replies).
 	CountByEntity(ctx context.Context, entityType EntityType, entityID string, projectID uuid.UUID) (int64, error)
-
-	HasActiveReplies(ctx context.Context, parentID uuid.UUID) (bool, error)
 }

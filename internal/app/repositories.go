@@ -101,9 +101,8 @@ func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRep
 	}
 }
 
-func ProvideBillingRepositories(tm *db.TxManager, clickhouseDB *database.ClickHouseDB, logger *slog.Logger) *BillingRepositories {
+func ProvideBillingRepositories(tm *db.TxManager, clickhouseDB *database.ClickHouseDB, _ *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
-		BillingRecord: billingRepo.NewBillingRecordRepository(tm, logger),
 		// Usage-based billing repositories
 		BillableUsage:       billingRepo.NewBillableUsageRepository(clickhouseDB.Conn),
 		Plan:                billingRepo.NewPlanRepository(tm),

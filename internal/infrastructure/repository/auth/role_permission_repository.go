@@ -50,22 +50,6 @@ func (r *rolePermissionRepository) createRolePermission(ctx context.Context, rp 
 	return nil
 }
 
-func (r *rolePermissionRepository) GetByRoleID(ctx context.Context, roleID uuid.UUID) ([]*authDomain.RolePermission, error) {
-	rows, err := r.tm.Queries(ctx).ListRolePermissionsByRoleID(ctx, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("list role_permissions for role %s: %w", roleID, err)
-	}
-	return rolePermissionsFromRows(rows), nil
-}
-
-func (r *rolePermissionRepository) GetByPermissionID(ctx context.Context, permissionID uuid.UUID) ([]*authDomain.RolePermission, error) {
-	rows, err := r.tm.Queries(ctx).ListRolePermissionsByPermissionID(ctx, permissionID)
-	if err != nil {
-		return nil, fmt.Errorf("list role_permissions for permission %s: %w", permissionID, err)
-	}
-	return rolePermissionsFromRows(rows), nil
-}
-
 func (r *rolePermissionRepository) Delete(ctx context.Context, roleID, permissionID uuid.UUID) error {
 	if err := r.tm.Queries(ctx).DeleteRolePermission(ctx, gen.DeleteRolePermissionParams{
 		RoleID:       roleID,
@@ -101,49 +85,9 @@ func (r *rolePermissionRepository) Exists(ctx context.Context, roleID, permissio
 	return ok, nil
 }
 
-// HasPermission is an alias for Exists retained by the domain interface.
-func (r *rolePermissionRepository) HasPermission(ctx context.Context, roleID, permissionID uuid.UUID) (bool, error) {
-	return r.Exists(ctx, roleID, permissionID)
-}
-
-// AssignPermissions replaces the role's entire permission set with the given
-// permissions. Wraps in a single transaction so a partial failure reverts
-// the delete. WithinTransaction is reentrant-safe — if a service already has
-// a tx open, we reuse it (outer wins).
-func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID uuid.UUID, permissionIDs []uuid.UUID, grantedBy *uuid.UUID) error {
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		if err := r.DeleteByRoleID(ctx, roleID); err != nil {
-			return err
-		}
-		return r.bulkInsert(ctx, roleID, permissionIDs, grantedBy)
-	})
-}
-
-// RevokePermissions removes the specified permissions from the role in a
-// single statement — no round-trip per ID.
-func (r *rolePermissionRepository) RevokePermissions(ctx context.Context, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
-	if len(permissionIDs) == 0 {
-		return nil
-	}
-	if _, err := r.tm.Queries(ctx).DeleteRolePermissionsForRoleIn(ctx, gen.DeleteRolePermissionsForRoleInParams{
-		RoleID:        roleID,
-		PermissionIds: permissionIDs,
-	}); err != nil {
-		return fmt.Errorf("revoke permissions from role %s: %w", roleID, err)
-	}
-	return nil
-}
-
 // RevokeAllPermissions drops every permission from the role.
 func (r *rolePermissionRepository) RevokeAllPermissions(ctx context.Context, roleID uuid.UUID) error {
 	return r.DeleteByRoleID(ctx, roleID)
-}
-
-// ReplaceAllPermissions is the canonical full-reset primitive. Matches the
-// AssignPermissions behaviour; both exist in the domain interface for
-// historical reasons.
-func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, roleID uuid.UUID, permissionIDs []uuid.UUID, grantedBy *uuid.UUID) error {
-	return r.AssignPermissions(ctx, roleID, permissionIDs, grantedBy)
 }
 
 func (r *rolePermissionRepository) HasResourceAction(ctx context.Context, roleID uuid.UUID, resource, action string) (bool, error) {
@@ -186,46 +130,6 @@ func (r *rolePermissionRepository) CheckResourceActions(ctx context.Context, rol
 		}
 	}
 	return result, nil
-}
-
-// BulkAssign inserts the given assignments atomically. Unique-constraint
-// violations surface through the underlying insert — callers are expected
-// to deduplicate when atomicity across conflicts matters.
-func (r *rolePermissionRepository) BulkAssign(ctx context.Context, assignments []authDomain.RolePermissionAssignment) error {
-	if len(assignments) == 0 {
-		return nil
-	}
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		q := r.tm.Queries(ctx)
-		for _, a := range assignments {
-			if err := q.CreateRolePermission(ctx, gen.CreateRolePermissionParams{
-				RoleID:       a.RoleID,
-				PermissionID: a.PermissionID,
-			}); err != nil {
-				return fmt.Errorf("bulk assign role=%s permission=%s: %w", a.RoleID, a.PermissionID, err)
-			}
-		}
-		return nil
-	})
-}
-
-// BulkRevoke deletes the given (role, permission) pairs atomically.
-func (r *rolePermissionRepository) BulkRevoke(ctx context.Context, revocations []authDomain.RolePermissionRevocation) error {
-	if len(revocations) == 0 {
-		return nil
-	}
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		q := r.tm.Queries(ctx)
-		for _, rev := range revocations {
-			if err := q.DeleteRolePermission(ctx, gen.DeleteRolePermissionParams{
-				RoleID:       rev.RoleID,
-				PermissionID: rev.PermissionID,
-			}); err != nil {
-				return fmt.Errorf("bulk revoke role=%s permission=%s: %w", rev.RoleID, rev.PermissionID, err)
-			}
-		}
-		return nil
-	})
 }
 
 func (r *rolePermissionRepository) GetRolePermissionCount(ctx context.Context, roleID uuid.UUID) (int, error) {

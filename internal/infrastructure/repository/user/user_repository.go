@@ -164,20 +164,6 @@ func (r *userRepository) UpdateLastLogin(ctx context.Context, userID uuid.UUID) 
 	return nil
 }
 
-func (r *userRepository) MarkEmailAsVerified(ctx context.Context, userID uuid.UUID) error {
-	if err := r.tm.Queries(ctx).MarkUserEmailVerified(ctx, userID); err != nil {
-		return fmt.Errorf("mark email verified for user %s: %w", userID, err)
-	}
-	return nil
-}
-
-// VerifyEmail is a legacy token-validating entry point used by the
-// service layer; the token is validated elsewhere and this delegates
-// to MarkEmailAsVerified.
-func (r *userRepository) VerifyEmail(ctx context.Context, userID uuid.UUID, _ string) error {
-	return r.MarkEmailAsVerified(ctx, userID)
-}
-
 func (r *userRepository) SetDefaultOrganization(ctx context.Context, userID uuid.UUID, orgID uuid.UUID) error {
 	var orgPtr *uuid.UUID
 	if orgID != uuid.Nil {
@@ -188,35 +174,6 @@ func (r *userRepository) SetDefaultOrganization(ctx context.Context, userID uuid
 		DefaultOrganizationID: orgPtr,
 	}); err != nil {
 		return fmt.Errorf("set default org for user %s: %w", userID, err)
-	}
-	return nil
-}
-
-func (r *userRepository) GetDefaultOrganization(ctx context.Context, userID uuid.UUID) (*uuid.UUID, error) {
-	ptr, err := r.tm.Queries(ctx).GetUserDefaultOrganization(ctx, userID)
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, fmt.Errorf("get default org for user %s: %w", userID, userDomain.ErrNotFound)
-		}
-		return nil, fmt.Errorf("get default org for user %s: %w", userID, err)
-	}
-	return ptr, nil
-}
-
-func (r *userRepository) DeactivateUser(ctx context.Context, userID uuid.UUID) error {
-	return r.setActive(ctx, userID, false)
-}
-
-func (r *userRepository) ReactivateUser(ctx context.Context, userID uuid.UUID) error {
-	return r.setActive(ctx, userID, true)
-}
-
-func (r *userRepository) setActive(ctx context.Context, userID uuid.UUID, active bool) error {
-	if err := r.tm.Queries(ctx).SetUserActive(ctx, gen.SetUserActiveParams{
-		ID:       userID,
-		IsActive: active,
-	}); err != nil {
-		return fmt.Errorf("set user %s active=%t: %w", userID, active, err)
 	}
 	return nil
 }
@@ -232,52 +189,6 @@ func (r *userRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*user
 		return nil, fmt.Errorf("list users by ids (n=%d): %w", len(ids), err)
 	}
 	return usersFromRows(rows), nil
-}
-
-func (r *userRepository) GetUsersByOrganization(ctx context.Context, organizationID uuid.UUID) ([]*userDomain.User, error) {
-	rows, err := r.tm.Queries(ctx).ListUsersByOrganization(ctx, organizationID)
-	if err != nil {
-		return nil, fmt.Errorf("list users for org %s: %w", organizationID, err)
-	}
-	return usersFromRows(rows), nil
-}
-
-// ----- Statistics -----------------------------------------------------
-
-func (r *userRepository) GetUserStats(ctx context.Context) (*userDomain.UserStats, error) {
-	q := r.tm.Queries(ctx)
-
-	total, err := q.CountActiveUsers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("count users: %w", err)
-	}
-	since := time.Now().AddDate(0, 0, -30)
-	active, err := q.CountUsersLoggedInSince(ctx, &since)
-	if err != nil {
-		return nil, fmt.Errorf("count active users: %w", err)
-	}
-	verified, err := q.CountVerifiedUsers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("count verified users: %w", err)
-	}
-	newToday, err := q.CountUsersCreatedSince(ctx, time.Now().Truncate(24*time.Hour))
-	if err != nil {
-		return nil, fmt.Errorf("count new users today: %w", err)
-	}
-	return &userDomain.UserStats{
-		TotalUsers:    total,
-		ActiveUsers:   active,
-		VerifiedUsers: verified,
-		NewUsersToday: newToday,
-	}, nil
-}
-
-func (r *userRepository) GetNewUsersCount(ctx context.Context, since time.Time) (int64, error) {
-	n, err := r.tm.Queries(ctx).CountUsersCreatedSince(ctx, since)
-	if err != nil {
-		return 0, fmt.Errorf("count new users since %s: %w", since, err)
-	}
-	return n, nil
 }
 
 // ----- Profile operations --------------------------------------------
@@ -367,16 +278,6 @@ func (r *userRepository) UpdateProfile(ctx context.Context, p *userDomain.UserPr
 	return nil
 }
 
-// Transaction is on the domain interface but has no callers. Kept to
-// satisfy the interface; delegates to TxManager. The fn receives a new
-// userRepository that shares the same TxManager — tx scoping travels
-// through ctx.
-func (r *userRepository) Transaction(fn func(userDomain.Repository) error) error {
-	return r.tm.WithinTransaction(context.Background(), func(ctx context.Context) error {
-		return fn(r)
-	})
-}
-
 // ----- gen ↔ domain boundary ----------------------------------------
 
 func userFromRow(row *gen.User) *userDomain.User {
@@ -439,4 +340,3 @@ func profileFromRow(row *gen.UserProfile) *userDomain.UserProfile {
 		UpdatedAt:             row.UpdatedAt,
 	}
 }
-

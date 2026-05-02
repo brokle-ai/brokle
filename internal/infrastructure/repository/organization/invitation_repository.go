@@ -290,18 +290,6 @@ func (r *invitationRepository) CreateAuditEvent(ctx context.Context, event *orgD
 	return nil
 }
 
-func (r *invitationRepository) GetAuditEventsByInvitationID(ctx context.Context, invitationID uuid.UUID) ([]*orgDomain.InvitationAuditEvent, error) {
-	rows, err := r.tm.Queries(ctx).ListInvitationAuditEventsByInvitation(ctx, invitationID)
-	if err != nil {
-		return nil, fmt.Errorf("list invitation audit events %s: %w", invitationID, err)
-	}
-	out := make([]*orgDomain.InvitationAuditEvent, 0, len(rows))
-	for i := range rows {
-		out = append(out, auditEventFromRow(&rows[i]))
-	}
-	return out, nil
-}
-
 // ----- gen ↔ domain boundary ----------------------------------------
 
 func invitationFromRow(row *gen.UserInvitation) *orgDomain.Invitation {

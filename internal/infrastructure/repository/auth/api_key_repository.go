@@ -120,29 +120,6 @@ func (r *apiKeyRepository) GetByProjectID(ctx context.Context, projectID uuid.UU
 	return apiKeysFromRows(rows), nil
 }
 
-func (r *apiKeyRepository) CleanupExpiredAPIKeys(ctx context.Context) error {
-	if _, err := r.tm.Queries(ctx).CleanupExpiredAPIKeys(ctx); err != nil {
-		return fmt.Errorf("cleanup expired api_keys: %w", err)
-	}
-	return nil
-}
-
-func (r *apiKeyRepository) GetAPIKeyCount(ctx context.Context, userID uuid.UUID) (int, error) {
-	n, err := r.tm.Queries(ctx).CountAPIKeysByUser(ctx, userID)
-	if err != nil {
-		return 0, fmt.Errorf("count api_keys for user %s: %w", userID, err)
-	}
-	return int(n), nil
-}
-
-func (r *apiKeyRepository) GetActiveAPIKeyCount(ctx context.Context, userID uuid.UUID) (int, error) {
-	n, err := r.tm.Queries(ctx).CountActiveAPIKeysByUser(ctx, userID)
-	if err != nil {
-		return 0, fmt.Errorf("count active api_keys for user %s: %w", userID, err)
-	}
-	return int(n), nil
-}
-
 // ----- gen ↔ domain boundary -----------------------------------------
 
 // apiKeyFromRow adapts a sqlc-generated row to the domain type.

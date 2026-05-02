@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	sq "github.com/Masterminds/squirrel"
+	"github.com/google/uuid"
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/infrastructure/db"
@@ -93,17 +93,6 @@ func (r *promptRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("soft-delete prompt: %w", err)
 	}
 	return nil
-}
-
-func (r *promptRepository) Restore(ctx context.Context, id uuid.UUID) error {
-	if err := r.tm.Queries(ctx).RestorePrompt(ctx, id); err != nil {
-		return fmt.Errorf("restore prompt: %w", err)
-	}
-	return nil
-}
-
-func (r *promptRepository) CountByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
-	return r.tm.Queries(ctx).CountPromptsByProject(ctx, projectID)
 }
 
 // ListByProject uses squirrel for optional type/tag/search filtering.

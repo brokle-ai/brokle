@@ -55,20 +55,6 @@ func (r *datasetVersionRepository) GetByID(ctx context.Context, id, datasetID uu
 	return datasetVersionFromRow(&row)
 }
 
-func (r *datasetVersionRepository) GetByVersionNumber(ctx context.Context, datasetID uuid.UUID, versionNum int) (*evalDomain.DatasetVersion, error) {
-	row, err := r.tm.Queries(ctx).GetDatasetVersionByNumber(ctx, gen.GetDatasetVersionByNumberParams{
-		DatasetID: datasetID,
-		Version:   int32(versionNum),
-	})
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, evalDomain.ErrDatasetVersionNotFound
-		}
-		return nil, err
-	}
-	return datasetVersionFromRow(&row)
-}
-
 func (r *datasetVersionRepository) GetLatest(ctx context.Context, datasetID uuid.UUID) (*evalDomain.DatasetVersion, error) {
 	row, err := r.tm.Queries(ctx).GetLatestDatasetVersion(ctx, datasetID)
 	if err != nil {
@@ -116,10 +102,6 @@ func (r *datasetVersionRepository) AddItems(ctx context.Context, versionID uuid.
 		Column1: versionIDs,
 		Column2: itemIDs,
 	})
-}
-
-func (r *datasetVersionRepository) GetItemIDs(ctx context.Context, versionID uuid.UUID) ([]uuid.UUID, error) {
-	return r.tm.Queries(ctx).ListDatasetItemIDsForVersion(ctx, versionID)
 }
 
 func (r *datasetVersionRepository) GetItems(ctx context.Context, versionID uuid.UUID, limit, offset int) ([]*evalDomain.DatasetItem, int64, error) {

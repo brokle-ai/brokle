@@ -77,10 +77,6 @@ func (r *memberRepository) GetByUserAndOrganization(ctx context.Context, userID,
 	return memberFromRow(&row), nil
 }
 
-func (r *memberRepository) GetByUserAndOrg(ctx context.Context, userID, orgID uuid.UUID) (*orgDomain.Member, error) {
-	return r.GetByUserAndOrganization(ctx, userID, orgID)
-}
-
 func (r *memberRepository) Update(ctx context.Context, m *orgDomain.Member) error {
 	if err := r.tm.Queries(ctx).UpdateMember(ctx, gen.UpdateMemberParams{
 		UserID:         m.UserID,
@@ -114,18 +110,6 @@ func (r *memberRepository) GetByOrganizationID(ctx context.Context, orgID uuid.U
 	rows, err := r.tm.Queries(ctx).ListMembersByOrganization(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("list members for org %s: %w", orgID, err)
-	}
-	return membersFromRows(rows), nil
-}
-
-func (r *memberRepository) GetMembersByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*orgDomain.Member, error) {
-	return r.GetByOrganizationID(ctx, orgID)
-}
-
-func (r *memberRepository) GetMembersByUserID(ctx context.Context, userID uuid.UUID) ([]*orgDomain.Member, error) {
-	rows, err := r.tm.Queries(ctx).ListMembersByUser(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list memberships for user %s: %w", userID, err)
 	}
 	return membersFromRows(rows), nil
 }

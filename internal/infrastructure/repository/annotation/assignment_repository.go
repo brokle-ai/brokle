@@ -50,7 +50,7 @@ func (r *assignmentRepository) Delete(ctx context.Context, queueID, userID uuid.
 	return nil
 }
 
-func (r *assignmentRepository) GetByQueueAndUser(ctx context.Context, queueID, userID uuid.UUID) (*annotationDomain.QueueAssignment, error) {
+func (r *assignmentRepository) getByQueueAndUser(ctx context.Context, queueID, userID uuid.UUID) (*annotationDomain.QueueAssignment, error) {
 	row, err := r.tm.Queries(ctx).GetAnnotationQueueAssignmentByQueueAndUser(ctx, gen.GetAnnotationQueueAssignmentByQueueAndUserParams{
 		QueueID: queueID,
 		UserID:  userID,
@@ -98,7 +98,7 @@ func (r *assignmentRepository) IsAssigned(ctx context.Context, queueID, userID u
 // HasRole checks whether the user's assigned role meets or exceeds the
 // minimum. Role hierarchy: admin > reviewer > annotator.
 func (r *assignmentRepository) HasRole(ctx context.Context, queueID, userID uuid.UUID, minRole annotationDomain.AssignmentRole) (bool, error) {
-	a, err := r.GetByQueueAndUser(ctx, queueID, userID)
+	a, err := r.getByQueueAndUser(ctx, queueID, userID)
 	if err != nil {
 		if err == annotationDomain.ErrAssignmentNotFound {
 			return false, nil
