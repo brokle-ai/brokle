@@ -117,7 +117,7 @@ export function AssignmentDialog({
   })
 
   const assignments = assignmentsQuery.data ?? []
-  const members = membersQuery.data?.members ?? []
+  const members = membersQuery.data?.data ?? []
 
   const availableMembers = useMemo(() => {
     const taken = new Set(assignments.map((a) => a.user_id))

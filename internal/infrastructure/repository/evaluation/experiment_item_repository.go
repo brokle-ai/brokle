@@ -91,10 +91,6 @@ func (r *experimentItemRepository) List(ctx context.Context, experimentID uuid.U
 	return out, total, nil
 }
 
-func (r *experimentItemRepository) CountByExperiment(ctx context.Context, experimentID uuid.UUID) (int64, error) {
-	return r.tm.Queries(ctx).CountExperimentItems(ctx, experimentID)
-}
-
 func experimentItemFromRow(row *gen.ExperimentItem) (*evalDomain.ExperimentItem, error) {
 	it := &evalDomain.ExperimentItem{
 		ID:            row.ID,

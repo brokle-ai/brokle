@@ -1,7 +1,7 @@
 // Package playground exposes prompt playground operations on two surfaces:
-//   - Dashboard plane (RequireAuth) — session CRUD under
-//     /api/v1/projects/{projectId}/playground/sessions plus execute + stream
-//     endpoints keyed by project_id in the request body.
+//   - Dashboard plane (RequireAuth) — session CRUD plus execute + stream
+//     endpoints all mounted under /api/v1/projects/{projectId}/playground/...,
+//     with project tenancy resolved from the URL via httpctx.MustGetProjectID.
 //   - SDK plane (RequireSDKAuth) — /v1/playground/execute with the project
 //     derived from the API key.
 //

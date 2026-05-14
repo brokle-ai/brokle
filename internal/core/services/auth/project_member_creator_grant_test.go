@@ -106,12 +106,6 @@ func (s *configurableOrgMemberRepo) GetActiveMembers(context.Context, uuid.UUID)
 func (s *configurableOrgMemberRepo) UpdateMemberRole(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	panic("unimplemented")
 }
-func (s *configurableOrgMemberRepo) BulkCreate(context.Context, []*authDomain.OrganizationMember) error {
-	panic("unimplemented")
-}
-func (s *configurableOrgMemberRepo) BulkUpdateRoles(context.Context, []authDomain.MemberRoleUpdate) error {
-	panic("unimplemented")
-}
 func (s *configurableOrgMemberRepo) GetMemberCount(context.Context, uuid.UUID) (int, error) {
 	panic("unimplemented")
 }
@@ -184,10 +178,6 @@ func (s *configurableRoleRepo) UpdateRolePermissions(context.Context, uuid.UUID,
 func (s *configurableRoleRepo) GetRoleStatistics(context.Context) (*authDomain.RoleStatistics, error) {
 	panic("unimplemented")
 }
-func (s *configurableRoleRepo) BulkCreate(context.Context, []*authDomain.Role) error {
-	panic("unimplemented")
-}
-
 // builtinAdminRole returns a Role shaped like the seeded `admin`
 // template (scope_type=organization, scope_id=NULL). This is exactly
 // the role ProjectService.CreateProject resolves and assigns.

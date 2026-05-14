@@ -134,17 +134,6 @@ func (r *roleRepository) GetSystemRoles(ctx context.Context) ([]*authDomain.Role
 	return rolesFromRows(rows), nil
 }
 
-func (r *roleRepository) GetCustomRolesByScopeID(ctx context.Context, scopeType string, scopeID uuid.UUID) ([]*authDomain.Role, error) {
-	rows, err := r.tm.Queries(ctx).ListCustomRolesByScopeID(ctx, gen.ListCustomRolesByScopeIDParams{
-		ScopeType: scopeType,
-		ScopeID:   &scopeID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list custom roles for %s/%s: %w", scopeType, scopeID, err)
-	}
-	return rolesFromRows(rows), nil
-}
-
 func (r *roleRepository) GetCustomRolesByOrganization(ctx context.Context, organizationID uuid.UUID) ([]*authDomain.Role, error) {
 	rows, err := r.tm.Queries(ctx).ListCustomRolesByOrganization(ctx, &organizationID)
 	if err != nil {
@@ -265,29 +254,6 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 
 // ----- Bulk ----------------------------------------------------------
 
-func (r *roleRepository) BulkCreate(ctx context.Context, roles []*authDomain.Role) error {
-	if len(roles) == 0 {
-		return nil
-	}
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		q := r.tm.Queries(ctx)
-		for _, role := range roles {
-			if err := q.CreateRole(ctx, gen.CreateRoleParams{
-				ID:          role.ID,
-				Name:        role.Name,
-				ScopeType:   role.ScopeType,
-				ScopeID:     role.ScopeID,
-				Description: role.Description,
-				CreatedAt:   role.CreatedAt,
-				UpdatedAt:   role.UpdatedAt,
-			}); err != nil {
-				return fmt.Errorf("bulk-create role %s: %w", role.Name, err)
-			}
-		}
-		return nil
-	})
-}
-
 // ----- gen ↔ domain boundary ----------------------------------------
 
 func roleFromRow(row *gen.Role) *authDomain.Role {
@@ -309,4 +275,3 @@ func rolesFromRows(rows []gen.Role) []*authDomain.Role {
 	}
 	return out
 }
-

@@ -55,9 +55,6 @@ type ItemRepository interface {
 	// Delete removes a queue item by ID.
 	Delete(ctx context.Context, id, queueID uuid.UUID) error
 
-	// ExistsByObject checks if an item for the given object exists in the queue.
-	ExistsByObject(ctx context.Context, queueID uuid.UUID, objectID string, objectType ObjectType) (bool, error)
-
 	// FetchAndLockNext finds and locks the next available item for annotation.
 	// Follows Langfuse pattern: finds first pending item where:
 	// - Never locked, OR
@@ -92,9 +89,6 @@ type AssignmentRepository interface {
 
 	// Delete removes a queue assignment by queue and user ID.
 	Delete(ctx context.Context, queueID, userID uuid.UUID) error
-
-	// GetByQueueAndUser retrieves an assignment by queue and user ID.
-	GetByQueueAndUser(ctx context.Context, queueID, userID uuid.UUID) (*QueueAssignment, error)
 
 	// List retrieves all assignments for a queue.
 	List(ctx context.Context, queueID uuid.UUID) ([]*QueueAssignment, error)

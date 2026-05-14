@@ -130,7 +130,7 @@ func (h *Handler) ListQueues(w http.ResponseWriter, r *http.Request) {
 			Stats: toStatsResponse(stats[i]),
 		}
 	}
-	response.Success(w, listQueuesResponse{Data: out, Total: total, Page: page, Limit: limit})
+	response.Success(w, listQueuesResponse{Data: out, Pagination: response.BuildPagination(page, limit, total)})
 }
 
 // ---- queue: get / get-with-stats ------------------------------------
@@ -311,7 +311,7 @@ func (h *Handler) doListItems(w http.ResponseWriter, r *http.Request, projectID,
 	for i, item := range items {
 		out[i] = toItemResponse(item)
 	}
-	response.Success(w, listItemsResponse{Data: out, Total: total, Page: page, Limit: limit})
+	response.Success(w, listItemsResponse{Data: out, Pagination: response.BuildPagination(page, limit, total)})
 }
 
 // ---- items: claim-next ---------------------------------------------

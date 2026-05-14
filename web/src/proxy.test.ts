@@ -59,6 +59,7 @@ describe('proxy matcher', () => {
     expect('/_next/static/chunks/foo.js').not.toMatch(pattern)
     expect('/favicon.ico').not.toMatch(pattern)
     expect('/logo.svg').not.toMatch(pattern)
+    expect('/site.webmanifest').not.toMatch(pattern)
   })
 })
 

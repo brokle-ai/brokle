@@ -30,8 +30,8 @@ interface ExperimentDetailProps {
   orgId: string
   projectId: string
   experimentId: string
+  page: number
   limit: number
-  offset: number
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -53,8 +53,8 @@ export function ExperimentDetail({
   orgId,
   projectId,
   experimentId,
+  page,
   limit,
-  offset,
 }: ExperimentDetailProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -72,7 +72,7 @@ export function ExperimentDetail({
       await navigate({
         to: '/o/$orgId/p/$projectId/experiments/$experimentId',
         params: { orgId, projectId, experimentId: fresh.id },
-        search: { page: 1, limit: 20, offset: 0, q: undefined },
+        search: { page: 1, limit: 20 },
       })
     },
     onError: (err) => {
@@ -87,20 +87,19 @@ export function ExperimentDetail({
   })
   const { data: itemsResp } = useSuspenseQuery(
     experimentItemsListQueryOptions(projectId, experimentId, {
+      page,
       limit,
-      offset,
     }),
   )
   const { data: metrics } = useSuspenseQuery(
     experimentMetricsQueryOptions(projectId, experimentId),
   )
 
-  const items = itemsResp.items
-  const total = itemsResp.total
-  const totalPages = Math.max(1, Math.ceil(total / Math.max(1, limit)))
-  const currentPage = Math.floor(offset / Math.max(1, limit)) + 1
-  const hasPrev = offset > 0
-  const hasNext = offset + limit < total
+  const items = itemsResp.data
+  const { total_pages: totalPagesRaw, has_next: hasNext, has_prev: hasPrev } =
+    itemsResp.pagination
+  const totalPages = Math.max(1, totalPagesRaw)
+  const currentPage = page
 
   // Pick a single "headline" score from the metrics map — the first one
   // present. The metrics endpoint returns a map keyed by score name
@@ -254,9 +253,8 @@ export function ExperimentDetail({
                 to="/o/$orgId/p/$projectId/experiments/$experimentId"
                 params={{ orgId, projectId, experimentId }}
                 search={{
-                  page: currentPage,
+                  page: Math.max(1, currentPage - 1),
                   limit,
-                  offset: Math.max(0, offset - limit),
                 }}
               >
                 Previous
@@ -266,7 +264,7 @@ export function ExperimentDetail({
               <Link
                 to="/o/$orgId/p/$projectId/experiments/$experimentId"
                 params={{ orgId, projectId, experimentId }}
-                search={{ page: currentPage, limit, offset: offset + limit }}
+                search={{ page: currentPage + 1, limit }}
               >
                 Next
               </Link>

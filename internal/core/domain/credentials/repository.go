@@ -20,10 +20,6 @@ type ProviderCredentialRepository interface {
 	// Returns nil if not found.
 	GetByOrgAndName(ctx context.Context, orgID uuid.UUID, name string) (*ProviderCredential, error)
 
-	// GetByOrgAndAdapter retrieves all credentials for a specific organization and adapter type.
-	// Returns empty slice if none found.
-	GetByOrgAndAdapter(ctx context.Context, orgID uuid.UUID, adapter Provider) ([]*ProviderCredential, error)
-
 	// ListByOrganization retrieves all credentials for an organization.
 	// Returns empty slice if no credentials configured.
 	ListByOrganization(ctx context.Context, orgID uuid.UUID) ([]*ProviderCredential, error)
@@ -35,7 +31,4 @@ type ProviderCredentialRepository interface {
 	// Delete removes a credential by ID within a specific organization.
 	// Returns an appErrors.NotFound("credential") if the credential doesn't exist or belongs to different organization.
 	Delete(ctx context.Context, id uuid.UUID, orgID uuid.UUID) error
-
-	// ExistsByOrgAndName checks if a credential exists for an organization/name combination.
-	ExistsByOrgAndName(ctx context.Context, orgID uuid.UUID, name string) (bool, error)
 }

@@ -175,7 +175,7 @@ func (h *Handler) DashListDatasets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.DatasetWithItemCountResponse]{
-		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
+		Data: out, Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 
@@ -251,7 +251,7 @@ func (h *Handler) DashListDatasetItems(w http.ResponseWriter, r *http.Request) {
 		out[i] = toDatasetItemResponse(it)
 	}
 	response.Success(w, pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 
@@ -465,7 +465,7 @@ func (h *Handler) DashGetDatasetVersionItems(w http.ResponseWriter, r *http.Requ
 		out[i] = toDatasetItemResponse(it)
 	}
 	response.Success(w, pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 
@@ -536,7 +536,7 @@ func (h *Handler) SdkListDatasets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.DatasetWithItemCountResponse]{
-		Data: out, Total: total, Page: params.Page, Limit: params.Limit,
+		Data: out, Pagination: response.BuildPagination(params.Page, params.Limit, total),
 	})
 }
 
@@ -634,7 +634,7 @@ func (h *Handler) SdkListDatasetItems(w http.ResponseWriter, r *http.Request) {
 		out[i] = toDatasetItemResponse(it)
 	}
 	response.Success(w, pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 
@@ -805,7 +805,7 @@ func (h *Handler) SdkGetDatasetVersionItems(w http.ResponseWriter, r *http.Reque
 		out[i] = toDatasetItemResponse(it)
 	}
 	response.Success(w, pageList[*DatasetItemResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 

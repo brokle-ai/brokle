@@ -349,7 +349,6 @@ export interface ExecuteRequest {
   variables: Record<string, string>
   config_overrides?: APIModelConfig
   session_id?: string
-  project_id: string
 }
 
 export interface ExecuteResponse {

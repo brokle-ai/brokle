@@ -90,23 +90,6 @@ func (r *projectRepository) GetByOrganizationID(ctx context.Context, orgID uuid.
 	return out, nil
 }
 
-func (r *projectRepository) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	n, err := r.tm.Queries(ctx).CountProjectsByOrganization(ctx, orgID)
-	if err != nil {
-		return 0, fmt.Errorf("count projects for org %s: %w", orgID, err)
-	}
-	return n, nil
-}
-
-// GetProjectCount is a legacy alias that returns int instead of int64.
-func (r *projectRepository) GetProjectCount(ctx context.Context, orgID uuid.UUID) (int, error) {
-	n, err := r.CountByOrganization(ctx, orgID)
-	if err != nil {
-		return 0, err
-	}
-	return int(n), nil
-}
-
 func (r *projectRepository) CanUserAccessProject(ctx context.Context, userID, projectID uuid.UUID) (bool, error) {
 	ok, err := r.tm.Queries(ctx).UserCanAccessProject(ctx, gen.UserCanAccessProjectParams{
 		ID:     projectID,

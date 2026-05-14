@@ -10,24 +10,6 @@ import (
 )
 
 // ============================================================================
-// Billing Repositories
-// ============================================================================
-
-// BillingRecordRepository handles billing records and summaries persistence
-type BillingRecordRepository interface {
-	// Billing records
-	InsertBillingRecord(ctx context.Context, record *BillingRecord) error
-	UpdateBillingRecord(ctx context.Context, recordID uuid.UUID, record *BillingRecord) error
-	GetBillingRecord(ctx context.Context, recordID uuid.UUID) (*BillingRecord, error)
-	GetBillingHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*BillingRecord, error)
-
-	// Billing summaries
-	InsertBillingSummary(ctx context.Context, summary *BillingSummary) error
-	GetBillingSummary(ctx context.Context, orgID uuid.UUID, period string) (*BillingSummary, error)
-	GetBillingSummaryHistory(ctx context.Context, orgID uuid.UUID, start, end time.Time) ([]*BillingSummary, error)
-}
-
-// ============================================================================
 // Usage-Based Billing Repositories (Spans + GB + Scores)
 // ============================================================================
 
@@ -92,10 +74,8 @@ type UsageAlertRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*UsageAlert, error)
 	GetByOrgID(ctx context.Context, orgID uuid.UUID, limit int) ([]*UsageAlert, error)
 	GetByBudgetID(ctx context.Context, budgetID uuid.UUID) ([]*UsageAlert, error)
-	GetUnacknowledged(ctx context.Context, orgID uuid.UUID) ([]*UsageAlert, error)
 	Create(ctx context.Context, alert *UsageAlert) error
 	Acknowledge(ctx context.Context, id uuid.UUID) error
-	Resolve(ctx context.Context, id uuid.UUID) error
 	MarkNotificationSent(ctx context.Context, id uuid.UUID) error
 }
 

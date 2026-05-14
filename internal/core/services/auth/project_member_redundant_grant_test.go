@@ -63,12 +63,6 @@ func (s *stubOrgMemberRepo) GetActiveMembers(context.Context, uuid.UUID) ([]*aut
 func (s *stubOrgMemberRepo) UpdateMemberRole(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	panic("unimplemented")
 }
-func (s *stubOrgMemberRepo) BulkCreate(context.Context, []*authDomain.OrganizationMember) error {
-	panic("unimplemented")
-}
-func (s *stubOrgMemberRepo) BulkUpdateRoles(context.Context, []authDomain.MemberRoleUpdate) error {
-	panic("unimplemented")
-}
 func (s *stubOrgMemberRepo) GetMemberCount(context.Context, uuid.UUID) (int, error) {
 	panic("unimplemented")
 }
@@ -136,10 +130,6 @@ func (s *stubRoleRepoByID) UpdateRolePermissions(context.Context, uuid.UUID, []u
 func (s *stubRoleRepoByID) GetRoleStatistics(context.Context) (*authDomain.RoleStatistics, error) {
 	panic("unimplemented")
 }
-func (s *stubRoleRepoByID) BulkCreate(context.Context, []*authDomain.Role) error {
-	panic("unimplemented")
-}
-
 // projectPerm builds a project-tier Permission with the given name.
 func projectPerm(name string) *authDomain.Permission {
 	return &authDomain.Permission{Name: name, ScopeLevel: authDomain.ScopeLevelProject}

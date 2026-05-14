@@ -51,14 +51,6 @@ func (r *ProviderModelRepositoryImpl) CreateProviderModel(ctx context.Context, m
 	return nil
 }
 
-func (r *ProviderModelRepositoryImpl) GetProviderModel(ctx context.Context, modelID uuid.UUID) (*analyticsDomain.ProviderModel, error) {
-	row, err := r.tm.Queries(ctx).GetProviderModelByID(ctx, modelID)
-	if err != nil {
-		return nil, err
-	}
-	return providerModelFromRow(&row)
-}
-
 func (r *ProviderModelRepositoryImpl) GetProviderModelByName(
 	ctx context.Context,
 	projectID *uuid.UUID,

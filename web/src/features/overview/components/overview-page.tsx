@@ -8,7 +8,6 @@ import { TimeRangePicker } from '@/components/shared/time-range-picker'
 import { cn } from '@/lib/utils'
 
 import { useProjectOverview, useOverviewTimeRange } from '../hooks'
-import { OnboardingChecklist } from './onboarding-checklist'
 import { StatsRow } from './stats-row'
 import { TraceVolumeChart } from './trace-volume-chart'
 import { CostByModelChart } from './cost-by-model-chart'
@@ -32,9 +31,6 @@ export function OverviewPage({ projectId, projectSlug, className }: OverviewPage
     isRefetching,
     error,
     refetch,
-    onboardingProgress,
-    isOnboardingDismissed,
-    dismissOnboarding,
   } = useProjectOverview(projectId, { timeRange })
 
   const handleRefresh = () => {
@@ -60,16 +56,6 @@ export function OverviewPage({ projectId, projectSlug, className }: OverviewPage
           </Button>
         </div>
       </PageHeader>
-
-      {/* Onboarding Checklist - shown for new projects */}
-      {!isOnboardingDismissed && (
-        <OnboardingChecklist
-          checklistStatus={data?.checklist_status ?? null}
-          onboardingProgress={onboardingProgress}
-          onDismiss={dismissOnboarding}
-          projectSlug={projectSlug}
-        />
-      )}
 
       {/* Stats Row */}
       <StatsRow

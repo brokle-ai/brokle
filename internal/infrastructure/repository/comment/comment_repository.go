@@ -86,10 +86,6 @@ func (r *commentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *commentRepository) HasActiveReplies(ctx context.Context, parentID uuid.UUID) (bool, error) {
-	return r.tm.Queries(ctx).HasActiveReplies(ctx, &parentID)
-}
-
 func (r *commentRepository) ListByEntity(ctx context.Context, entityType commentDomain.EntityType, entityID string, projectID uuid.UUID) ([]*commentDomain.CommentWithUser, error) {
 	rows, err := r.tm.Queries(ctx).ListCommentsByEntity(ctx, gen.ListCommentsByEntityParams{
 		EntityType: gen.CommentEntityType(entityType),

@@ -203,14 +203,6 @@ func (r *itemRepository) Delete(ctx context.Context, id, queueID uuid.UUID) erro
 	return nil
 }
 
-func (r *itemRepository) ExistsByObject(ctx context.Context, queueID uuid.UUID, objectID string, objectType annotationDomain.ObjectType) (bool, error) {
-	return r.tm.Queries(ctx).AnnotationQueueItemExistsByObject(ctx, gen.AnnotationQueueItemExistsByObjectParams{
-		QueueID:    queueID,
-		ObjectID:   objectID,
-		ObjectType: string(objectType),
-	})
-}
-
 // FetchAndLockNext atomically claims the next available item using
 // SELECT ... FOR UPDATE SKIP LOCKED + UPDATE. Eligibility: pending AND
 // (never locked OR lock expired OR locked by same user). Kept as raw

@@ -56,8 +56,7 @@ export const getTraceScores = async (
   traceId: string
 ): Promise<Annotation[]> => {
   const response = await client.get<Annotation[]>(
-    `/v1/traces/${traceId}/scores`,
-    { project_id: projectId }
+    `/v1/projects/${projectId}/traces/${traceId}/scores`
   )
   return Array.isArray(response) ? response : []
 }
@@ -78,9 +77,8 @@ export const createAnnotation = async (
   data: CreateAnnotationRequest
 ): Promise<Annotation> => {
   return client.post<Annotation>(
-    `/v1/traces/${traceId}/scores`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/scores`,
+    data
   )
 }
 
@@ -102,9 +100,8 @@ export const updateAnnotation = async (
   data: UpdateAnnotationRequest
 ): Promise<Annotation> => {
   return client.put<Annotation>(
-    `/v1/traces/${traceId}/scores/${scoreId}`,
-    data,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/scores/${scoreId}`,
+    data
   )
 }
 
@@ -123,7 +120,6 @@ export const deleteAnnotation = async (
   scoreId: string
 ): Promise<void> => {
   await client.delete(
-    `/v1/traces/${traceId}/scores/${scoreId}`,
-    { params: { project_id: projectId } }
+    `/v1/projects/${projectId}/traces/${traceId}/scores/${scoreId}`
   )
 }

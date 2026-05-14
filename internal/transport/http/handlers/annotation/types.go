@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"brokle/pkg/response"
 )
 
 // Queue request/response types
@@ -30,19 +32,15 @@ type UpdateQueueRequest struct {
 // listQueuesResponse is the wire shape for GET
 // /projects/{projectId}/annotation-queues.
 type listQueuesResponse struct {
-	Data  []*QueueWithStatsResponse `json:"data"`
-	Total int64                     `json:"total"`
-	Page  int                       `json:"page"`
-	Limit int                       `json:"limit"`
+	Data       []*QueueWithStatsResponse `json:"data"`
+	Pagination *response.Pagination      `json:"pagination"`
 }
 
 // listItemsResponse is the wire shape for GET
 // /projects/{projectId}/annotation-queues/{queueId}/items.
 type listItemsResponse struct {
-	Data  []*ItemResponse `json:"data"`
-	Total int64           `json:"total"`
-	Page  int             `json:"page"`
-	Limit int             `json:"limit"`
+	Data       []*ItemResponse      `json:"data"`
+	Pagination *response.Pagination `json:"pagination"`
 }
 
 // QueueSettings represents configurable settings for an annotation queue.

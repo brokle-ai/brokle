@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/pkg/response"
 )
 
 // Package-level shared DTOs — types used by two or more feature files
@@ -14,10 +15,8 @@ import (
 
 // pageList is the canonical paginated list envelope for evaluation responses.
 type pageList[T any] struct {
-	Data  []T   `json:"data"`
-	Total int64 `json:"total"`
-	Page  int   `json:"page"`
-	Limit int   `json:"limit"`
+	Data       []T                  `json:"data"`
+	Pagination *response.Pagination `json:"pagination"`
 }
 
 // ScoreType is the score-config enum carried in request bodies.

@@ -300,12 +300,11 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
       variables: windowState.variables,
       config_overrides: filteredConfig,
       session_id: sessionId,
-      project_id: projectId,
     }
 
     // Pass full windowState.config for history capture (includes _enabled flags and disabled param values)
     // The request.config_overrides is filtered for the API, but history needs the complete UI state
-    await stream(request, windowState.config ?? null)
+    await stream(request, projectId, windowState.config ?? null)
   }, [windowState, sessionId, projectId, stream])
 
   // Register execute function for Execute All feature

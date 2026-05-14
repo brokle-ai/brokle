@@ -198,7 +198,6 @@ type StorageRepositories struct {
 }
 
 type BillingRepositories struct {
-	BillingRecord billingDomain.BillingRecordRepository
 	// Usage-based billing repositories (Spans + GB + Scores)
 	BillableUsage       billingDomain.BillableUsageRepository
 	Plan                billingDomain.PlanRepository

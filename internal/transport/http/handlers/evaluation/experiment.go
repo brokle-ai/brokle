@@ -191,7 +191,7 @@ func (h *Handler) DashListExperiments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.ExperimentResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 
@@ -320,22 +320,12 @@ func (h *Handler) DashListExperimentItems(w http.ResponseWriter, r *http.Request
 		response.WriteError(w, err)
 		return
 	}
-	limit, err := request.QueryInt(r, "limit", 50)
+	page, limit, err := readPagination(r)
 	if err != nil {
 		response.WriteError(w, err)
 		return
 	}
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	offset, err := request.QueryInt(r, "offset", 0)
-	if err != nil {
-		response.WriteError(w, err)
-		return
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	offset := limit * (page - 1)
 
 	items, total, err := h.experimentItemSvc.List(r.Context(), experimentID, projectID, limit, offset)
 	if err != nil {
@@ -346,7 +336,9 @@ func (h *Handler) DashListExperimentItems(w http.ResponseWriter, r *http.Request
 	for i, it := range items {
 		out[i] = toExperimentItemResponse(it)
 	}
-	response.Success(w, &ExperimentItemListResponse{Items: out, Total: total})
+	response.Success(w, pageList[*ExperimentItemResponse]{
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
+	})
 }
 
 // ---- SDK handlers --------------------------------------------------
@@ -382,7 +374,7 @@ func (h *Handler) SdkListExperiments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, pageList[*evaluationDomain.ExperimentResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 

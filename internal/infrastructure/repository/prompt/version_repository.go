@@ -74,17 +74,6 @@ func (r *versionRepository) GetByPromptAndVersion(ctx context.Context, promptID 
 	return versionFromRow(&row)
 }
 
-func (r *versionRepository) GetLatestByPrompt(ctx context.Context, promptID uuid.UUID) (*promptDomain.Version, error) {
-	row, err := r.tm.Queries(ctx).GetLatestPromptVersion(ctx, promptID)
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, appErrors.NotFound("prompt_version", appErrors.WithOp("repo.prompt_version.get_latest"))
-		}
-		return nil, err
-	}
-	return versionFromRow(&row)
-}
-
 func (r *versionRepository) ListByPrompt(ctx context.Context, promptID uuid.UUID) ([]*promptDomain.Version, error) {
 	rows, err := r.tm.Queries(ctx).ListPromptVersions(ctx, promptID)
 	if err != nil {
@@ -104,10 +93,6 @@ func (r *versionRepository) GetNextVersionNumber(ctx context.Context, promptID u
 		return 0, err
 	}
 	return int(n), nil
-}
-
-func (r *versionRepository) CountByPrompt(ctx context.Context, promptID uuid.UUID) (int64, error) {
-	return r.tm.Queries(ctx).CountPromptVersions(ctx, promptID)
 }
 
 func (r *versionRepository) GetLatestByPrompts(ctx context.Context, promptIDs []uuid.UUID) ([]*promptDomain.Version, error) {

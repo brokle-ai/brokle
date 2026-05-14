@@ -31,16 +31,13 @@ type MemberRepository interface {
 	// Member management
 	Create(ctx context.Context, member *Member) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Member, error)
-	GetByUserAndOrg(ctx context.Context, userID, orgID uuid.UUID) (*Member, error)
-	GetByUserAndOrganization(ctx context.Context, userID, orgID uuid.UUID) (*Member, error) // Alias for GetByUserAndOrg
+	GetByUserAndOrganization(ctx context.Context, userID, orgID uuid.UUID) (*Member, error)
 	Update(ctx context.Context, member *Member) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	DeleteByUserAndOrg(ctx context.Context, orgID, userID uuid.UUID) error
 
 	// Organization members
-	GetMembersByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*Member, error)
-	GetByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*Member, error) // Alias for GetMembersByOrganizationID
-	GetMembersByUserID(ctx context.Context, userID uuid.UUID) ([]*Member, error)
+	GetByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*Member, error)
 
 	// Role operations
 	UpdateMemberRole(ctx context.Context, orgID, userID, roleID uuid.UUID) error
@@ -63,7 +60,6 @@ type ProjectRepository interface {
 
 	// Organization scoped
 	GetByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]*Project, error)
-	GetProjectCount(ctx context.Context, orgID uuid.UUID) (int, error)
 
 	// Access validation
 	CanUserAccessProject(ctx context.Context, userID, projectID uuid.UUID) (bool, error)
@@ -103,7 +99,6 @@ type InvitationRepository interface {
 
 	// Audit logging
 	CreateAuditEvent(ctx context.Context, event *InvitationAuditEvent) error
-	GetAuditEventsByInvitationID(ctx context.Context, invitationID uuid.UUID) ([]*InvitationAuditEvent, error)
 }
 
 // OrganizationFilters represents filters for organization queries.
@@ -170,11 +165,3 @@ type OrganizationSettingsRepository interface {
 	DeleteMultiple(ctx context.Context, orgID uuid.UUID, keys []string) error
 }
 
-// Repository aggregates all organization-related repositories.
-type Repository interface {
-	Organizations() OrganizationRepository
-	Members() MemberRepository
-	Projects() ProjectRepository
-	Invitations() InvitationRepository
-	Settings() OrganizationSettingsRepository
-}

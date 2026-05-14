@@ -144,7 +144,7 @@ export const createInvitation = async (
 export const getPendingInvitations = async (
   organizationId: string
 ): Promise<Invitation[]> => {
-  const response = await client.get<{ invitations: InvitationAPIResponse[]; total: number }>(
+  const response = await client.get<{ data: InvitationAPIResponse[] }>(
     `/v1/organizations/${organizationId}/invitations`,
     { status: 'pending' },
     {
@@ -153,7 +153,7 @@ export const getPendingInvitations = async (
     }
   )
 
-  return response.invitations.map(mapInvitationFromAPI)
+  return response.data.map(mapInvitationFromAPI)
 }
 
 /**
@@ -224,11 +224,11 @@ export const declineInvitation = async (
  * Get invitations for the current user
  */
 export const getUserInvitations = async (): Promise<UserInvitation[]> => {
-  const response = await client.get<{ invitations: UserInvitationAPIResponse[]; total: number }>(
+  const response = await client.get<{ data: UserInvitationAPIResponse[] }>(
     '/v1/invitations'
   )
 
-  return response.invitations.map(mapUserInvitationFromAPI)
+  return response.data.map(mapUserInvitationFromAPI)
 }
 
 // Backend response type for validation
@@ -271,13 +271,13 @@ export const validateInvitationToken = async (
  * Returns organization-scoped roles that can be assigned to new members
  */
 export const getAvailableRolesForInvitation = async (): Promise<Role[]> => {
-  const response = await client.get<RoleAPIResponse[]>(
+  const response = await client.get<{ data: RoleAPIResponse[] }>(
     '/v1/rbac/roles',
     { scope_type: 'organization' }
   )
 
   // Filter to roles that can be assigned (exclude owner - only one owner allowed)
-  return response
+  return response.data
     .map(mapRoleFromAPI)
     .filter(role => role.name !== 'owner')
 }

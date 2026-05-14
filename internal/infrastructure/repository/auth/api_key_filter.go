@@ -161,4 +161,3 @@ func applyAPIKeyFilterPaging(q sq.SelectBuilder, filters *authDomain.APIKeyFilte
 	}
 	return q.Limit(limit).Offset(offset)
 }
-

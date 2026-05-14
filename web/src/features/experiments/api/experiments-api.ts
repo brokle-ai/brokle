@@ -7,7 +7,7 @@ import type {
   UpdateExperimentRequest,
   RerunExperimentRequest,
   ExperimentListParams,
-  ExperimentItemListResponse,
+  ExperimentItem,
   ExperimentComparisonResponse,
   CompareExperimentsRequest,
   CreateExperimentFromWizardRequest,
@@ -91,11 +91,12 @@ export const experimentsApi = {
   listExperimentItems: async (
     projectId: string,
     experimentId: string,
-    limit = 50,
-    offset = 0
-  ): Promise<ExperimentItemListResponse> => {
-    return client.get<ExperimentItemListResponse>(
-      `/v1/projects/${projectId}/experiments/${experimentId}/items?limit=${limit}&offset=${offset}`
+    page = 1,
+    limit = 50
+  ): Promise<PaginatedResponse<ExperimentItem>> => {
+    return client.getPaginated<ExperimentItem>(
+      `/v1/projects/${projectId}/experiments/${experimentId}/items`,
+      { page, limit }
     )
   },
 

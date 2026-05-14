@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/response"
 )
 
 // Dashboard-plane response DTOs + conversion helpers.
@@ -97,35 +98,26 @@ func toAnnotationResponse(s *observability.Score) *AnnotationResponse {
 	}
 }
 
-// ---- pagination envelope --------------------------------------------
-
-type paginationMeta struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int   `json:"total_pages"`
-}
-
 // ---- list response wrappers ----------------------------------------
 
 type listTracesResponse struct {
 	Data       []*observability.TraceSummary `json:"data"`
-	Pagination paginationMeta                `json:"pagination"`
+	Pagination *response.Pagination          `json:"pagination"`
 }
 
 type listSpansResponse struct {
 	Data       []*observability.Span `json:"data"`
-	Pagination paginationMeta        `json:"pagination"`
+	Pagination *response.Pagination  `json:"pagination"`
 }
 
 type listScoresResponse struct {
 	Data       []*TraceScoreResponse `json:"data"`
-	Pagination paginationMeta        `json:"pagination"`
+	Pagination *response.Pagination  `json:"pagination"`
 }
 
 type listTraceSessionsResponse struct {
 	Data       []*observability.TraceSessionSummary `json:"data"`
-	Pagination paginationMeta                       `json:"pagination"`
+	Pagination *response.Pagination                 `json:"pagination"`
 }
 
 // ---- request bodies -------------------------------------------------

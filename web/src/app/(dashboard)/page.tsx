@@ -11,7 +11,6 @@ import { getLastProjectSlug, clearLastProjectSlug } from '@/lib/utils/project-pe
 import { extractIdFromCompositeSlug, isValidCompositeSlug } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
 import { Plus, Building2, FolderPlus } from 'lucide-react'
-import { ROUTES } from '@/lib/routes'
 
 export default function RootPage() {
   const router = useRouter()
@@ -97,10 +96,13 @@ export default function RootPage() {
   useEffect(() => {
     if (isLoading || !isInitialized) return
 
-    if (!user) {
-      router.push(ROUTES.SIGNIN)
-      return
-    }
+    // No `if (!user) router.push(SIGNIN)` here. `user` is seeded from
+    // the server-fetched DAL via WorkspaceProvider's initialData. The
+    // server layout (lib/auth/dal.ts) redirects on 401 before this
+    // page mounts, and TanStack Query keeps last-good `data` on
+    // refetch failures, so `user` cannot be null on cold load or
+    // mid-session. Auth enforcement lives in proxy.ts + DAL +
+    // providers.tsx reactive listeners.
 
     // Handle workspace fetch error - skip redirect logic (will show error state)
     // Note: Do NOT set redirectInitiatedRef here - it blocks redirects after error recovery

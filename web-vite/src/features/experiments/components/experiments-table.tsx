@@ -74,7 +74,7 @@ export function ExperimentsTable({ rows, orgId, projectId }: ExperimentsTablePro
                 <Link
                   to="/o/$orgId/p/$projectId/experiments/$experimentId"
                   params={{ orgId, projectId, experimentId: experiment.id }}
-                  search={{ page: 1, limit: 20, offset: 0, q: undefined }}
+                  search={{ page: 1, limit: 20 }}
                   className="hover:underline"
                 >
                   {experiment.name}

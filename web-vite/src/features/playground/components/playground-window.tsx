@@ -384,7 +384,6 @@ export function PlaygroundWindow({
       variables: windowState.variables,
       config_overrides: filteredConfig,
       session_id: sessionId,
-      project_id: projectId,
     }
 
     await stream(request, windowState.config ?? null)

@@ -19,10 +19,11 @@ type SpanQueryRequest struct {
 }
 
 // SpanQueryResponse represents the response containing queried spans.
+// Pagination metadata (HasMore, etc.) is a wire concern and is computed
+// at the transport layer — see handlers/observability/sdk.go.
 type SpanQueryResponse struct {
 	Spans      []*Span `json:"spans"`
 	TotalCount int64   `json:"total_count"`
-	HasMore    bool    `json:"has_more"`
 }
 
 // Query request defaults and limits

@@ -50,7 +50,7 @@ func (h *Handler) ListScoreConfigs(w http.ResponseWriter, r *http.Request) {
 		out[i] = c.ToResponse()
 	}
 	response.Success(w, pageList[*evaluationDomain.ScoreConfigResponse]{
-		Data: out, Total: total, Page: page, Limit: limit,
+		Data: out, Pagination: response.BuildPagination(page, limit, total),
 	})
 }
 

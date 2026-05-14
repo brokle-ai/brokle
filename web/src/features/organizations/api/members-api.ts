@@ -1,7 +1,6 @@
 // Members API - Organization member management endpoints
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 
 // API response type matching backend OrganizationMember
 export interface MemberAPIResponse {
@@ -37,29 +36,24 @@ export interface Member {
 const client = new BrokleAPIClient('/api')
 
 /**
- * Get all members of an organization
+ * Get all members of an organization. The backend list-members endpoint
+ * is NOT paginated — it returns the full members array per call wrapped
+ * in `{ data: [...] }`.
  * @param organizationId - Organization ID
- * @param page - Page number
- * @param limit - Items per page
  */
 export const getOrganizationMembers = async (
-  organizationId: string,
-  page = 1,
-  limit = 50
-): Promise<PaginatedResponse<Member>> => {
-  const response = await client.getPaginated<MemberAPIResponse>(
+  organizationId: string
+): Promise<Member[]> => {
+  const response = await client.get<{ data: MemberAPIResponse[] }>(
     `/v1/organizations/${organizationId}/members`,
-    { page, limit },
+    undefined,
     {
       includeOrgContext: true,
       customOrgId: organizationId
     }
   )
 
-  return {
-    data: response.data.map(mapMemberFromAPI),
-    pagination: response.pagination,
-  }
+  return response.data.map(mapMemberFromAPI)
 }
 
 /**

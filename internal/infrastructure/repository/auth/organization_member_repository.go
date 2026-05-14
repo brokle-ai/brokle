@@ -199,63 +199,6 @@ func (r *organizationMemberRepository) UpdateMemberRole(ctx context.Context, use
 	return nil
 }
 
-// ----- Bulk operations ----------------------------------------------
-
-func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members []*authDomain.OrganizationMember) error {
-	if len(members) == 0 {
-		return nil
-	}
-	return r.tm.WithinTransaction(ctx, func(ctx context.Context) error {
-		q := r.tm.Queries(ctx)
-		now := time.Now()
-		for _, m := range members {
-			if m.JoinedAt.IsZero() {
-				m.JoinedAt = now
-			}
-			rows, err := q.CreateMember(ctx, gen.CreateMemberParams{
-				UserID:         m.UserID,
-				OrganizationID: m.OrganizationID,
-				RoleID:         m.RoleID,
-				JoinedAt:       m.JoinedAt,
-				InvitedBy:      m.InvitedBy,
-				CreatedAt:      now,
-				UpdatedAt:      now,
-			})
-			if err != nil {
-				return appErrors.Internal("bulk-create member", err,
-					appErrors.WithOp("repo.organization_member.bulk_create"))
-			}
-			if rows == 0 {
-				return appErrors.AlreadyExists("organization_member",
-					appErrors.WithOp("repo.organization_member.bulk_create"))
-			}
-		}
-		return nil
-	})
-}
-
-func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, updates []authDomain.MemberRoleUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-	userIDs := make([]uuid.UUID, len(updates))
-	orgIDs := make([]uuid.UUID, len(updates))
-	roleIDs := make([]uuid.UUID, len(updates))
-	for i, u := range updates {
-		userIDs[i] = u.UserID
-		orgIDs[i] = u.OrganizationID
-		roleIDs[i] = u.RoleID
-	}
-	if err := r.tm.Queries(ctx).BulkUpdateMemberRoles(ctx, gen.BulkUpdateMemberRolesParams{
-		Column1: userIDs,
-		Column2: orgIDs,
-		Column3: roleIDs,
-	}); err != nil {
-		return fmt.Errorf("bulk-update member roles (%d updates): %w", len(updates), err)
-	}
-	return nil
-}
-
 // ----- Statistics ---------------------------------------------------
 
 func (r *organizationMemberRepository) GetMemberCount(ctx context.Context, orgID uuid.UUID) (int, error) {

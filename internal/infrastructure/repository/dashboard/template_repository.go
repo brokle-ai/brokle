@@ -103,17 +103,6 @@ func (r *templateRepository) GetByName(ctx context.Context, name string) (*dashb
 	return templateFromRow(&row)
 }
 
-func (r *templateRepository) GetByCategory(ctx context.Context, category dashboardDomain.TemplateCategory) (*dashboardDomain.Template, error) {
-	row, err := r.tm.Queries(ctx).GetActiveDashboardTemplateByCategory(ctx, string(category))
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.get_by_category"))
-		}
-		return nil, appErrors.Internal(fmt.Sprintf("get template by category %s", category), err, appErrors.WithOp("repo.dashboard_template.get_by_category"))
-	}
-	return templateFromRow(&row)
-}
-
 func (r *templateRepository) Create(ctx context.Context, t *dashboardDomain.Template) error {
 	cfg, layout, err := marshalDashboardContent(&t.Config, t.Layout)
 	if err != nil {
@@ -165,25 +154,6 @@ func (r *templateRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	if n == 0 {
 		return appErrors.NotFound("dashboard_template", appErrors.WithOp("repo.dashboard_template.delete"))
-	}
-	return nil
-}
-
-func (r *templateRepository) Upsert(ctx context.Context, t *dashboardDomain.Template) error {
-	cfg, layout, err := marshalDashboardContent(&t.Config, t.Layout)
-	if err != nil {
-		return appErrors.Internal("marshal template content", err, appErrors.WithOp("repo.dashboard_template.upsert"))
-	}
-	if err := r.tm.Queries(ctx).UpsertDashboardTemplateByName(ctx, gen.UpsertDashboardTemplateByNameParams{
-		ID:          t.ID,
-		Name:        t.Name,
-		Description: nilIfEmptyDash(t.Description),
-		Category:    string(t.Category),
-		Config:      cfg,
-		Layout:      layout,
-		IsActive:    t.IsActive,
-	}); err != nil {
-		return appErrors.Internal("upsert template", err, appErrors.WithOp("repo.dashboard_template.upsert"))
 	}
 	return nil
 }

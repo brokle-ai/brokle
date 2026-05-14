@@ -87,17 +87,6 @@ func (r *providerCredentialRepository) GetByOrgAndName(ctx context.Context, orgI
 	return credentialFromRow(&row)
 }
 
-func (r *providerCredentialRepository) GetByOrgAndAdapter(ctx context.Context, orgID uuid.UUID, adapter credentialsDomain.Provider) ([]*credentialsDomain.ProviderCredential, error) {
-	rows, err := r.tm.Queries(ctx).ListProviderCredentialsByOrgAndAdapter(ctx, gen.ListProviderCredentialsByOrgAndAdapterParams{
-		OrganizationID: orgID,
-		Adapter:        gen.Provider(adapter),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("get credentials by adapter: %w", err)
-	}
-	return credentialsFromRows(rows)
-}
-
 func (r *providerCredentialRepository) ListByOrganization(ctx context.Context, orgID uuid.UUID) ([]*credentialsDomain.ProviderCredential, error) {
 	rows, err := r.tm.Queries(ctx).ListProviderCredentialsByOrg(ctx, orgID)
 	if err != nil {
@@ -147,17 +136,6 @@ func (r *providerCredentialRepository) Delete(ctx context.Context, id, orgID uui
 		return appErrors.NotFound("credential", appErrors.WithOp("repo.credentials.delete"))
 	}
 	return nil
-}
-
-func (r *providerCredentialRepository) ExistsByOrgAndName(ctx context.Context, orgID uuid.UUID, name string) (bool, error) {
-	ok, err := r.tm.Queries(ctx).ProviderCredentialExistsByOrgAndName(ctx, gen.ProviderCredentialExistsByOrgAndNameParams{
-		OrganizationID: orgID,
-		Name:           name,
-	})
-	if err != nil {
-		return false, fmt.Errorf("check credential exists: %w", err)
-	}
-	return ok, nil
 }
 
 // ----- gen ↔ domain boundary -----------------------------------------

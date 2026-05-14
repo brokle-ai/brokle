@@ -149,10 +149,6 @@ func (r *labelRepository) RemoveLabel(ctx context.Context, promptID uuid.UUID, n
 	return nil
 }
 
-func (r *labelRepository) DeleteByPrompt(ctx context.Context, promptID uuid.UUID) error {
-	return r.tm.Queries(ctx).DeletePromptLabelsByPrompt(ctx, promptID)
-}
-
 func labelFromRow(row *gen.PromptLabel) *promptDomain.Label {
 	return &promptDomain.Label{
 		ID:        row.ID,

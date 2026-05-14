@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -100,14 +99,6 @@ func (r *passwordResetTokenRepository) MarkAsUsed(ctx context.Context, id uuid.U
 	return nil
 }
 
-func (r *passwordResetTokenRepository) IsUsed(ctx context.Context, id uuid.UUID) (bool, error) {
-	ok, err := r.tm.Queries(ctx).IsPasswordResetTokenUsed(ctx, id)
-	if err != nil {
-		return false, fmt.Errorf("check password reset token %s used: %w", id, err)
-	}
-	return ok, nil
-}
-
 func (r *passwordResetTokenRepository) IsValid(ctx context.Context, id uuid.UUID) (bool, error) {
 	ok, err := r.tm.Queries(ctx).IsPasswordResetTokenValid(ctx, id)
 	if err != nil {
@@ -116,27 +107,9 @@ func (r *passwordResetTokenRepository) IsValid(ctx context.Context, id uuid.UUID
 	return ok, nil
 }
 
-func (r *passwordResetTokenRepository) GetValidTokenByUserID(ctx context.Context, userID uuid.UUID) (*authDomain.PasswordResetToken, error) {
-	row, err := r.tm.Queries(ctx).GetValidPasswordResetTokenByUser(ctx, userID)
-	if err != nil {
-		if db.IsNoRows(err) {
-			return nil, appErrors.NotFound("password_reset_token", appErrors.WithOp("repo.password_reset_token.get_valid_by_user_id"))
-		}
-		return nil, fmt.Errorf("get valid password reset token for user %s: %w", userID, err)
-	}
-	return passwordResetTokenFromRow(&row), nil
-}
-
 func (r *passwordResetTokenRepository) CleanupExpiredTokens(ctx context.Context) error {
 	if _, err := r.tm.Queries(ctx).CleanupExpiredPasswordResetTokens(ctx); err != nil {
 		return fmt.Errorf("cleanup expired password reset tokens: %w", err)
-	}
-	return nil
-}
-
-func (r *passwordResetTokenRepository) CleanupUsedTokens(ctx context.Context, olderThan time.Time) error {
-	if _, err := r.tm.Queries(ctx).CleanupUsedPasswordResetTokens(ctx, olderThan); err != nil {
-		return fmt.Errorf("cleanup used password reset tokens older than %s: %w", olderThan, err)
 	}
 	return nil
 }

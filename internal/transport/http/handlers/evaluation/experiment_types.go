@@ -47,8 +47,3 @@ type CompareExperimentsResponse struct {
 	Scores      map[string]map[string]*ScoreAggregationResponse `json:"scores"`
 	Diffs       map[string]map[string]*ScoreDiffResponse        `json:"diffs,omitempty"`
 }
-
-type ExperimentItemListResponse struct {
-	Items []*ExperimentItemResponse `json:"items"`
-	Total int64                     `json:"total"`
-}

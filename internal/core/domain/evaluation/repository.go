@@ -33,12 +33,10 @@ type DatasetItemRepository interface {
 	Create(ctx context.Context, item *DatasetItem) error
 	CreateBatch(ctx context.Context, items []*DatasetItem) error
 	GetByID(ctx context.Context, id uuid.UUID, datasetID uuid.UUID) (*DatasetItem, error)
-	GetByIDForProject(ctx context.Context, id uuid.UUID, projectID uuid.UUID) (*DatasetItem, error)
 	List(ctx context.Context, datasetID uuid.UUID, limit, offset int) ([]*DatasetItem, int64, error)
 	ListAll(ctx context.Context, datasetID uuid.UUID) ([]*DatasetItem, error)
 	Delete(ctx context.Context, id uuid.UUID, datasetID uuid.UUID) error
 	CountByDataset(ctx context.Context, datasetID uuid.UUID) (int64, error)
-	FindByContentHash(ctx context.Context, datasetID uuid.UUID, contentHash string) (*DatasetItem, error)
 	FindByContentHashes(ctx context.Context, datasetID uuid.UUID, contentHashes []string) (map[string]bool, error)
 }
 
@@ -47,8 +45,6 @@ type DatasetVersionRepository interface {
 	Create(ctx context.Context, version *DatasetVersion) error
 	// GetByID gets a version by its ID
 	GetByID(ctx context.Context, id uuid.UUID, datasetID uuid.UUID) (*DatasetVersion, error)
-	// GetByVersionNumber gets a version by dataset ID and version number
-	GetByVersionNumber(ctx context.Context, datasetID uuid.UUID, versionNum int) (*DatasetVersion, error)
 	// GetLatest gets the latest version for a dataset
 	GetLatest(ctx context.Context, datasetID uuid.UUID) (*DatasetVersion, error)
 	// List lists all versions for a dataset
@@ -59,8 +55,6 @@ type DatasetVersionRepository interface {
 	// Item-Version associations
 	// AddItems associates items with a version (batch)
 	AddItems(ctx context.Context, versionID uuid.UUID, itemIDs []uuid.UUID) error
-	// GetItemIDs gets all item IDs for a version
-	GetItemIDs(ctx context.Context, versionID uuid.UUID) ([]uuid.UUID, error)
 	// GetItems gets all items for a version with pagination
 	GetItems(ctx context.Context, versionID uuid.UUID, limit, offset int) ([]*DatasetItem, int64, error)
 }
@@ -88,7 +82,6 @@ type ExperimentItemRepository interface {
 	Create(ctx context.Context, item *ExperimentItem) error
 	CreateBatch(ctx context.Context, items []*ExperimentItem) error
 	List(ctx context.Context, experimentID uuid.UUID, limit, offset int) ([]*ExperimentItem, int64, error)
-	CountByExperiment(ctx context.Context, experimentID uuid.UUID) (int64, error)
 }
 
 // ExperimentConfigRepository handles persistence for experiment configurations created via the wizard.

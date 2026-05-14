@@ -59,9 +59,8 @@ func (h *SDKHandler) QuerySpans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, SpanQueryResponse{
-		Spans:      result.Spans,
-		TotalCount: result.TotalCount,
-		HasMore:    result.HasMore,
+		Data:       result.Spans,
+		Pagination: response.BuildPagination(page, limit, result.TotalCount),
 	})
 }
 

@@ -8,12 +8,12 @@ import {
   experimentMetricsQueryOptions,
 } from '@/features/experiments/api/queries'
 
-// Experiment items use limit/offset on the backend (predates pageList),
-// so we mirror that on the search params. `.catch` keeps hostile URLs
-// from throwing.
+// Experiment items now use the canonical `?page=&limit=` pagination matching
+// the rest of the evaluation surface. `.catch` keeps hostile URLs from
+// throwing.
 const searchSchema = z.object({
+  page: z.number().int().min(1).catch(1),
   limit: z.number().int().min(1).max(100).catch(20),
-  offset: z.number().int().min(0).catch(0),
 })
 
 export const Route = createFileRoute(
@@ -21,8 +21,8 @@ export const Route = createFileRoute(
 )({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({
+    page: search.page,
     limit: search.limit,
-    offset: search.offset,
   }),
   loader: async ({ params, context, deps }) => {
     // Parallelise detail + metrics + first page of items so the view
@@ -38,7 +38,7 @@ export const Route = createFileRoute(
         experimentItemsListQueryOptions(
           params.projectId,
           params.experimentId,
-          { limit: deps.limit, offset: deps.offset },
+          { page: deps.page, limit: deps.limit },
         ),
       ),
     ])
@@ -71,8 +71,8 @@ function ExperimentDetailPage() {
       orgId={orgId}
       projectId={projectId}
       experimentId={experimentId}
+      page={search.page}
       limit={search.limit}
-      offset={search.offset}
     />
   )
 }

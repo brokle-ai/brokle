@@ -106,14 +106,6 @@ func (r *dashboardRepository) GetByNameAndProject(ctx context.Context, projectID
 	return dashboardFromRow(&row)
 }
 
-func (r *dashboardRepository) CountByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
-	n, err := r.tm.Queries(ctx).CountDashboardsByProject(ctx, projectID)
-	if err != nil {
-		return 0, appErrors.Internal("count dashboards by project", err, appErrors.WithOp("repo.dashboard.count_by_project"))
-	}
-	return n, nil
-}
-
 // GetByProjectID is the dynamic-filter list. Optional ILIKE on name,
 // pagination; total uses the same predicate for accuracy.
 func (r *dashboardRepository) GetByProjectID(ctx context.Context, projectID uuid.UUID, filter *dashboardDomain.DashboardFilter) ([]*dashboardDomain.Dashboard, int64, error) {

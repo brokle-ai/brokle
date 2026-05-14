@@ -6,14 +6,13 @@ import (
 	prompt "brokle/internal/core/domain/prompt"
 )
 
-// executePlaygroundBody — POST /api/v1/playground/execute
+// executePlaygroundBody — POST /api/v1/projects/{projectId}/playground/execute
 type executePlaygroundBody struct {
 	Template        any                 `json:"template"`
 	PromptType      prompt.PromptType   `json:"prompt_type"        validate:"required,oneof=text chat"`
 	Variables       map[string]string   `json:"variables,omitempty"`
 	ConfigOverrides *prompt.ModelConfig `json:"config_overrides,omitempty"`
 	SessionID       *string             `json:"session_id,omitempty"`
-	ProjectID       *string             `json:"project_id"`
 }
 
 // StreamChunk is the single event variant emitted on /stream. The
@@ -39,14 +38,13 @@ type StreamMetrics struct {
 	TotalDuration    int64    `json:"total_duration_ms,omitempty"`
 }
 
-// streamBody — POST /api/v1/playground/stream
+// streamBody — POST /api/v1/projects/{projectId}/playground/stream
 type streamBody struct {
 	Template        any                 `json:"template"`
 	PromptType      prompt.PromptType   `json:"prompt_type"        validate:"required,oneof=text chat"`
 	Variables       map[string]string   `json:"variables,omitempty"`
 	ConfigOverrides *prompt.ModelConfig `json:"config_overrides,omitempty"`
 	SessionID       *string             `json:"session_id,omitempty"`
-	ProjectID       *string             `json:"project_id"`
 }
 
 // createSessionBody — POST /api/v1/projects/{projectId}/playground/sessions
