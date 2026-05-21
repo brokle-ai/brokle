@@ -67,7 +67,7 @@
     "geist": "^1.5.1",
     "input-otp": "^1.4.2",
     "jose": "^6.1.1",
-    "js-cookie": "^3.0.5",
+    "js-cookie": "^3.0.7",
     "lucide-react": "^0.548.0",
     "monaco-editor": "^0.55.1",
     "nanoid": "^5.1.6",
